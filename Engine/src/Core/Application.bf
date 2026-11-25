@@ -25,6 +25,10 @@ namespace Tallow;
 ///   --gpu-pixel-error PX                               how many pixels of error a cluster level may have before a finer one
 ///                                                      is used (1; lower = more triangles, fewer holes)
 ///   --gpu-driven-min-triangles N                       the fewest triangles a mesh needs to be drawn that way (2000)
+///   --streaming-test                                   check the streaming core (page files, pools, IO threads, the
+///                                                      feedback ring) with no window, and exit 0 or 1
+///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
+///   --streaming-log                                    print streaming requests and uploads
 ///   --gpu-driven-test [mesh]                           draw a crowd of a big mesh both ways, compare the pictures and
 ///                                                      the timings, and exit 0 or 1 (sphere:1000x700, a model)
 [CSharpExpose]
@@ -140,6 +144,33 @@ class Application
 	protected virtual void OnShutdown() { }
 
 	/// Whether a switch is on the command line.
+	/// Starts the streaming core with the budgets of the quality level, or of --streaming-budget geo=,tex=,vt= (MB).
+	void StartStreaming()
+	{
+		int64 geo = 0, tex = 0, vt = 0;
+		let text = scope String();
+		if (GetArg("--streaming-budget", text))
+		{
+			for (let part in text.Split(','))
+			{
+				let eq = part.IndexOf('=');
+				if (eq <= 0)
+					continue;
+				int64 mb = 0;
+				if (int64.Parse(part.Substring(eq + 1)) case .Ok(let parsed))
+					mb = parsed;
+				else
+					continue;
+				let key = part.Substring(0, eq);
+				if (key == "geo") geo = mb << 20;
+				else if (key == "tex") tex = mb << 20;
+				else if (key == "vt") vt = mb << 20;
+			}
+		}
+		StreamingCore.Log = HasArg("--streaming-log");
+		StreamingCore.Start(2, geo, tex, vt);
+	}
+
 	public bool HasArg(StringView name)
 	{
 		for (let arg in Args)
@@ -242,6 +273,8 @@ class Application
 		let clodTest = scope String();
 		if (GetArg("--clod-test", clodTest))
 			return ClusterMeshTest.Run(clodTest);
+		if (HasArg("--streaming-test"))
+			return StreamingTest.Run();
 		// The GPU-driven drawing check runs the whole application (it needs a window), as its own.
 		if (HasArg("--gpu-driven-test") && !(this is GpuDrivenTestApp))
 		{
@@ -249,6 +282,7 @@ class Application
 			test.Run(args);
 			return test.Result;
 		}
+		StartStreaming();
 		// A server with no window has no ears either.
 		Audio.Disabled = Headless;
 
@@ -500,6 +534,7 @@ class Application
 		AntiCheat.Release();
 		OnShutdown();
 		AssetLoader.Shutdown();
+		StreamingCore.Stop();
 		Jobs.Shutdown();
 		VoiceChat.Shutdown();
 		Audio.Shutdown();

@@ -18,7 +18,7 @@ internal static class AssetPack
     const int Block = 4096;
     static readonly byte[] Magic = "TPAK1\0\0\0"u8.ToArray();
     // Already compressed: deflating again gains nothing.
-    static readonly HashSet<string> Stored = new(StringComparer.Ordinal) { ".png", ".jpg", ".jpeg", ".ogg", ".mp3", ".flac", ".tpak" };
+    static readonly HashSet<string> Stored = new(StringComparer.Ordinal) { ".png", ".jpg", ".jpeg", ".ogg", ".mp3", ".flac", ".tpak", ".tpages" };
 
     static byte[] MakeBlock(uint seed, uint salt)
     {

@@ -156,6 +156,35 @@ class PackFile
 		return .Ok;
 	}
 
+	/// Reads bytes [offset, offset+size) of one stored (not deflated) entry with a single seek, for page files that
+	/// are read in pieces (Streaming). The range is not checksummed here; pages carry their own CRC. Err if the entry
+	/// is missing, deflated, or the range is outside it.
+	public Result<void> ReadRange(StringView name, uint64 offset, int size, List<uint8> data)
+	{
+		for (let entry in mEntries)
+		{
+			if (entry.name != name)
+				continue;
+			if ((entry.flags & Deflated) != 0 || offset + (uint64)size > (uint64)entry.stored || size < 0)
+				return .Err;
+			let stream = scope FileStream();
+			if (stream.Open(mFile, .Read, .Read) case .Err)
+				return .Err;
+			let start = data.Count;
+			data.Count = start + size;
+			stream.Position = (int64)(entry.offset + offset);
+			if (size > 0 && (stream.TryRead(.(data.Ptr + start, size)) case .Ok(let got)) && got != size)
+			{
+				data.Count = start;
+				return .Err;
+			}
+			// Undo the scrambling at the range's place in the entry.
+			ScrambleAt(.(data.Ptr + start, size), mSeed, entry.crc, (int)(offset % BlockSize));
+			return .Ok;
+		}
+		return .Err;
+	}
+
 	/// Writes a pack of the given files (name inside the pack, contents), stored and scrambled as the engine's packs
 	/// are. Names use forward slashes.
 	public static Result<void> Write(StringView file, Span<(StringView name, Span<uint8> data)> files)
@@ -204,7 +233,10 @@ class PackFile
 	}
 
 	/// XOR with the repeating block made from the seed and salt; the same call undoes it.
-	static void Scramble(Span<uint8> data, uint32 seed, uint32 salt)
+	static void Scramble(Span<uint8> data, uint32 seed, uint32 salt) => ScrambleAt(data, seed, salt, 0);
+
+	/// Scramble for data that starts `phase` bytes into the block pattern.
+	static void ScrambleAt(Span<uint8> data, uint32 seed, uint32 salt, int phase)
 	{
 		if (data.Length == 0)
 			return;
@@ -220,7 +252,7 @@ class PackFile
 			block[i] = (uint8)(state >> 11);
 		}
 		for (int i < data.Length)
-			data[i] ^= block[i % BlockSize];
+			data[i] ^= block[(i + phase) % BlockSize];
 	}
 
 	static uint32[256] sCrcTable;

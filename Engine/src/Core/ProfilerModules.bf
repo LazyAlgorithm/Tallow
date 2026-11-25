@@ -28,6 +28,15 @@ static class ProfilerModules
 	static ProfilerCounter sGpuComputes = .("GPU Compute Dispatches", .Rendering);
 	static ProfilerCounter sGpuBlits = .("GPU Copies", .Rendering);
 	static ProfilerCounter sGpuPrimitives = .("GPU Primitives (all passes)", .Rendering);
+	// Streaming.
+	static ProfilerCounter sStreamGeoMB = .("Streaming Geometry Resident", .Assets, "MB");
+	static ProfilerCounter sStreamTexMB = .("Streaming Texture Resident", .Assets, "MB");
+	static ProfilerCounter sStreamVtMB = .("Streaming Virtual Texture Resident", .Assets, "MB");
+	static ProfilerCounter sStreamRequests = .("Streaming Requests", .Assets, "/s");
+	static ProfilerCounter sStreamMisses = .("Streaming Misses", .Assets);
+	static ProfilerCounter sStreamUpload = .("Streaming Upload", .Assets, "MB/frame");
+	static ProfilerCounter sStreamQueue = .("Streaming IO Queue", .Assets);
+	static ProfilerCounter sStreamLatency = .("Streaming Latency", .Assets, "ms");
 	static ProfilerCounter sGpuTime = .("GPU Frame", .Rendering, "ms");
 	static ProfilerCounter sPasses = .("Render Passes", .Rendering);
 	// Memory.
@@ -147,6 +156,17 @@ static class ProfilerModules
 		sGpuTriangles.Set((int32)GpuDriven.Triangles);
 		sGpuDeferred.Set((int32)GpuDriven.DeferredClusters);
 		sGpuLost.Set((int32)(GpuDriven.ClustersLost + GpuDriven.NodesLost));
+		if (StreamingCore.Pool(.GeoPage) != null)
+		{
+			sStreamGeoMB.Set(StreamingCore.Pool(.GeoPage).Resident / 1.0e6);
+			sStreamTexMB.Set(StreamingCore.Pool(.TextureMip).Resident / 1.0e6);
+			sStreamVtMB.Set(StreamingCore.Pool(.VtTile).Resident / 1.0e6);
+			sStreamRequests.Set(StreamingCore.RequestsPerSecond);
+			sStreamMisses.Set((int32)StreamingCore.Misses);
+			sStreamUpload.Set(StreamingCore.LastFrameUploadMB);
+			sStreamQueue.Set(StreamingCore.QueueDepth);
+			sStreamLatency.Set(StreamingCore.AverageLatencyMs);
+		}
 		sInstancesDropped.Set((int32)RenderView.InstancesDropped);
 
 		sProcess.Set(ProcessMemory());

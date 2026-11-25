@@ -158,6 +158,7 @@ static class SceneManager
 	public static bool Update(Scene scene)
 	{
 		AssetLoader.Update();
+		StreamingCore.Update((int)Time.FrameCount);
 		bool changed = false;
 		for (int i = 0; i < sLoads.Count; i++)
 		{
