@@ -244,6 +244,9 @@ class Application
 		// Bend skinned models on the CPU, to compare with the GPU (tallowengine.com/docs/gpu-skinning).
 		if (HasArg("--cpu-skinning"))
 			GpuSkinning.Enabled = false;
+		// The analytic sky the OpenGL backends use, on any backend (to compare with the physical sky's tables).
+		if (HasArg("--sky-preetham"))
+			PhysicalSky.ForcePreetham = true;
 		let gpuDriven = scope String();
 		if (GetArg("--gpu-driven", gpuDriven))
 		{
@@ -370,6 +373,13 @@ class Application
 		if (HasArg("--gpu-driven-test") && !(this is GpuDrivenTestApp))
 		{
 			let test = scope GpuDrivenTestApp();
+			test.Run(args);
+			return test.Result;
+		}
+		// The sky check draws the sky at set times and needs a window (D1d).
+		if (HasArg("--sky-test") && !(this is SkyTestApp))
+		{
+			let test = scope SkyTestApp();
 			test.Run(args);
 			return test.Result;
 		}
@@ -645,6 +655,7 @@ class Application
 			GpuSkinning.Shutdown();
 			GpuDriven.Shutdown();
 			Reflections.Shutdown();
+			PhysicalSky.Shutdown();
 			Textures.LogTotals();
 			Reflections.LogTotals();
 			RenderResources.Destroy();

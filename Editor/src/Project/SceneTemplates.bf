@@ -25,6 +25,8 @@ static class SceneTemplates
 		scene.Environment.timeOfDay = 10;
 		scene.Environment.sunIntensity = Atmosphere.ReferenceSunIntensity;
 		scene.Environment.autoColors = true;
+		// The physical sky follows the sun (older scenes keep the gradient sky: the class default).
+		scene.Environment.skyMode = .Physical;
 	}
 
 	/// Sun, camera and a floor; with withPlayer (a new project's first scene), the first-person character too if

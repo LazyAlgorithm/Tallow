@@ -430,6 +430,9 @@ class RenderView
 		let lightDirection = SetSun(sun);
 		let castShadows = DrawShadows && ShadowsEnabled && sun && sun.castShadows && shading == .Rendered;
 		SetFrameConstants(camera, env);
+		// The physical sky's tables follow the camera (before the reflections, which draw the sky too).
+		if (!Capture)
+			PhysicalSky.Update(env, mSunDir, camera.position.y);
 		Reflections.Update(scene, mSunDir, mSunColor, CapturesReflections && !Capture);
 		DynamicGI.Update(scene, env, camera.position, CapturesReflections && !Capture);
 		mReflectionIntensity = Math.Max(env.reflectionIntensity, 0);
@@ -1634,16 +1637,9 @@ class RenderView
 
 	void SubmitSky(uint16 view, SceneEnvironment env)
 	{
-		var zenith = Linear(env.skyZenith);
-		var horizon = Linear(env.skyHorizon);
-		var ground = Linear(env.skyGround);
 		bgfx.set_uniform(RenderResources.uCamPos, &mCamPos, 1);
-		bgfx.set_uniform(RenderResources.uSunDir, &mSunDir, 1);
-		bgfx.set_uniform(RenderResources.uSunColor, &mSunColor, 1);
-		bgfx.set_uniform(RenderResources.uSkyZenith, &zenith, 1);
-		bgfx.set_uniform(RenderResources.uSkyHorizon, &horizon, 1);
-		bgfx.set_uniform(RenderResources.uSkyGround, &ground, 1);
-		SubmitFullscreen(view, RenderResources.SkyProgram, Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateDepthLequal | Gfx.StateMsaa);
+		PhysicalSky.SetUniforms(env, mSunDir, mSunColor);
+		SubmitFullscreen(view, PhysicalSky.Mode(env) == 0 ? RenderResources.SkyProgram : RenderResources.SkyPhysicalProgram, Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateDepthLequal | Gfx.StateMsaa);
 	}
 
 	void SubmitFullscreen(uint16 view, bgfx.ProgramHandle program, uint64 state)

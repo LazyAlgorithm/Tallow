@@ -17,6 +17,8 @@ static class RenderResources
 	public static bgfx.ProgramHandle MeshProgram;
 	public static bgfx.ProgramHandle ShadowProgram;
 	public static bgfx.ProgramHandle SkyProgram;
+	/// The physical sky (SkyMode.Physical; PhysicalSky.bf).
+	public static bgfx.ProgramHandle SkyPhysicalProgram;
 	public static bgfx.ProgramHandle TonemapProgram;
 	public static bgfx.ProgramHandle BloomDownProgram, BloomBlurProgram;
 	// Antialiasing and upscaling of the finished picture (RenderViewAntialias.bf).
@@ -72,6 +74,7 @@ static class RenderResources
 		MeshProgram = Gfx.LoadProgram("vs_mesh", "fs_mesh");
 		ShadowProgram = Gfx.LoadProgram("vs_shadow", "fs_shadow");
 		SkyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_sky");
+		SkyPhysicalProgram = Gfx.LoadProgram("vs_fullscreen", "fs_sky_physical");
 		TonemapProgram = Gfx.LoadProgram("vs_fullscreen", "fs_tonemap");
 		BloomDownProgram = Gfx.LoadProgram("vs_fullscreen", "fs_bloom_down");
 		BloomBlurProgram = Gfx.LoadProgram("vs_fullscreen", "fs_bloom_blur");
@@ -268,6 +271,7 @@ static class RenderResources
 		bgfx.destroy_program(MeshProgram);
 		bgfx.destroy_program(ShadowProgram);
 		bgfx.destroy_program(SkyProgram);
+		bgfx.destroy_program(SkyPhysicalProgram);
 		bgfx.destroy_program(TonemapProgram);
 		bgfx.destroy_program(BloomDownProgram);
 		bgfx.destroy_program(BloomBlurProgram);

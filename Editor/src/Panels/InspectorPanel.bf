@@ -237,12 +237,62 @@ extension EditorApp
 		}
 		if (ImGui.CollapsingHeader("Sky and Fog", ImGui.TreeFlags.DefaultOpen) && BeginPropertyTable("sky"))
 		{
-			BeginProperty("Zenith");
-			changed |= ImGui.ColorEdit3("##sz", ref env.skyZenith);
-			BeginProperty("Horizon");
-			changed |= ImGui.ColorEdit3("##sh", ref env.skyHorizon);
-			BeginProperty("Ground");
-			changed |= ImGui.ColorEdit3("##sg", ref env.skyGround);
+			BeginProperty("Sky");
+			StringView[3] skyModes = .("Gradient", "Physical", "Custom");
+			if (ImGui.BeginCombo("##skymode", scope String(skyModes[Math.Clamp((int)env.skyMode, 0, 2)]).CStr()))
+			{
+				for (int32 i < 3)
+				{
+					if (ImGui.Selectable(scope String(skyModes[i]).CStr(), (int32)env.skyMode == i))
+					{
+						env.skyMode = (SkyMode)i;
+						changed = true;
+					}
+				}
+				ImGui.EndCombo();
+			}
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("Gradient: three colours you pick (older scenes).\nPhysical: the air lit by the sun: blue by day, red at sunset, stars and the moon at night.\nCustom: a skybox picture (coming; drawn as Physical for now).");
+			if (env.skyMode == .Gradient)
+			{
+				BeginProperty("");
+				if (ImGui.Button("Switch to Physical Sky"))
+				{
+					env.skyMode = .Physical;
+					changed = true;
+				}
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("A sky that follows the sun. Turn on Day / Night to move the sun with a clock.");
+				BeginProperty("Zenith");
+				changed |= ImGui.ColorEdit3("##sz", ref env.skyZenith);
+				BeginProperty("Horizon");
+				changed |= ImGui.ColorEdit3("##sh", ref env.skyHorizon);
+				BeginProperty("Ground");
+				changed |= ImGui.ColorEdit3("##sg", ref env.skyGround);
+			}
+			else
+			{
+				BeginProperty("Sky Brightness");
+				changed |= ImGui.SliderFloat("##skb", ref env.skyBrightness, 0, 4);
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("How bright the sky is next to the sun light (1: as the air makes it).");
+				BeginProperty("Haze");
+				changed |= ImGui.SliderFloat("##tb", ref env.turbidity, 1, 10);
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("How hazy the air is (turbidity). 2.5 is a clear day; higher is whiter, with a wider glow round the sun.");
+				BeginProperty("Sun Size");
+				changed |= ImGui.SliderFloat("##sds", ref env.sunDiscSize, 0, 5, "%.2f deg");
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("How wide the sun's disc looks (the real sun: 0.53 degrees).");
+				BeginProperty("Moon Size");
+				changed |= ImGui.SliderFloat("##ms", ref env.moonSize, 0, 10, "%.2f deg");
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("How wide the moon looks (the real moon: 0.52 degrees). 0: no moon. Shown with Day / Night on.");
+				BeginProperty("Stars");
+				changed |= ImGui.SliderFloat("##stb", ref env.starBrightness, 0, 4);
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("How bright the stars are at night. 0: no stars.");
+			}
 			BeginProperty("Fog Color");
 			changed |= ImGui.ColorEdit3("##fc", ref env.fogColor);
 			if (env.dayNight && env.autoColors && ImGui.IsItemHovered())

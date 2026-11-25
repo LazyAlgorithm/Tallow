@@ -66,12 +66,14 @@ struct QualityValues : IEquatable<QualityValues>
 	public int32 geometryBudgetMB = 512;
 	public int32 textureBudgetMB = 1024;
 	public int32 vtBudgetMB = 512;
+	/// The physical sky's detail: 0 the smallest sky table (128 x 72), 1 192 x 108, 2 384 x 216 with more samples.
+	public int32 skyQuality = 1;
 
 	public this()
 	{
 	}
 
-	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialiasMode == other.antialiasMode && upscaler == other.upscaler && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize && gpuDriven == other.gpuDriven && pixelError == other.pixelError && gpuOcclusion == other.gpuOcclusion && streamGeometry == other.streamGeometry && geometryBudgetMB == other.geometryBudgetMB && textureBudgetMB == other.textureBudgetMB && vtBudgetMB == other.vtBudgetMB;
+	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialiasMode == other.antialiasMode && upscaler == other.upscaler && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize && gpuDriven == other.gpuDriven && pixelError == other.pixelError && gpuOcclusion == other.gpuOcclusion && streamGeometry == other.streamGeometry && geometryBudgetMB == other.geometryBudgetMB && textureBudgetMB == other.textureBudgetMB && vtBudgetMB == other.vtBudgetMB && skyQuality == other.skyQuality;
 	public static bool operator ==(QualityValues a, QualityValues b) => a.Equals(b);
 }
 
@@ -118,6 +120,7 @@ static class Quality
 			v.geometryBudgetMB = 256;
 			v.textureBudgetMB = 512;
 			v.vtBudgetMB = 256;
+			v.skyQuality = 0;
 		case .Medium:
 			v.renderScale = 0.85f;
 			v.upscaler = .FSR1;
@@ -132,6 +135,7 @@ static class Quality
 			v.foliageDistance = 0.75f;
 			v.reflectionSize = 64;
 			v.pixelError = 2.0f;
+			v.skyQuality = 0;
 		case .High,.Custom:
 		case .Ultra:
 			// TAA (a graphics card that cannot do it falls back to FXAA: Antialiasing.Resolve).
@@ -146,6 +150,7 @@ static class Quality
 			v.geometryBudgetMB = 1024;
 			v.textureBudgetMB = 2048;
 			v.vtBudgetMB = 1024;
+			v.skyQuality = 2;
 		}
 		return v;
 	}
@@ -205,6 +210,7 @@ static class Quality
 		if (!GpuDriven.StreamGeometryFromArgs)
 			GpuDriven.StreamGeometry = Current.streamGeometry;
 		StreamingCore.ApplyBudgetsMB(Current.geometryBudgetMB, Current.textureBudgetMB, Current.vtBudgetMB);
+		PhysicalSky.Quality = Math.Clamp(Current.skyQuality, 0, 2);
 	}
 
 	/// The preset suggested for this machine: Low on phones, Medium on integrated graphics and in a browser, High
@@ -223,8 +229,8 @@ static class Quality
 	/// The settings as text, one `name=value` a line.
 	public static void Write(QualityValues v, String text)
 	{
-		text.AppendF("renderScale={}\nantialias={}\nantialiasMode={}\nupscaler={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\ngpuDriven={}\npixelError={}\ngpuOcclusion={}\nstreamGeometry={}\ngeometryBudgetMB={}\ntextureBudgetMB={}\nvtBudgetMB={}\n",
-			v.renderScale, v.antialiasMode != .Off ? 1 : 0, (int32)v.antialiasMode, (int32)v.upscaler, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize, v.gpuDriven ? 1 : 0, v.pixelError, v.gpuOcclusion ? 1 : 0, v.streamGeometry ? 1 : 0, v.geometryBudgetMB, v.textureBudgetMB, v.vtBudgetMB);
+		text.AppendF("renderScale={}\nantialias={}\nantialiasMode={}\nupscaler={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\ngpuDriven={}\npixelError={}\ngpuOcclusion={}\nstreamGeometry={}\ngeometryBudgetMB={}\ntextureBudgetMB={}\nvtBudgetMB={}\nskyQuality={}\n",
+			v.renderScale, v.antialiasMode != .Off ? 1 : 0, (int32)v.antialiasMode, (int32)v.upscaler, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize, v.gpuDriven ? 1 : 0, v.pixelError, v.gpuOcclusion ? 1 : 0, v.streamGeometry ? 1 : 0, v.geometryBudgetMB, v.textureBudgetMB, v.vtBudgetMB, v.skyQuality);
 	}
 
 	/// Reads settings from text (unknown or missing lines keep the values given).
@@ -272,6 +278,7 @@ static class Quality
 			case "geometryBudgetMB": v.geometryBudgetMB = (int32)Math.Clamp(number, 16, 16384);
 			case "textureBudgetMB": v.textureBudgetMB = (int32)Math.Clamp(number, 16, 16384);
 			case "vtBudgetMB": v.vtBudgetMB = (int32)Math.Clamp(number, 16, 16384);
+			case "skyQuality": v.skyQuality = (int32)Math.Clamp(number, 0, 2);
 			}
 		}
 		return v;

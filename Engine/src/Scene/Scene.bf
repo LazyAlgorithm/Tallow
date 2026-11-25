@@ -4,6 +4,18 @@ using System.Collections;
 
 namespace Tallow;
 
+/// What the sky behind everything is (tallowengine.com/docs/day-night).
+enum SkyMode : int32
+{
+	/// Three hand-picked colours (zenith, horizon, ground) and the sun: the sky scenes had before the physical sky.
+	Gradient,
+	/// Light scattered by the air, from the sun's direction: blue by day, orange and red at sunset, stars and the moon
+	/// at night. New scenes use it.
+	Physical,
+	/// A skybox picture (coming: until then drawn as Physical).
+	Custom
+}
+
 /// Environment settings saved with a scene: ambient light, sky and fog.
 class SceneEnvironment
 {
@@ -143,6 +155,20 @@ class SceneEnvironment
 	/// by day, warm at sunset, dark at night). Off keeps the hand-picked colours.
 	public bool autoColors;
 
+	/// What the sky is: the old colour Gradient (older scenes), the Physical sky (new scenes), or a Custom skybox.
+	public SkyMode skyMode = .Gradient;
+	/// Physical sky: how bright the sky is next to the sun light (1 as the air makes it).
+	public float skyBrightness = 1;
+	/// Physical sky: how bright the stars are at night. 0: no stars.
+	public float starBrightness = 1;
+	/// Physical sky: how wide the moon looks, in degrees (the real moon: 0.52). 0: no moon.
+	public float moonSize = 0.52f;
+	/// Physical sky: how wide the sun's disc looks, in degrees (the real sun: 0.53).
+	public float sunDiscSize = 0.53f;
+	/// Physical sky: how hazy the air is. 2.5 is a clear day; higher is hazier, with a whiter sky and a wider glow
+	/// round the sun.
+	public float turbidity = 2.5f;
+
 	/// The radius of the depth of field's largest blur as a share of the screen's height, at Depth Of Field 1.
 	public const float DepthOfFieldReach = 0.015f;
 
@@ -223,6 +249,12 @@ class SceneEnvironment
 		sunIntensity = other.sunIntensity;
 		moonIntensity = other.moonIntensity;
 		autoColors = other.autoColors;
+		skyMode = other.skyMode;
+		skyBrightness = other.skyBrightness;
+		starBrightness = other.starBrightness;
+		moonSize = other.moonSize;
+		sunDiscSize = other.sunDiscSize;
+		turbidity = other.turbidity;
 	}
 }
 

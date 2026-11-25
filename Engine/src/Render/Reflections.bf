@@ -271,7 +271,7 @@ static class Reflections
 
 	public static bgfx.UniformHandle sReflectionProbe, sReflectionSky, sSource;
 	public static bgfx.UniformHandle uReflection, uAmbientParams, uProbeMin, uProbeMax, uProbePos, uEnvFace, uEnvFilter, uEnvViewProj;
-	static bgfx.ProgramHandle sSkyProgram, sCopyProgram, sFilterProgram;
+	static bgfx.ProgramHandle sSkyProgram, sSkyPhysicalProgram, sCopyProgram, sFilterProgram;
 	static bool sReady;
 
 	static RenderView sCaptureView ~ delete _;
@@ -344,6 +344,7 @@ static class Reflections
 		uEnvFilter = bgfx.create_uniform("u_envFilter", .Vec4, 1);
 		uEnvViewProj = bgfx.create_uniform("u_envViewProj", .Mat4, 1);
 		sSkyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_env_sky");
+		sSkyPhysicalProgram = Gfx.LoadProgram("vs_fullscreen", "fs_env_sky_physical");
 		sCopyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_env_copy");
 		sFilterProgram = Gfx.LoadProgram("vs_fullscreen", "fs_env_filter");
 		uint32[6] black = .(0xff000000, 0xff000000, 0xff000000, 0xff000000, 0xff000000, 0xff000000);
@@ -418,6 +419,13 @@ static class Reflections
 			Mix(ref hash, .(color.r, color.g, color.b));
 		Mix(ref hash, .(sunDir.x, sunDir.y, sunDir.z));
 		Mix(ref hash, .(sunColor.x, sunColor.y, sunColor.z));
+		// The physical sky: a new table, the moon and stars' clock, and its settings.
+		hash = hash * 1099511628211 ^ PhysicalSky.State(env);
+		if (env.skyMode != .Gradient)
+		{
+			Mix(ref hash, .(env.skyBrightness, env.turbidity, env.dayNight ? env.sunIntensity : 0));
+			Mix(ref hash, .(env.timeOfDay, env.latitude, env.dayOfYear));
+		}
 		return hash;
 	}
 
@@ -504,23 +512,14 @@ static class Reflections
 			if (sStep == 0)
 			{
 				let env = scene.Environment;
-				var zenith = Linear(env.skyZenith);
-				var horizon = Linear(env.skyHorizon);
-				var ground = Linear(env.skyGround);
-				var dir = sunDir;
-				var color = sunColor;
 				for (int face < 6)
 				{
 					let view = (uint16)(FaceViewBase + face);
 					SetUpFaceView(view, "Reflection Sky", sSourceFaces[face], sJobSize);
 					Vector4 faceParams = .(face, Gfx.OriginBottomLeft ? 1 : 0, 0, 0);
 					bgfx.set_uniform(uEnvFace, &faceParams, 1);
-					bgfx.set_uniform(RenderResources.uSunDir, &dir, 1);
-					bgfx.set_uniform(RenderResources.uSunColor, &color, 1);
-					bgfx.set_uniform(RenderResources.uSkyZenith, &zenith, 1);
-					bgfx.set_uniform(RenderResources.uSkyHorizon, &horizon, 1);
-					bgfx.set_uniform(RenderResources.uSkyGround, &ground, 1);
-					SubmitFullscreen(view, sSkyProgram);
+					PhysicalSky.SetUniforms(env, sunDir, sunColor);
+					SubmitFullscreen(view, PhysicalSky.Mode(env) == 0 ? sSkyProgram : sSkyPhysicalProgram);
 				}
 			}
 			else
@@ -622,7 +621,7 @@ static class Reflections
 		bgfx.touch(view);
 	}
 
-	static void SubmitFullscreen(uint16 view, bgfx.ProgramHandle program)
+	public static void SubmitFullscreen(uint16 view, bgfx.ProgramHandle program)
 	{
 		if (bgfx.get_avail_transient_vertex_buffer(3, &Gfx.ScreenLayout) < 3)
 			return;
@@ -738,7 +737,7 @@ static class Reflections
 		bgfx.destroy_uniform(sSource);
 		for (let uniform in bgfx.UniformHandle[?](uReflection, uAmbientParams, uProbeMin, uProbeMax, uProbePos, uEnvFace, uEnvFilter, uEnvViewProj))
 			bgfx.destroy_uniform(uniform);
-		for (let program in bgfx.ProgramHandle[?](sSkyProgram, sCopyProgram, sFilterProgram))
+		for (let program in bgfx.ProgramHandle[?](sSkyProgram, sSkyPhysicalProgram, sCopyProgram, sFilterProgram))
 			bgfx.destroy_program(program);
 		sSourceCube.idx = sSkyCube.idx = sBlackCube.idx = uint16.MaxValue;
 		sSkyState = int64.MinValue;

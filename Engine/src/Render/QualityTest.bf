@@ -34,6 +34,7 @@ static class QualityTest
 		Check(GpuDriven.PixelError == 0.75f && StreamingCore.Pool(.TextureMip).Budget == 2048L << 20, "Ultra: 0.75 px, 2048 MB textures");
 		Quality.Set(.Low);
 		Check(StreamingCore.Pool(.VtTile).Budget == 256L << 20, "Low: 256 MB virtual textures");
+		Check(PhysicalSky.Quality == 0, "Low: smallest sky table");
 
 		// Round trip: a changed value comes back, and Custom is reported.
 		var v = Quality.Preset(.High);
@@ -43,6 +44,7 @@ static class QualityTest
 		v.geometryBudgetMB = 300;
 		v.textureBudgetMB = 700;
 		v.vtBudgetMB = 200;
+		v.skyQuality = 2;
 		let text = scope String();
 		Quality.Write(v, text);
 		let back = Quality.Read(text, .());

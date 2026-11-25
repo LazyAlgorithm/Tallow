@@ -13,6 +13,8 @@ class CompareShot
 	int32 mWait = -1;
 
 	public bool Started => mWait >= 0;
+	/// The picture's RGBA pixels (rows top to bottom) once Step returned true.
+	public uint8[] Pixels => mPixels;
 
 	public bool Step(RenderView view, int32 width, int32 height, StringView path)
 	{

@@ -97,6 +97,12 @@ static class SceneSerializer
 		Number(text, "sunIntensity", env.sunIntensity, defaults.sunIntensity);
 		Number(text, "moonIntensity", env.moonIntensity, defaults.moonIntensity);
 		Number(text, "autoColors", env.autoColors ? 1 : 0, 0);
+		Number(text, "skyMode", (int32)env.skyMode, 0);
+		Number(text, "skyBrightness", env.skyBrightness, defaults.skyBrightness);
+		Number(text, "starBrightness", env.starBrightness, defaults.starBrightness);
+		Number(text, "moonSize", env.moonSize, defaults.moonSize);
+		Number(text, "sunDiscSize", env.sunDiscSize, defaults.sunDiscSize);
+		Number(text, "turbidity", env.turbidity, defaults.turbidity);
 	}
 
 	/// Writes an environment number only when it differs from a new scene's.
@@ -784,6 +790,12 @@ static class SceneSerializer
 		case "sunIntensity": env.sunIntensity = Math.Max(value, 0);
 		case "moonIntensity": env.moonIntensity = Math.Max(value, 0);
 		case "autoColors": env.autoColors = value != 0;
+		case "skyMode": env.skyMode = (SkyMode)(int32)Math.Clamp(value, 0, 2);
+		case "skyBrightness": env.skyBrightness = Math.Max(value, 0);
+		case "starBrightness": env.starBrightness = Math.Max(value, 0);
+		case "moonSize": env.moonSize = Math.Clamp(value, 0, 20);
+		case "sunDiscSize": env.sunDiscSize = Math.Clamp(value, 0, 20);
+		case "turbidity": env.turbidity = Math.Clamp(value, 1, 10);
 		}
 	}
 

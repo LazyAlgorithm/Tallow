@@ -68,6 +68,18 @@ static class DayNight
 		return Direction(env, HourAngle(env.timeOfDay) - phase, declination);
 	}
 
+	/// The star sphere's axes in the scene's world at the environment's time: x towards the stars at right ascension 0
+	/// on the celestial equator, y at 90 degrees east of it, z the celestial pole. A star fixed on that sphere turns
+	/// with the sky through the night (the physical sky's stars).
+	public static void CelestialBasis(SceneEnvironment env, out Vector3 x, out Vector3 y, out Vector3 z)
+	{
+		// Sidereal angle: the sun's hour angle plus a turn a year.
+		let sidereal = HourAngle(env.timeOfDay) + 2.0 * Math.PI_d * env.dayOfYear / 365.0;
+		x = Direction(env, sidereal, 0);
+		y = Direction(env, sidereal - 0.5 * Math.PI_d, 0);
+		z = Direction(env, 0, 0.5 * Math.PI_d);
+	}
+
 	/// The sun's height above the horizon in degrees (below it negative).
 	public static float SunElevation(SceneEnvironment env) => Math.Asin(Math.Clamp(SunDirection(env).y, -1, 1)) * Mathf.Rad2Deg;
 

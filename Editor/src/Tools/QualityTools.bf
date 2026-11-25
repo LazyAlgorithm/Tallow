@@ -107,6 +107,13 @@ extension EditorApp
 				v.reflectionSize = (int32)(32 << (int)Math.Round(sizeSlider));
 				changed = true;
 			}
+			StringView[3] skyNames = .("low", "medium", "high");
+			var skySlider = (float)Math.Clamp(v.skyQuality, 0, 2);
+			if (ImGui.SliderFloat(scope String()..AppendF("Sky Detail ({})###skydetail", skyNames[Math.Clamp(v.skyQuality, 0, 2)]).CStr(), ref skySlider, 0, 2, ""))
+			{
+				v.skyQuality = (int32)Math.Round(skySlider);
+				changed = true;
+			}
 			if (changed)
 			{
 				Quality.Current = v;
