@@ -43,7 +43,9 @@ class GiGeometry
 		let count = TriangleCount;
 		if (count <= 0)
 			return;
-		let indices = scope uint32[count * 3];
+		// On the heap: this runs on the probe worker, whose stack is small, and a big scene has millions of triangles.
+		let indices = new uint32[count * 3];
+		defer delete indices;
 		for (int i < indices.Count)
 			indices[i] = (uint32)i;
 		bvh = LightBaker.tn_bake_create(positions.Ptr, count * 3, indices.Ptr, count);

@@ -153,14 +153,22 @@ static class SceneManager
 	/// The scene loads in progress.
 	public static List<SceneLoad> Loads => sLoads;
 
+	/// Streaming's part of the frame: uploads the geometry pages, texture mip levels and virtual texture tiles that
+	/// finished reading, and asks for the ones the last frame's drawing wanted. The editor calls it every frame, also
+	/// when the game is not playing, so a big scene streams in the Scene and Game views too.
+	public static void UpdateStreaming()
+	{
+		StreamingCore.Update((int)Time.FrameCount);
+		StreamedTextures.Update((int)Time.FrameCount);
+		VirtualTextures.Update((int)Time.FrameCount);
+	}
+
 	/// Called by the application once a frame: background loading, then scene changes. Returns true if the scene was
 	/// changed.
 	public static bool Update(Scene scene)
 	{
 		AssetLoader.Update();
-		StreamingCore.Update((int)Time.FrameCount);
-		StreamedTextures.Update((int)Time.FrameCount);
-		VirtualTextures.Update((int)Time.FrameCount);
+		UpdateStreaming();
 		bool changed = false;
 		for (int i = 0; i < sLoads.Count; i++)
 		{

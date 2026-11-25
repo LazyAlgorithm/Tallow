@@ -66,6 +66,9 @@ static class StreamingCore
 	static List<Thread> sThreads = new .() ~ delete _;
 	static StreamPool[Kinds] sPools;
 	static bool sQuit;
+	static int sNextKind;
+	/// Pages of one kind read and waiting for room in their pool, before no more of that kind are read.
+	const int MaxReadyPerKind = 4;
 	static bool sStarted;
 	static int sFrame;
 	static int64 sFrameUploaded;
@@ -316,7 +319,11 @@ static class StreamingCore
 			if (!ready.ok || resource.mDead)
 			{
 				if (!ready.ok)
+				{
 					Failures++;
+					if (Log)
+						Console.WriteLine(scope $"streaming: read failed {resource.Kind} {resource.Id}:{request.page}");
+				}
 				Remove(ready);
 				continue;
 			}
@@ -328,6 +335,8 @@ static class StreamingCore
 			{
 				// Room comes as evicted pages retire or pages go cold: keep it, try next frame. Later pages of a
 				// smaller size may still fit.
+				if (Log && frame % 240 == 0)
+					Console.WriteLine(scope $"streaming: pool full for {resource.Kind} {resource.Id}:{request.page} ({bytes} bytes)");
 				i++;
 				continue;
 			}
@@ -344,8 +353,25 @@ static class StreamingCore
 					Console.WriteLine(scope $"streaming: resident {resource.Kind} {resource.Id}:{request.page} ({bytes} bytes, {ms:F1} ms)");
 			}
 			else
+			{
 				Failures++;
+				if (Log)
+					Console.WriteLine(scope $"streaming: upload refused {resource.Kind} {resource.Id}:{request.page} ({bytes} bytes)");
+			}
 			Remove(ready);
+		}
+		if (Log && frame % 240 == 0)
+		{
+			using (sMonitor.Enter())
+			{
+				int readyGeo = 0, readyTex = 0;
+				for (let r in sReady)
+				{
+					if (r.request.resource.Kind == .GeoPage) readyGeo++;
+					else readyTex++;
+				}
+				Console.WriteLine(scope $"streaming: frame {frame}: queued geo {sQueued[(int)StreamKind.GeoPage].Count} tex {sQueued[(int)StreamKind.TextureMip].Count}, in flight geo {sInFlight[(int)StreamKind.GeoPage].Count}, ready geo {readyGeo} other {readyTex}");
+			}
 		}
 		LastFrameUploadMB = (float)sFrameUploaded / 1.0e6f;
 		AverageLatencyMs = sLatencyCount > 0 ? (float)(sLatencyTotalMs / sLatencyCount) : 0;
@@ -374,11 +400,25 @@ static class StreamingCore
 		Request request = null;
 		using (sMonitor.Enter())
 		{
+			// Priorities of different kinds are not comparable (a texture's is a pixel count, a geometry page's a flat 100),
+			// so the kinds take turns and each is read best first. A kind with pages already read and waiting for room is
+			// skipped: reading more of it only fills memory.
 			int bestKind = -1;
 			uint64 bestKey = 0;
-			float best = float.MinValue;
-			for (int k < Kinds)
+			for (int turn < Kinds)
 			{
+				let k = (sNextKind + turn) % Kinds;
+				if (sQueued[k].Count == 0)
+					continue;
+				int waiting = 0;
+				for (let r in sReady)
+				{
+					if ((int)r.request.resource.Kind == k)
+						waiting++;
+				}
+				if (waiting >= MaxReadyPerKind)
+					continue;
+				float best = float.MinValue;
 				for (let (key, queued) in sQueued[k])
 				{
 					if (queued.priority > best)
@@ -388,6 +428,8 @@ static class StreamingCore
 						bestKey = key;
 					}
 				}
+				sNextKind = k + 1;
+				break;
 			}
 			if (bestKind < 0)
 				return false;

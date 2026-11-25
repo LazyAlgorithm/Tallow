@@ -782,9 +782,12 @@ class SkinnedModel
 		for (int32 i < Native.tn_gltf_image_count(scene))
 		{
 			int32 width = 0, height = 0;
-			let pixels = Native.tn_gltf_get_image(scene, i, &width, &height);
 			let name = new String()..AppendF("{}#image{}", path, i);
 			names.Add(name);
+			// Made now (not copied out for the main thread) and big: streamed from its file, never decoded whole.
+			if (images == null && Assets.TryStreamModelImage(scene, i, name))
+				continue;
+			let pixels = Native.tn_gltf_get_image(scene, i, &width, &height);
 			if (pixels == null)
 				continue;
 			if (images == null)

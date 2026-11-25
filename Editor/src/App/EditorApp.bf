@@ -553,6 +553,13 @@ class EditorApp : Application
 			SaveSystem.Update();
 			SceneManager.Update(mScene);
 		}
+		else
+		{
+			// Streamed geometry, textures and virtual textures arrive in Edit and Paused too, or a big scene would stay at
+			// its coarsest level in the editor.
+			AssetLoader.Update();
+			SceneManager.UpdateStreaming();
+		}
 		let gameCamera = FindGameCamera();
 		VoxelTerrain.ViewerPosition = (mPlay != .Edit && gameCamera) ? gameCamera.Transform.Position : mCamPosition;
 		Camera.ViewerPosition = VoxelTerrain.ViewerPosition;

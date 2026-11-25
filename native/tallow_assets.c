@@ -303,6 +303,8 @@ typedef struct tn_gltf_image
 	unsigned char* pixels;      // RGBA, 4 bytes a pixel; null when it could not be read
 	int32_t width;
 	int32_t height;
+	char* file;                 // a file beside the model that is decoded only when asked for (tn_gltf_get_image); null otherwise
+	int32_t decoded;
 } tn_gltf_image;
 
 typedef struct tn_gltf_joint
@@ -500,6 +502,14 @@ static cgltf_result pack_or_file_read(const struct cgltf_memory_options* memory,
 	return cgltf_result_success;
 }
 
+static char* _strdup_path(const char* text)
+{
+	size_t n = strlen(text) + 1;
+	char* copy = (char*)malloc(n);
+	if (copy != NULL) memcpy(copy, text, n);
+	return copy;
+}
+
 static void pack_or_file_release(const struct cgltf_memory_options* memory, const struct cgltf_file_options* file, void* data, cgltf_size size)
 {
 	free(data);
@@ -549,12 +559,9 @@ static void tn_load_images(tn_gltf_scene* scene, const cgltf_data* data, const c
 				memcpy(path, modelPath, folder);
 				strcpy(path + folder, image->uri);
 				cgltf_decode_uri(path + folder);
-				cgltf_size length = 0;
-				if (pack_or_file_read(NULL, NULL, path, &length, &owned) == cgltf_result_success)
-				{
-					bytes = (const unsigned char*)owned;
-					size = (size_t)length;
-				}
+				// Not read here: a big model has dozens of 4K pictures, and most callers only want the ones they draw
+				// (or stream: tn_gltf_image_file). tn_gltf_get_image decodes one when it is asked for.
+				scene->images[i].file = _strdup_path(path);
 			}
 		}
 		if (bytes != NULL && size > 0)
@@ -728,12 +735,46 @@ tn_gltf_scene* tn_gltf_load(const char* path)
 }
 
 int32_t tn_gltf_image_count(const tn_gltf_scene* scene) { return scene != NULL ? scene->imageCount : 0; }
+static void tn_image_decode(tn_gltf_image* image)
+{
+	if (image->decoded || image->file == NULL) return;
+	image->decoded = 1;
+	void* owned = NULL;
+	cgltf_size length = 0;
+	if (pack_or_file_read(NULL, NULL, image->file, &length, &owned) != cgltf_result_success) return;
+	int width = 0, height = 0, channels = 0;
+	image->pixels = stbi_load_from_memory((const unsigned char*)owned, (int)length, &width, &height, &channels, 4);
+	image->width = width;
+	image->height = height;
+	free(owned);
+}
+
 const unsigned char* tn_gltf_get_image(const tn_gltf_scene* scene, int32_t index, int32_t* width, int32_t* height)
 {
 	if (scene == NULL || index < 0 || index >= scene->imageCount) { *width = *height = 0; return NULL; }
+	tn_image_decode(&scene->images[index]);
 	*width = scene->images[index].width;
 	*height = scene->images[index].height;
 	return scene->images[index].pixels;
+}
+
+// The file an image is read from (beside the model), or null for one inside the model; with its size, found from the
+// file's header without decoding it. Such an image can be streamed from that file instead of being decoded here.
+const char* tn_gltf_image_file(const tn_gltf_scene* scene, int32_t index, int32_t* width, int32_t* height)
+{
+	*width = *height = 0;
+	if (scene == NULL || index < 0 || index >= scene->imageCount || scene->images[index].file == NULL) return NULL;
+	const tn_gltf_image* image = &scene->images[index];
+	if (image->pixels != NULL) { *width = image->width; *height = image->height; return image->file; }
+	void* owned = NULL;
+	cgltf_size length = 0;
+	if (pack_or_file_read(NULL, NULL, image->file, &length, &owned) == cgltf_result_success)
+	{
+		int channels = 0, w = 0, h = 0;
+		if (stbi_info_from_memory((const unsigned char*)owned, (int)length, &w, &h, &channels)) { *width = w; *height = h; }
+		free(owned);
+	}
+	return image->file;
 }
 
 int32_t tn_gltf_joint_count(const tn_gltf_scene* scene) { return scene != NULL ? scene->jointCount : 0; }
@@ -766,7 +807,7 @@ void tn_gltf_free(tn_gltf_scene* scene)
 		free(scene->prims[i].weights);
 	}
 	for (int32_t i = 0; i < scene->animCount; i++) free(scene->anims[i].data);
-	for (int32_t i = 0; i < scene->imageCount; i++) stbi_image_free(scene->images[i].pixels);
+	for (int32_t i = 0; i < scene->imageCount; i++) { stbi_image_free(scene->images[i].pixels); free(scene->images[i].file); }
 	free(scene->images);
 	free(scene->anims);
 	free(scene->joints);

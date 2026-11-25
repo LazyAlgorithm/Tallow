@@ -195,4 +195,5 @@ static class Native
 	[CLink] public static extern void tn_gltf_free(void* scene);
 	[CLink] public static extern int32 tn_gltf_image_count(void* scene);
 	[CLink] public static extern uint8* tn_gltf_get_image(void* scene, int32 index, int32* width, int32* height);
+	[CLink] public static extern char8* tn_gltf_image_file(void* scene, int32 index, int32* width, int32* height);
 }

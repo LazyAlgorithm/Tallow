@@ -679,6 +679,30 @@ static class Assets
 	}
 
 	/// Makes each image in a glTF / GLB file a texture named "<file>#image<n>". False if the file cannot be read.
+	/// A big picture in a file beside a model (a glTF's image uri) streams like any other picture (its mip levels, or
+	/// virtual texture pages) instead of being decoded whole: a model with dozens of 4K pictures would take gigabytes
+	/// and freeze the editor. True when the texture named key was made that way.
+	public static bool TryStreamModelImage(void* scene, int32 index, StringView key)
+	{
+		if (!Gfx.Initialized || sTextures.ContainsKeyAlt(key))
+			return false;
+		int32 width = 0, height = 0;
+		let file = Native.tn_gltf_image_file(scene, index, &width, &height);
+		if (file == null || Math.Max(width, height) < StreamedTextures.MinSize)
+			return false;
+		let kind = Textures.GltfImageKind(scene, index);
+		let full = scope String(file);
+		bgfx.TextureHandle streamed = .() { idx = uint16.MaxValue };
+		if (kind == .Color)
+			streamed = VirtualTextures.TryCreate(key, full);
+		if (!streamed.Valid)
+			streamed = StreamedTextures.TryCreate(key, full, kind);
+		if (!streamed.Valid)
+			return false;
+		sTextures[new String(key)] = streamed.idx;
+		return true;
+	}
+
 	static bool AddModelImages(StringView model)
 	{
 		if (!model.EndsWith(".glb", .OrdinalIgnoreCase) && !model.EndsWith(".gltf", .OrdinalIgnoreCase) && !IsConvertedModel(model))
@@ -692,9 +716,12 @@ static class Assets
 		for (int32 i < Native.tn_gltf_image_count(scene))
 		{
 			int32 width = 0, height = 0;
+			let key = scope String()..AppendF("{}#image{}", model, i);
+			if (TryStreamModelImage(scene, i, key))
+				continue;
 			let pixels = Native.tn_gltf_get_image(scene, i, &width, &height);
 			if (pixels != null)
-				AddTexture(scope $"{model}#image{i}" , pixels, width, height, Textures.GltfImageKind(scene, i));
+				AddTexture(key, pixels, width, height, Textures.GltfImageKind(scene, i));
 		}
 		return true;
 	}
