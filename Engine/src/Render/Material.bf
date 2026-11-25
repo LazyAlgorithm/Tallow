@@ -507,7 +507,7 @@ class Material
 			{
 				mResolvedTexture.Set(texture);
 				mTextureVersion = Assets.TextureVersion;
-				mTexture = Assets.GetTexture(texture);
+				mTexture = Assets.GetTexture(texture, .Color, true);
 			}
 			return mTexture;
 		}

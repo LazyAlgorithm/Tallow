@@ -159,6 +159,7 @@ static class SceneManager
 	{
 		AssetLoader.Update();
 		StreamingCore.Update((int)Time.FrameCount);
+		StreamedTextures.Update((int)Time.FrameCount);
 		bool changed = false;
 		for (int i = 0; i < sLoads.Count; i++)
 		{

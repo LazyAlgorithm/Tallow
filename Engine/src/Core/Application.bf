@@ -28,6 +28,7 @@ namespace Tallow;
 ///   --streaming-test                                   check the streaming core (page files, pools, IO threads, the
 ///                                                      feedback ring) with no window, and exit 0 or 1
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
+///   --no-texture-streaming                             load big textures whole instead of streaming their mip levels
 ///   --streaming-log                                    print streaming requests and uploads
 ///   --gpu-driven-test [mesh]                           draw a crowd of a big mesh both ways, compare the pictures and
 ///                                                      the timings, and exit 0 or 1 (sphere:1000x700, a model)
@@ -168,6 +169,8 @@ class Application
 			}
 		}
 		StreamingCore.Log = HasArg("--streaming-log");
+		if (HasArg("--no-texture-streaming"))
+			StreamedTextures.Enabled = false;
 		StreamingCore.Start(2, geo, tex, vt);
 	}
 
@@ -273,7 +276,14 @@ class Application
 		let clodTest = scope String();
 		if (GetArg("--clod-test", clodTest))
 			return ClusterMeshTest.Run(clodTest);
-		if (HasArg("--streaming-test"))
+		let streamingTest = scope String();
+		if (GetArg("--streaming-test", streamingTest) && streamingTest == "textures" && !(this is TextureStreamTestApp))
+		{
+			let test = scope TextureStreamTestApp();
+			test.Run(args);
+			return test.Result;
+		}
+		if (HasArg("--streaming-test") && !(this is TextureStreamTestApp))
 			return StreamingTest.Run();
 		// The GPU-driven drawing check runs the whole application (it needs a window), as its own.
 		if (HasArg("--gpu-driven-test") && !(this is GpuDrivenTestApp))

@@ -367,6 +367,7 @@ extension RenderView
 			if (first.lightGrid > 0)
 				LightProbes.Bind(mProbeGrid, first.lightGrid);
 			var surface = ResolveSurface(first.renderer, first.material, first.world);
+			NoteStreamedTextures(first, surface);
 			surface.cull = FacingCull(surface.cull);
 			SetSurfaceUniforms(first.renderer, ref surface);
 			let state = Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | surface.cull | Gfx.StateMsaa;

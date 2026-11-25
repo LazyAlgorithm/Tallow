@@ -164,7 +164,7 @@ class PageFile
 	}
 
 	/// Writes a file of pages. A page that deflates smaller is stored deflated.
-	public static Result<void> Write(StringView file, StreamKind kind, List<List<uint8>> pages)
+	public static Result<void> Write(StringView file, StreamKind kind, List<List<uint8>> pages, bool compress = true)
 	{
 		let stream = scope FileStream();
 		if (stream.Create(file) case .Err)
@@ -186,7 +186,7 @@ class PageFile
 			var storedLength = page.Count;
 			uint32 flags = 0;
 			var owned = false;
-			if (page.Count > 0)
+			if (compress && page.Count > 0)
 			{
 				int32 length = 0;
 				let packed = stbi_zlib_compress(page.Ptr, (int32)page.Count, &length, 6);

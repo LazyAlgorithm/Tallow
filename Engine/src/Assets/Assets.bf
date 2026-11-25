@@ -43,6 +43,7 @@ static class Assets
 			{
 				bgfx.TextureHandle handle;
 				handle.idx = entry.value;
+				StreamedTextures.Release(handle.idx);
 				bgfx.destroy_texture(handle);
 			}
 			delete entry.key;
@@ -109,6 +110,7 @@ static class Assets
 				{
 					bgfx.TextureHandle handle;
 					handle.idx = pair.value;
+					StreamedTextures.Release(handle.idx);
 					bgfx.destroy_texture(handle);
 				}
 				delete pair.key;
@@ -557,6 +559,7 @@ static class Assets
 		{
 			bgfx.TextureHandle old;
 			old.idx = pair.value;
+			StreamedTextures.Release(old.idx);
 			bgfx.destroy_texture(old);
 		}
 		delete pair.key;
@@ -583,6 +586,7 @@ static class Assets
 			{
 				bgfx.TextureHandle old;
 				old.idx = pair.value;
+				StreamedTextures.Release(old.idx);
 				bgfx.destroy_texture(old);
 			}
 			delete pair.key;
@@ -594,7 +598,7 @@ static class Assets
 
 	/// The texture of an image file (loaded the first time). kind says what it holds, for its mip levels, when the
 	/// caller knows (a normal map slot); otherwise it is worked out (Textures.KindOf).
-	public static bgfx.TextureHandle GetTexture(StringView path, TextureKind kind = .Color)
+	public static bgfx.TextureHandle GetTexture(StringView path, TextureKind kind = .Color, bool streamable = false)
 	{
 		if (path.IsEmpty)
 			return Gfx.WhiteTexture;
@@ -614,9 +618,26 @@ static class Assets
 		}
 		let full = scope String();
 		ResolvePath(path, full);
-		let texture = Gfx.LoadTexture(full, kind == .Color ? Textures.KindOf(path) : kind);
+		let texKind = kind == .Color ? Textures.KindOf(path) : kind;
+		// A big picture a surface shows streams its mip levels in (StreamedTextures): its tail now, the rest as it is seen.
+		bgfx.TextureHandle texture = .() { idx = uint16.MaxValue };
+		if (streamable)
+			texture = StreamedTextures.TryCreate(path, full, texKind);
+		if (!texture.Valid)
+			texture = Gfx.LoadTexture(full, texKind);
 		sTextures[new String(path)] = texture.idx;
 		return texture;
+	}
+
+	/// Shows another handle for a texture already loaded (a streamed texture got a bigger or smaller level). Materials
+	/// and renderers look it up again.
+	public static void SwapTexture(StringView path, bgfx.TextureHandle handle)
+	{
+		if (sTextures.TryGetAlt(path, let key, ?))
+		{
+			sTextures[key] = handle.idx;
+			TextureVersion++;
+		}
 	}
 
 	/// Makes each image in a glTF / GLB file a texture named "<file>#image<n>". False if the file cannot be read.

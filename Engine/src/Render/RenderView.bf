@@ -265,6 +265,7 @@ class RenderView
 	List<RenderItem> mViewmodelTransparent = new .() ~ delete _;
 
 	// Frame constants, re-sent with every draw because bgfx orders uniform updates by sorted draw.
+	float mTanHalfFov;
 	Vector4 mCamPos, mSunDir, mSunColor, mAmbientSky, mAmbientGround, mFogColor, mLightCount, mCascadeSplits, mShadowParams;
 	Vector4 mClusterForward, mClusterParams;
 	Matrix4 mClusterViewProj;
@@ -576,6 +577,7 @@ class RenderView
 	void SetFrameConstants(CameraData camera, SceneEnvironment env)
 	{
 		mCamPos = .(camera.position, 1);
+		mTanHalfFov = camera.orthographic ? 0 : Math.Tan(camera.fieldOfView * 0.5f * (Math.PI_f / 180));
 		mProbeGrid = BakedLightingOn ? LightProbes.Get(env.lightProbes) : null;
 		mAmbientSky = Linear(env.ambientSky, env.ambientIntensity);
 		mAmbientGround = Linear(env.ambientGround, env.ambientIntensity);
@@ -1322,6 +1324,7 @@ class RenderView
 		if (first.lightGrid > 0)
 			LightProbes.Bind(mProbeGrid, first.lightGrid);
 		var surface = ResolveSurface(renderer, first.material, first.world);
+		NoteStreamedTextures(first, surface);
 		surface.cull = FacingCull(surface.cull);
 		if (shaded)
 			ApplyShading(ref surface);
@@ -1416,6 +1419,26 @@ class RenderView
 			data.color = .(color.r * item.tint.r * material.color.r, color.g * item.tint.g * material.color.g, color.b * item.tint.b * material.color.b, color.a * item.tint.a * material.color.a);
 	}
 
+	/// Tells the texture streaming how many pixels this item's surface covers, so it asks for the mip levels that show.
+	void NoteStreamedTextures(RenderItem item, Surface surface)
+	{
+		if (!StreamedTextures.Active)
+			return;
+		var pixels = 4096.0f;
+		if (mTanHalfFov > 0)
+		{
+			let distance = Math.Max((item.center - Vector3(mCamPos.x, mCamPos.y, mCamPos.z)).Length - item.radius * 0.5f, 0.05f);
+			pixels = item.radius * 2 / (distance * mTanHalfFov * 2) * mHeight;
+		}
+		// A texture repeated over the surface needs its texels for each repeat.
+		pixels *= Math.Max(Math.Max(Math.Abs(surface.uvTransform.x), Math.Abs(surface.uvTransform.y)), 1.0f);
+		StreamedTextures.Note(surface.texture.idx, pixels);
+		StreamedTextures.NotePath(surface.normalMap, pixels);
+		StreamedTextures.NotePath(surface.metalRoughMap, pixels);
+		StreamedTextures.NotePath(surface.occlusionMap, pixels);
+		StreamedTextures.NotePath(surface.emissiveMap, pixels);
+	}
+
 	/// A material, when the renderer (or this part) has one, replaces the renderer's own surface settings.
 	static Surface ResolveSurface(RenderProxy renderer, Material shared, Matrix4 world)
 	{
@@ -1493,10 +1516,10 @@ class RenderView
 		bgfx.set_texture(3, RenderResources.sTexture2, Assets.GetTexture(surface.textures[1]), uint32.MaxValue);
 		bgfx.set_uniform(RenderResources.uPbr, &surface.pbr, 1);
 		bgfx.set_uniform(RenderResources.uPalette, &surface.palette, 1);
-		bgfx.set_texture(4, RenderResources.sNormalMap, Assets.GetTexture(surface.normalMap, .Normal), uint32.MaxValue);
-		bgfx.set_texture(5, RenderResources.sMetalRoughMap, Assets.GetTexture(surface.metalRoughMap, .Data), uint32.MaxValue);
-		bgfx.set_texture(6, RenderResources.sOcclusionMap, Assets.GetTexture(surface.occlusionMap, .Data), uint32.MaxValue);
-		bgfx.set_texture(7, RenderResources.sEmissiveMap, Assets.GetTexture(surface.emissiveMap), uint32.MaxValue);
+		bgfx.set_texture(4, RenderResources.sNormalMap, Assets.GetTexture(surface.normalMap, .Normal, true), uint32.MaxValue);
+		bgfx.set_texture(5, RenderResources.sMetalRoughMap, Assets.GetTexture(surface.metalRoughMap, .Data, true), uint32.MaxValue);
+		bgfx.set_texture(6, RenderResources.sOcclusionMap, Assets.GetTexture(surface.occlusionMap, .Data, true), uint32.MaxValue);
+		bgfx.set_texture(7, RenderResources.sEmissiveMap, Assets.GetTexture(surface.emissiveMap, .Color, true), uint32.MaxValue);
 	}
 
 	/// Each particle system is one instanced draw of its mesh.

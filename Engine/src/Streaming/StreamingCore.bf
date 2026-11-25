@@ -166,6 +166,7 @@ static class StreamingCore
 			delete sQueued[k];
 			delete sInFlight[k];
 			delete sPools[k];
+			sPools[k] = null;
 		}
 		for (let ready in sReady)
 		{
