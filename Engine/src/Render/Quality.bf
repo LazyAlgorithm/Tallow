@@ -57,7 +57,7 @@ struct QualityValues : IEquatable<QualityValues>
 	/// Draw big meshes from clusters picked on the graphics card (GpuDriven.bf), where it can.
 	public bool gpuDriven = true;
 	/// How many pixels of error the clusters of those meshes may have on screen: lower is sharper and costs more.
-	public float pixelError = 1.5f;
+	public float pixelError = 1.0f;
 
 	public this()
 	{
@@ -131,7 +131,7 @@ static class Quality
 			v.lodBias = 1.5f;
 			v.foliageDistance = 1.5f;
 			v.reflectionSize = 256;
-			v.pixelError = 1;
+			v.pixelError = 0.75f;
 		}
 		return v;
 	}
@@ -184,7 +184,8 @@ static class Quality
 		Reflections.ProbesEnabled = Current.reflectionProbes;
 		Reflections.Resolution = Math.Clamp(Current.reflectionSize, 32, 512);
 		GpuDriven.QualitySetting = Current.gpuDriven;
-		GpuDriven.PixelError = Math.Clamp(Current.pixelError, 0.25f, 16);
+		if (!GpuDriven.PixelErrorFromArgs)
+			GpuDriven.PixelError = Math.Clamp(Current.pixelError, 0.25f, 16);
 	}
 
 	/// The preset suggested for this machine: Low on phones, Medium on integrated graphics and in a browser, High

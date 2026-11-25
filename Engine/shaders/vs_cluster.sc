@@ -37,7 +37,6 @@ void main()
 	uint packedColor = b_pool[v + 6u];
 	vec4 a_color0 = vec4(float(packedColor & 255u), float((packedColor >> 8u) & 255u), float((packedColor >> 16u) & 255u), float(packedColor >> 24u)) / 255.0;
 	v_texcoord0 = vec2(uintBitsToFloat(b_pool[v + 7u]), uintBitsToFloat(b_pool[v + 8u]));
-	v_texcoord1 = vec2(uintBitsToFloat(b_pool[v + 9u]), uintBitsToFloat(b_pool[v + 10u]));
 
 	uint at = instance * CLOD_INSTANCE_WORDS;
 	vec4 i_data0 = vec4(uintBitsToFloat(b_instances[at]), uintBitsToFloat(b_instances[at + 1u]), uintBitsToFloat(b_instances[at + 2u]), uintBitsToFloat(b_instances[at + 3u]));
@@ -45,6 +44,10 @@ void main()
 	vec4 i_data2 = vec4(uintBitsToFloat(b_instances[at + 8u]), uintBitsToFloat(b_instances[at + 9u]), uintBitsToFloat(b_instances[at + 10u]), uintBitsToFloat(b_instances[at + 11u]));
 	vec4 i_data3 = vec4(uintBitsToFloat(b_instances[at + 12u]), uintBitsToFloat(b_instances[at + 13u]), uintBitsToFloat(b_instances[at + 14u]), uintBitsToFloat(b_instances[at + 15u]));
 	vec4 i_data4 = vec4(uintBitsToFloat(b_instances[at + 16u]), uintBitsToFloat(b_instances[at + 17u]), uintBitsToFloat(b_instances[at + 18u]), uintBitsToFloat(b_instances[at + 19u]));
+
+	// fs_cluster has no lightmap: its second UV carries the cluster's simplification error in world units, the
+	// distance the drawn surface may lie off the true one, which the shadow lookups step over (include/lighting.sh).
+	v_texcoord1 = vec2(uintBitsToFloat(b_pool[cluster + 12u]) * uintBitsToFloat(b_instances[at + 39u]), 0.0);
 
 	mat4 model = mtxFromCols(vec4(i_data0.xyz, 0.0), vec4(i_data1.xyz, 0.0), vec4(i_data2.xyz, 0.0), i_data3);
 	v_surface = vec3(i_data0.w, i_data1.w, i_data2.w);

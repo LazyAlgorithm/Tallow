@@ -118,7 +118,7 @@ vec2 clusterList(vec3 wpos)
 
 // A point or spot light's shadow at wpos: its tile (a point light's cube face facing wpos), compared through four
 // taps kept inside the tile. toLight runs from wpos to the light.
-float localShadow(vec4 shadow, vec3 wpos, vec3 normal, vec3 toLight, float dist)
+float localShadow(vec4 shadow, vec3 wpos, vec3 normal, vec3 toLight, float dist, float receiverError)
 {
 	int tile = int(shadow.y + 0.5);
 	if (shadow.z > 1.5)
@@ -137,7 +137,7 @@ float localShadow(vec4 shadow, vec3 wpos, vec3 normal, vec3 toLight, float dist)
 	vec4 bounds = lightTexel(t + 4); // the tile in texture coordinates, a texel and a half in
 	vec4 info = lightTexel(t + 5);   // x: texel size, y: depth bias, z: a texel's width a metre from the light
 	// Pushed off the surface by about a texel where it lands, against shadow acne.
-	vec4 clip = mul(mtx, vec4(wpos + normal * (dist * info.z * 1.5), 1.0));
+	vec4 clip = mul(mtx, vec4(wpos + normal * (dist * info.z * 1.5 + receiverError), 1.0));
 	if (clip.w <= 0.0) return 1.0;
 	vec3 sc = clip.xyz / clip.w;
 	if (sc.z < 0.0 || sc.z > 1.0) return 1.0;
@@ -154,7 +154,7 @@ float localShadow(vec4 shadow, vec3 wpos, vec3 normal, vec3 toLight, float dist)
 
 // One light of the view's list on a surface.
 vec3 shadeLight(int index, vec3 wpos, vec3 n, vec3 v, vec3 albedo, float metallic, float roughness,
-	float specularLevel, vec4 bakedMask, bool lightmapped)
+	float specularLevel, vec4 bakedMask, bool lightmapped, float receiverError)
 {
 	int base = index * 8;
 	vec4 posRange = lightTexel(base);     // xyz position, w range
@@ -187,7 +187,7 @@ vec3 shadeLight(int index, vec3 wpos, vec3 n, vec3 v, vec3 albedo, float metalli
 			return vec3_splat(0.0);
 		vec4 shadow = lightTexel(base + 4); // x strength (0: none), y first tile, z tiles (1 spot, 6 point)
 		if (shadow.x > 0.0)
-			atten *= localShadow(shadow, wpos, n, toLight, dist);
+			atten *= localShadow(shadow, wpos, n, toLight, dist, receiverError);
 	}
 	if (params.z > 0.5) atten *= bakedMask[int(params.z - 1.0)];
 	return brdf(n, v, l, albedo, metallic, roughness, specularLevel) * colorType.rgb * atten * PI;
@@ -210,7 +210,10 @@ float shadowTap(mat4 mtx, vec3 wpos, float slopeBias)
 	return sum * 0.125;
 }
 
-float sunShadow(vec3 wpos, vec3 n, float viewDepth)
+// receiverError: how far the drawn surface may lie inside the true one (world units), stepped over along the normal.
+// Cluster LOD drawing passes the drawn cluster's simplification error: the shadow map holds another level of the same
+// mesh, and a coarse level's flat facets sit under it and would be shadowed in patches.
+float sunShadowLod(vec3 wpos, vec3 n, float viewDepth, float receiverError)
 {
 	if (u_shadowParams.z < 0.5 || viewDepth > u_cascadeSplits.w)
 	{
@@ -222,7 +225,7 @@ float sunShadow(vec3 wpos, vec3 n, float viewDepth)
 	float sinAngle = sqrt(1.0 - ndl * ndl);
 	float slopeBias = 1.0 + min(sinAngle / max(ndl, 0.05), 8.0);
 	vec3 offset = n * (u_shadowParams.w * (0.6 + 1.4 * sinAngle));
-	vec3 p = wpos + offset;
+	vec3 p = wpos + offset + n * receiverError;
 	float s;
 	if (viewDepth < u_cascadeSplits.x)
 	{
@@ -243,6 +246,11 @@ float sunShadow(vec3 wpos, vec3 n, float viewDepth)
 	// Fade out towards the end of the last cascade so the shadow distance has no hard edge.
 	float fade = clamp((u_cascadeSplits.w - viewDepth) / (u_cascadeSplits.w * 0.1), 0.0, 1.0);
 	return mix(1.0, s, fade * u_sunDir.w);
+}
+
+float sunShadow(vec3 wpos, vec3 n, float viewDepth)
+{
+	return sunShadowLod(wpos, n, viewDepth, 0.0);
 }
 
 // The ambient light on a surface facing n, between the ground's colour below and the sky's above.
@@ -413,8 +421,8 @@ vec3 environmentBrdf(vec3 f0, float roughness, float ndotv)
 // A surface's colour under every light, before its glow and fog: ambient (already worked out, from the hemisphere
 // or a lightmap), the surroundings mirrored, the sun and the scene's lights. bakedMask holds a lightmap's shadow
 // mask (all 1 without one); a lightmapped surface skips lights that are baked into it.
-vec3 shadeSurface(vec3 wpos, vec3 n, vec3 v, float viewDepth, vec3 albedo, float metallic, float roughness,
-	float specularLevel, float occlusion, vec3 ambient, vec4 bakedMask, bool lightmapped)
+vec3 shadeSurfaceLod(vec3 wpos, vec3 n, vec3 v, float viewDepth, vec3 albedo, float metallic, float roughness,
+	float specularLevel, float occlusion, vec3 ambient, vec4 bakedMask, bool lightmapped, float receiverError)
 {
 	vec3 mirrored = reflect(-v, n);
 	vec3 f0 = mix(vec3_splat(0.04 * specularLevel), albedo, metallic);
@@ -449,7 +457,7 @@ vec3 shadeSurface(vec3 wpos, vec3 n, vec3 v, float viewDepth, vec3 albedo, float
 		color += surroundings * reflectance * (1.0 - roughness * 0.75) * metallic * occlusion;
 	}
 
-	float shadow = sunShadow(wpos, n, viewDepth);
+	float shadow = sunShadowLod(wpos, n, viewDepth, receiverError);
 	if (u_lightCount.y > 0.5)
 	{
 		int channel = int(u_lightCount.y - 1.0);
@@ -460,16 +468,23 @@ vec3 shadeSurface(vec3 wpos, vec3 n, vec3 v, float viewDepth, vec3 albedo, float
 	// Extra directional lights reach every pixel; the others by the cluster the pixel is in.
 	int directionalCount = int(u_lightCount.x + 0.5);
 	for (int i = 0; i < directionalCount; i++)
-		color += shadeLight(i, wpos, n, v, albedo, metallic, roughness, specularLevel, bakedMask, lightmapped);
+		color += shadeLight(i, wpos, n, v, albedo, metallic, roughness, specularLevel, bakedMask, lightmapped, receiverError);
 	if (u_lightCount.z > float(directionalCount) + 0.5)
 	{
 		vec2 list = clusterList(wpos);
 		int first = int(list.x + 0.5);
 		int count = int(list.y + 0.5);
 		for (int k = 0; k < count; k++)
-			color += shadeLight(clusterLight(first + k), wpos, n, v, albedo, metallic, roughness, specularLevel, bakedMask, lightmapped);
+			color += shadeLight(clusterLight(first + k), wpos, n, v, albedo, metallic, roughness, specularLevel, bakedMask, lightmapped, receiverError);
 	}
 	return color;
+}
+
+// shadeSurfaceLod for a surface drawn as it is (every surface but cluster LOD drawing's).
+vec3 shadeSurface(vec3 wpos, vec3 n, vec3 v, float viewDepth, vec3 albedo, float metallic, float roughness,
+	float specularLevel, float occlusion, vec3 ambient, vec4 bakedMask, bool lightmapped)
+{
+	return shadeSurfaceLod(wpos, n, v, viewDepth, albedo, metallic, roughness, specularLevel, occlusion, ambient, bakedMask, lightmapped, 0.0);
 }
 
 // Distance fog over a colour seen at wpos.

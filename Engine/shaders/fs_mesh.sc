@@ -179,7 +179,12 @@ void main()
 #else
 	vec4 bakedMask = vec4_splat(1.0);
 #endif
+#ifdef TW_NO_LIGHTMAP
+	// vs_cluster.sc passes the drawn cluster's simplification error (world units) where the lightmap UV would be.
+	vec3 color = shadeSurfaceLod(v_wpos, n, v, v_depth, albedo, metallic, roughness, specularLevel, occlusion, ambient, bakedMask, false, v_texcoord1.x);
+#else
 	vec3 color = shadeSurface(v_wpos, n, v, v_depth, albedo, metallic, roughness, specularLevel, occlusion, ambient, bakedMask, TW_LIGHTMAP_MODE > 0.5);
+#endif
 
 	color += emissive;
 

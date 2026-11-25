@@ -22,6 +22,8 @@ namespace Tallow;
 ///   --gpu-occlusion on|off                             leave out what is hidden behind other things in the GPU-driven
 ///                                                      path (on by default, with the camera's occlusion culling)
 ///   --gpu-no-local-shadows                             draw point and spot light shadows the usual way
+///   --gpu-pixel-error PX                               how many pixels of error a cluster level may have before a finer one
+///                                                      is used (1; lower = more triangles, fewer holes)
 ///   --gpu-driven-min-triangles N                       the fewest triangles a mesh needs to be drawn that way (2000)
 ///   --gpu-driven-test [mesh]                           draw a crowd of a big mesh both ways, compare the pictures and
 ///                                                      the timings, and exit 0 or 1 (sphere:1000x700, a model)
@@ -210,6 +212,12 @@ class Application
 		let minTriangles = scope String();
 		if (GetArg("--gpu-driven-min-triangles", minTriangles) && int32.Parse(minTriangles) case .Ok(let triangles))
 			GpuDriven.MinTriangles = Math.Max(triangles, 1);
+		let pixelError = scope String();
+		if (GetArg("--gpu-pixel-error", pixelError) && float.Parse(pixelError) case .Ok(let pixels))
+		{
+			GpuDriven.PixelError = Math.Clamp(pixels, 0.0f, 16);
+			GpuDriven.PixelErrorFromArgs = true;
+		}
 		if (HasArg("--headless"))
 			Headless = true;
 		if (HasArg("--fixed-step"))

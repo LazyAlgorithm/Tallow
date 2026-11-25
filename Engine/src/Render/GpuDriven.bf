@@ -46,7 +46,9 @@ static class GpuDriven
 	/// `--gpu-driven on|off`: -1 follows the setting.
 	public static int32 Override = -1;
 	/// How many pixels of error a cluster may have on screen before a finer one is drawn (the quality setting).
-	public static float PixelError = 1.5f;
+	public static float PixelError = 1.0f;
+	/// `--gpu-pixel-error` was given: the quality preset must not overwrite it.
+	public static bool PixelErrorFromArgs;
 	/// The shadow cascades are drawn this many times coarser.
 	public const float ShadowErrorScale = 2.0f;
 	/// Meshes with fewer triangles than this are drawn the usual way.
