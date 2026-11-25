@@ -14,11 +14,18 @@ SAMPLER2D(s_normalMap, 4);
 SAMPLER2D(s_metalRoughMap, 5);
 SAMPLER2D(s_occlusionMap, 6);
 SAMPLER2D(s_emissiveMap, 7);
+// Drawn from buffers (cluster LOD drawing, fs_cluster via tools/compile_shaders.py) the stages 8 to 10 hold buffers, so
+// that variant has no lightmaps.
+#ifdef TW_NO_LIGHTMAP
+#define TW_LIGHTMAP_MODE 0.0
+#else
 SAMPLER2D(s_lightmap, 8);
 SAMPLER2D(s_lightmapDirection, 9);
 SAMPLER2D(s_lightmapShadowmask, 10);
 uniform vec4 u_lightmapTransform;
 uniform vec4 u_lightmapDecode;
+#define TW_LIGHTMAP_MODE u_lightmapDecode.w
+#endif
 
 uniform vec4 u_material;      // x metallic, y roughness, z flat shading, w 1 unlit, 2 the editor's preview light
 uniform vec4 u_emissive;
@@ -154,6 +161,7 @@ void main()
 	roughness = clamp(roughness, 0.045, 1.0);
 
 	vec3 ambient = hemisphereAmbient(n);
+#ifndef TW_NO_LIGHTMAP
 	if (u_lightmapDecode.w > 0.5)
 	{
 		vec4 baked = texture2D(s_lightmap, v_texcoord1 * u_lightmapTransform.xy + u_lightmapTransform.zw);
@@ -168,7 +176,10 @@ void main()
 	vec4 bakedMask = vec4_splat(1.0);
 	if (u_lightmapDecode.w > 2.5)
 		bakedMask = texture2D(s_lightmapShadowmask, v_texcoord1 * u_lightmapTransform.xy + u_lightmapTransform.zw);
-	vec3 color = shadeSurface(v_wpos, n, v, v_depth, albedo, metallic, roughness, specularLevel, occlusion, ambient, bakedMask, u_lightmapDecode.w > 0.5);
+#else
+	vec4 bakedMask = vec4_splat(1.0);
+#endif
+	vec3 color = shadeSurface(v_wpos, n, v, v_depth, albedo, metallic, roughness, specularLevel, occlusion, ambient, bakedMask, TW_LIGHTMAP_MODE > 0.5);
 
 	color += emissive;
 

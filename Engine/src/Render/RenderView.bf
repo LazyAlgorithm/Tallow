@@ -456,7 +456,8 @@ class RenderView
 		GatherInstanced(scene, frustum, castShadows || mHasLocalShadows, camera, shadowRange);
 		Wind.Gather(scene, camera.position, out mWind, ref mWindZone, ref mWindPush);
 		FoliageBender.Gather(scene, camera.position, ref mBender, ref mBenderPush);
-		VisibleRenderers = (int32)(mItems.Count + mViewmodelItems.Count);
+		GpuRoute(castShadows);
+		VisibleRenderers = (int32)(mItems.Count + mGpuScene.Count + mViewmodelItems.Count);
 		Profiler.End();
 		using (sSortMarker.Sample())
 			SortItems();
@@ -1105,6 +1106,8 @@ class RenderView
 		bgfx.touch(view);
 		SubmitSky(view, env);
 		SubmitMeshes(view, mItems);
+		GpuCullScene(camera);
+		GpuDrawScene(view);
 		SubmitMeshes(view, mFoliageItems);
 		SubmitParticles(view, scene, frustum);
 		SubmitLines(view, DebugDraw.Lines);
@@ -1255,11 +1258,32 @@ class RenderView
 			if (custom != null && custom.Value.idx != uint16.MaxValue)
 				return;
 		}
+		// The frame's instance memory may take only some of them at a time: the batch is drawn in as many pieces as it
+		// needs, and only what the memory cannot hold at all is left out (counted in InstancesDropped).
+		var done = 0;
+		while (done < count)
+		{
+			let drawn = SubmitBatchPiece(view, items, start + done, count - done, transparent, mirror);
+			if (drawn <= 0)
+			{
+				InstancesDropped += (int32)(count - done);
+				break;
+			}
+			done += drawn;
+		}
+	}
+
+	/// Instances left out of a draw because the frame's instance memory was full (all views, since the start).
+	public static int64 InstancesDropped;
+
+	/// One instanced draw of up to `count` items from `start`: as many as the instance memory has room for. Returns how many.
+	int SubmitBatchPiece(uint16 view, List<RenderItem> items, int start, int count, bool transparent, bool mirror)
+	{
 		let stride = (uint16)sizeof(InstanceData);
 		let available = (int)bgfx.get_avail_instance_data_buffer((uint32)count, stride);
 		let drawCount = Math.Min(count, available);
 		if (drawCount <= 0)
-			return;
+			return 0;
 		bgfx.InstanceDataBuffer buffer = default;
 		bgfx.alloc_instance_data_buffer(&buffer, (uint32)drawCount, stride);
 		FillInstances((InstanceData*)buffer.data, items, start, drawCount);
@@ -1318,7 +1342,7 @@ class RenderView
 			DrawCalls++;
 			Instances += (int32)drawCount;
 			Triangles += (int32)drawCount * mesh.IndexCount / 3;
-			return;
+			return drawCount;
 		}
 		if (lines)
 			bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | Gfx.StateLines | Gfx.StateMsaa, 0);
@@ -1331,6 +1355,7 @@ class RenderView
 		DrawCalls++;
 		Instances += (int32)drawCount;
 		Triangles += (int32)drawCount * mesh.IndexCount / 3;
+		return drawCount;
 	}
 
 	/// An editor view's shading (ViewShading) in place of the surface's own lighting. Every mode but Rendered draws

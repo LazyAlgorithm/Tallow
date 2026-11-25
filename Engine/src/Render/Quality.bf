@@ -54,12 +54,16 @@ struct QualityValues : IEquatable<QualityValues>
 	public bool reflectionProbes = true;
 	/// The size of a reflection probe's cube, in pixels (those that do not choose their own).
 	public int32 reflectionSize = 128;
+	/// Draw big meshes from clusters picked on the graphics card (GpuDriven.bf), where it can.
+	public bool gpuDriven = true;
+	/// How many pixels of error the clusters of those meshes may have on screen: lower is sharper and costs more.
+	public float pixelError = 1.5f;
 
 	public this()
 	{
 	}
 
-	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialiasMode == other.antialiasMode && upscaler == other.upscaler && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize;
+	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialiasMode == other.antialiasMode && upscaler == other.upscaler && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize && gpuDriven == other.gpuDriven && pixelError == other.pixelError;
 	public static bool operator ==(QualityValues a, QualityValues b) => a.Equals(b);
 }
 
@@ -101,6 +105,8 @@ static class Quality
 			v.anisotropic = false;
 			v.reflectionProbes = false;
 			v.reflectionSize = 64;
+			v.gpuDriven = false;
+			v.pixelError = 2.5f;
 		case .Medium:
 			v.renderScale = 0.85f;
 			v.upscaler = .FSR1;
@@ -114,6 +120,7 @@ static class Quality
 			v.lodBias = 0.8f;
 			v.foliageDistance = 0.75f;
 			v.reflectionSize = 64;
+			v.pixelError = 2.5f;
 		case .High,.Custom:
 		case .Ultra:
 			// TAA (a graphics card that cannot do it falls back to FXAA: Antialiasing.Resolve).
@@ -124,6 +131,7 @@ static class Quality
 			v.lodBias = 1.5f;
 			v.foliageDistance = 1.5f;
 			v.reflectionSize = 256;
+			v.pixelError = 1;
 		}
 		return v;
 	}
@@ -175,6 +183,8 @@ static class Quality
 		Gfx.SetAnisotropic(Current.anisotropic);
 		Reflections.ProbesEnabled = Current.reflectionProbes;
 		Reflections.Resolution = Math.Clamp(Current.reflectionSize, 32, 512);
+		GpuDriven.QualitySetting = Current.gpuDriven;
+		GpuDriven.PixelError = Math.Clamp(Current.pixelError, 0.25f, 16);
 	}
 
 	/// The preset suggested for this machine: Low on phones, Medium on integrated graphics and in a browser, High
@@ -193,8 +203,8 @@ static class Quality
 	/// The settings as text, one `name=value` a line.
 	public static void Write(QualityValues v, String text)
 	{
-		text.AppendF("renderScale={}\nantialias={}\nantialiasMode={}\nupscaler={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\n",
-			v.renderScale, v.antialiasMode != .Off ? 1 : 0, (int32)v.antialiasMode, (int32)v.upscaler, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize);
+		text.AppendF("renderScale={}\nantialias={}\nantialiasMode={}\nupscaler={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\ngpuDriven={}\npixelError={}\n",
+			v.renderScale, v.antialiasMode != .Off ? 1 : 0, (int32)v.antialiasMode, (int32)v.upscaler, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize, v.gpuDriven ? 1 : 0, v.pixelError);
 	}
 
 	/// Reads settings from text (unknown or missing lines keep the values given).
@@ -235,6 +245,8 @@ static class Quality
 			case "anisotropic": v.anisotropic = flag;
 			case "reflectionProbes": v.reflectionProbes = flag;
 			case "reflectionSize": v.reflectionSize = (int32)Math.Clamp(number, 32, 512);
+			case "gpuDriven": v.gpuDriven = flag;
+			case "pixelError": v.pixelError = Math.Clamp(number, 0.25f, 16);
 			}
 		}
 		return v;

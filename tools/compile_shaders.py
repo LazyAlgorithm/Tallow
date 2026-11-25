@@ -18,12 +18,20 @@ def main():
     targets = {'spirv': ('spirv', 'linux'), 'glsl': ('430', 'linux'), 'essl': ('310_es', 'android'),
                'webgl': ('300_es', 'asm.js'), 'metal': ('metal', 'osx')}
     failed = []
+    # Shaders that are another shader's source with a define added after its first ($input) line: fs_cluster is fs_mesh
+    # without lightmaps, which draws from buffers in the stages the lightmaps use (cluster LOD drawing).
+    variants = {'fs_cluster': ('fs_mesh.sc', '#define TW_NO_LIGHTMAP 1\n')}
+    scratch = root / 'build' / 'shader-variants'
+    scratch.mkdir(parents=True, exist_ok=True)
+    for name, (original, define) in variants.items():
+        lines = (source / original).read_text().split('\n', 1)
+        (scratch / (name + '.sc')).write_text(lines[0] + '\n' + define + lines[1])
     for prefix, stage in [('vs_', 'vertex'), ('fs_', 'fragment'), ('cs_', 'compute')]:
-        for shader in sorted(source.glob(prefix + '*.sc')):
+        for shader in sorted(list(source.glob(prefix + '*.sc')) + list(scratch.glob(prefix + '*.sc'))):
             if shader.name == 'cs_template.sc':
                 continue
             for backend in args.backend or list(targets):
-                if backend == 'webgl' and stage == 'compute':
+                if backend == 'webgl' and (stage == 'compute' or shader.name.startswith(('vs_cluster', 'cs_clod', 'fs_cluster'))):
                     continue
                 profile, platform = targets[backend]
                 output = root / 'Engine/assets/shaders' / backend / (shader.stem + '.bin')

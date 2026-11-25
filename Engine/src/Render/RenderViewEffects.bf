@@ -393,6 +393,7 @@ extension RenderView
 				start = end;
 			}
 		}
+		GpuDrawDepth(view, worldViewProj);
 	}
 
 	const uint8 DepthPalette = 15;
@@ -400,11 +401,27 @@ extension RenderView
 
 	void SubmitDepthBatch(uint16 view, List<RenderItem> items, int start, int count, Matrix4 viewProj, bool viewmodel)
 	{
+		var done = 0;
+		while (done < count)
+		{
+			let drawn = SubmitDepthPiece(view, items, start + done, count - done, viewProj, viewmodel);
+			if (drawn <= 0)
+			{
+				InstancesDropped += (int32)(count - done);
+				break;
+			}
+			done += drawn;
+		}
+	}
+
+	/// One draw of as many of the items as the instance memory has room for; returns how many.
+	int SubmitDepthPiece(uint16 view, List<RenderItem> items, int start, int count, Matrix4 viewProj, bool viewmodel)
+	{
 		// With the motion vectors each instance also carries last frame's matrix (VelocityInstance).
 		let stride = mTemporalOn ? (uint16)sizeof(VelocityInstance) : (uint16)sizeof(InstanceData);
 		let drawCount = Math.Min(count, (int)bgfx.get_avail_instance_data_buffer((uint32)count, stride));
 		if (drawCount <= 0)
-			return;
+			return 0;
 		bgfx.InstanceDataBuffer buffer = default;
 		bgfx.alloc_instance_data_buffer(&buffer, (uint32)drawCount, stride);
 		let first = items[start];
@@ -457,6 +474,7 @@ extension RenderView
 			depth = 0;
 		bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | depth | cull, 0);
 		bgfx.submit(view, mTemporalOn ? (mDepthAlbedo ? RenderResources.DepthAlbedoVelProgram : RenderResources.DepthVelProgram) : (mDepthAlbedo ? RenderResources.DepthAlbedoProgram : RenderResources.DepthProgram), 0, 0xff);
+		return drawCount;
 	}
 
 	/// The texture the lit pass multiplies an item's colour by (as ResolveSurface picks it), for the depth pass's colours.

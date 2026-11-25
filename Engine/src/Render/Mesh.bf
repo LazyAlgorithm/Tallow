@@ -38,6 +38,12 @@ class Mesh
 	/// Give it its Indices and call UploadIndices; keep its Bounds in step with the source's.
 	public Mesh VertexSource;
 
+	/// GPU-driven drawing (GpuDriven.bf): where the mesh's clusters are in the pool once built, the build under way (0:
+	/// none) and whether building them failed. Released with the graphics card's copy of the vertices.
+	public GpuDriven.MeshEntry GpuEntry;
+	public int64 GpuJob;
+	public bool GpuFailed;
+
 	/// Whether a compute shader may write its vertices (UploadDynamic with computeWritable).
 	public bool IsComputeWritable => mComputeWritable;
 	bool mComputeWritable;
@@ -285,6 +291,7 @@ class Mesh
 	/// Frees the graphics card's copy.
 	public void ReleaseGpu()
 	{
+		GpuDriven.Forget(this);
 		if (!Gfx.Initialized)
 			return;
 		if (mVertexBuffer.Valid)

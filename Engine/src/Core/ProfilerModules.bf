@@ -16,6 +16,13 @@ static class ProfilerModules
 	static ProfilerCounter sVisible = .("Visible Renderers", .Rendering);
 	static ProfilerCounter sViews = .("Camera Views Drawn", .Rendering);
 	static ProfilerCounter sShadowTiles = .("Shadowed Lights", .Rendering);
+	// GPU-driven drawing (GpuDriven.bf); the cluster counts are read back from the graphics card a few frames late.
+	static ProfilerCounter sGpuBins = .("GPU-Driven Bins", .Rendering);
+	static ProfilerCounter sGpuInstances = .("GPU-Driven Instances", .Rendering);
+	static ProfilerCounter sGpuClusters = .("GPU-Driven Clusters Drawn", .Rendering);
+	static ProfilerCounter sGpuTriangles = .("GPU-Driven Triangles", .Rendering);
+	static ProfilerCounter sGpuLost = .("GPU-Driven Clusters Over Budget", .Rendering);
+	static ProfilerCounter sInstancesDropped = .("Instances Dropped (no instance memory)", .Rendering);
 	static ProfilerCounter sGpuDraws = .("GPU Draws (all passes)", .Rendering);
 	static ProfilerCounter sGpuComputes = .("GPU Compute Dispatches", .Rendering);
 	static ProfilerCounter sGpuBlits = .("GPU Copies", .Rendering);
@@ -132,6 +139,13 @@ static class ProfilerModules
 		sShadowTiles.Set(RenderView.FrameShadowTiles);
 		RenderView.FrameDrawCalls = RenderView.FrameInstances = RenderView.FrameTriangles = 0;
 		RenderView.FrameVisible = RenderView.FrameViews = RenderView.FrameShadowTiles = 0;
+		sGpuBins.Set(GpuDriven.FrameBins);
+		sGpuInstances.Set(GpuDriven.FrameInstances);
+		GpuDriven.FrameBins = GpuDriven.FrameInstances = 0;
+		sGpuClusters.Set((int32)GpuDriven.Clusters);
+		sGpuTriangles.Set((int32)GpuDriven.Triangles);
+		sGpuLost.Set((int32)(GpuDriven.ClustersLost + GpuDriven.NodesLost));
+		sInstancesDropped.Set((int32)RenderView.InstancesDropped);
 
 		sProcess.Set(ProcessMemory());
 		sEngineTextures.Set(Textures.Bytes);

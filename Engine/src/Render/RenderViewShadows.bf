@@ -22,7 +22,9 @@ extension RenderView
 			bgfx.touch(view);
 			mShadowPassViewProj = mCascadeViewProj[cascade];
 			mShadowScissor = default;
+			GpuCullCascade(cascade);
 			SubmitShadowCascade(view, cascade);
+			GpuDrawShadow(view, cascade);
 		}
 		let filterRadius = mCascadeRadius[0] * 2.0f / RenderResources.ShadowTileSize * 1.5f;
 		mShadowParams = .(1.0f / RenderResources.ShadowAtlasSize, ShadowBias, 1.0f, filterRadius);
@@ -55,6 +57,13 @@ extension RenderView
 				if (tile.frustum.IntersectsSphere(items[i].center, items[i].radius))
 					mShadowVisible.Add(&items[i]);
 			}
+			// What the sun's cascades draw from clusters is still drawn whole here.
+			let local = mLocalShadowItems.Ptr;
+			for (int i < mLocalShadowItems.Count)
+			{
+				if (tile.frustum.IntersectsSphere(local[i].center, local[i].radius))
+					mShadowVisible.Add(&local[i]);
+			}
 			SubmitShadowCasters(view);
 		}
 		mShadowScissor = default;
@@ -78,10 +87,26 @@ extension RenderView
 	/// Draws `count` of mShadowVisible from `start` as one instanced draw into the shadow map.
 	void SubmitShadowBatch(uint16 view, int start, int count)
 	{
+		var done = 0;
+		while (done < count)
+		{
+			let drawn = SubmitShadowPiece(view, start + done, count - done);
+			if (drawn <= 0)
+			{
+				InstancesDropped += (int32)(count - done);
+				break;
+			}
+			done += drawn;
+		}
+	}
+
+	/// One draw of as many of the casters as the instance memory has room for; returns how many.
+	int SubmitShadowPiece(uint16 view, int start, int count)
+	{
 		let stride = (uint16)sizeof(InstanceData);
 		let drawCount = Math.Min(count, (int)bgfx.get_avail_instance_data_buffer((uint32)count, stride));
 		if (drawCount <= 0)
-			return;
+			return 0;
 		bgfx.InstanceDataBuffer buffer = default;
 		bgfx.alloc_instance_data_buffer(&buffer, (uint32)drawCount, stride);
 		let data = (InstanceData*)buffer.data;
@@ -101,6 +126,7 @@ extension RenderView
 			bgfx.set_scissor((uint16)mShadowScissor[0], (uint16)mShadowScissor[1], (uint16)mShadowScissor[2], (uint16)mShadowScissor[3]);
 		bgfx.set_state(Gfx.StateWriteZ | Gfx.StateDepthLess, 0);
 		bgfx.submit(view, RenderResources.ShadowProgram, 0, 0xff);
+		return drawCount;
 	}
 
 	/// How far behind a cascade's view things can stand and still cast a shadow into it.

@@ -263,6 +263,12 @@ public static class Quality
     public static bool ReflectionProbes { get => Flag("reflectionProbes"); set => Change("reflectionProbes", value ? "1" : "0"); }
     /// <summary>Reflection probe resolution in pixels (32-512).</summary>
     public static int ReflectionSize { get => (int)Number("reflectionSize"); set => Change("reflectionSize", Text(value)); }
+    /// <summary>Draws big meshes from clusters picked on the graphics card, with the level of detail chosen per cluster
+    /// (where the graphics card can: Vulkan and Metal; the setting has no effect elsewhere).</summary>
+    public static bool GpuDriven { get => Flag("gpuDriven"); set => Change("gpuDriven", value ? "1" : "0"); }
+    /// <summary>How many pixels of error the clusters of GPU-driven meshes may have on screen (0.25-16): lower is
+    /// sharper and costs more.</summary>
+    public static float PixelError { get => Number("pixelError"); set => Change("pixelError", Text(value)); }
 
     /// <summary>Keeps the current settings for the next start.</summary>
     public static void Save()

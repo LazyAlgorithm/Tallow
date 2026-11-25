@@ -61,6 +61,15 @@ extension EditorApp
 			changed |= ImGui.SliderFloat("Detail Distance", ref v.lodBias, 0.25f, 3, "x%.2f");
 			changed |= ImGui.SliderFloat("Foliage Distance", ref v.foliageDistance, 0.25f, 3, "x%.2f");
 			changed |= ImGui.Checkbox("GPU Skinning", ref v.gpuSkinning);
+			// Clusters of big meshes picked on the graphics card: needs compute and indirect draws (Vulkan, Metal).
+			ImGui.BeginDisabled(!GpuDriven.Available);
+			changed |= ImGui.Checkbox("GPU-Driven Rendering", ref v.gpuDriven);
+			ImGui.EndDisabled();
+			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip(GpuDriven.Available ? "Draws big meshes from clusters picked on the graphics card, with the level of detail chosen per cluster." : "Needs compute shaders and indirect draws (Vulkan or Metal).");
+			changed |= ImGui.SliderFloat("Pixel Error", ref v.pixelError, 0.5f, 4, "%.1f px");
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("How many pixels of error the clusters of GPU-driven meshes may have on screen: lower is sharper and costs more.");
 			changed |= ImGui.Checkbox("Vsync", ref v.vsync);
 			var detail = (float)v.textureDetail;
 			StringView[4] detailNames = .("full", "half", "quarter", "eighth");

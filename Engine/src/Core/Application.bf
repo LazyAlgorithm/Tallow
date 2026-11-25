@@ -17,6 +17,11 @@ namespace Tallow;
 ///                                                      report and its private symbols
 ///   --clod-test <mesh>                                 build a mesh's cluster LOD hierarchy with no window, check it
 ///                                                      and exit 0 or 1 (builtin:sphere_smooth, sphere:512x300, a model)
+///   --gpu-driven on|off                                draw big meshes from clusters picked on the graphics card (or
+///                                                      not), whatever the quality setting says
+///   --gpu-driven-min-triangles N                       the fewest triangles a mesh needs to be drawn that way (2000)
+///   --gpu-driven-test [mesh]                           draw a crowd of a big mesh both ways, compare the pictures and
+///                                                      the timings, and exit 0 or 1 (sphere:1000x700, a model)
 [CSharpExpose]
 class Application
 {
@@ -180,6 +185,18 @@ class Application
 		// Bend skinned models on the CPU, to compare with the GPU (tallowengine.com/docs/gpu-skinning).
 		if (HasArg("--cpu-skinning"))
 			GpuSkinning.Enabled = false;
+		let gpuDriven = scope String();
+		if (GetArg("--gpu-driven", gpuDriven))
+		{
+			if (gpuDriven == "on" || gpuDriven == "off")
+				GpuDriven.Override = gpuDriven == "on" ? 1 : 0;
+			else
+				Log.Warning(scope $"--gpu-driven takes on or off, not '{gpuDriven}'");
+		}
+		// Meshes with fewer triangles than this are drawn the usual way (default 2000): lower it to try small meshes.
+		let minTriangles = scope String();
+		if (GetArg("--gpu-driven-min-triangles", minTriangles) && int32.Parse(minTriangles) case .Ok(let triangles))
+			GpuDriven.MinTriangles = Math.Max(triangles, 1);
 		if (HasArg("--headless"))
 			Headless = true;
 		if (HasArg("--fixed-step"))
@@ -204,6 +221,13 @@ class Application
 		let clodTest = scope String();
 		if (GetArg("--clod-test", clodTest))
 			return ClusterMeshTest.Run(clodTest);
+		// The GPU-driven drawing check runs the whole application (it needs a window), as its own.
+		if (HasArg("--gpu-driven-test") && !(this is GpuDrivenTestApp))
+		{
+			let test = scope GpuDrivenTestApp();
+			test.Run(args);
+			return test.Result;
+		}
 		// A server with no window has no ears either.
 		Audio.Disabled = Headless;
 
@@ -465,6 +489,7 @@ class Application
 			ShaderAsset.ReleaseAll();
 			Compute.Shutdown();
 			GpuSkinning.Shutdown();
+			GpuDriven.Shutdown();
 			Reflections.Shutdown();
 			Textures.LogTotals();
 			Reflections.LogTotals();
