@@ -50,7 +50,7 @@ static class RenderResources
 	public static bgfx.UniformHandle sAlbedo, sShadowMap, sLocalShadowMap, sColor;
 	public static bgfx.UniformHandle uWind, uWindZone, uWindPush, uSway, uBender, uBenderPush;
 	public static bgfx.UniformHandle uCamPos, uSunDir, uSunColor, uAmbientSky, uAmbientGround, uFogColor;
-	public static bgfx.UniformHandle uMaterial, uEmissive, uUvTransform, uSurface, uParams, uPbr, uPalette, sTexture1, sTexture2, sNormalMap, sMetalRoughMap, sOcclusionMap, sEmissiveMap;
+	public static bgfx.UniformHandle uMaterial, uEmissive, uUvTransform, uVtInfo, uVtCache, uSurface, uParams, uPbr, uPalette, sTexture1, sTexture2, sNormalMap, sMetalRoughMap, sOcclusionMap, sEmissiveMap;
 	public static bgfx.UniformHandle sLightmap, sLightmapDirection, sLightmapShadowmask, uLightmapTransform, uLightmapDecode;
 	/// Baked light probes (LightProbes): the grids' 3D texture and where the draw's two grids are in it.
 	public static bgfx.UniformHandle sLightProbes, uLightProbe;
@@ -173,6 +173,8 @@ static class RenderResources
 		uMaterial = bgfx.create_uniform("u_material", .Vec4, 1);
 		uEmissive = bgfx.create_uniform("u_emissive", .Vec4, 1);
 		uUvTransform = bgfx.create_uniform("u_uvTransform", .Vec4, 1);
+		uVtInfo = bgfx.create_uniform("u_vtInfo", .Vec4, 1);
+		uVtCache = bgfx.create_uniform("u_vtCache", .Vec4, 1);
 		uSurface = bgfx.create_uniform("u_surface", .Vec4, 1);
 		uWind = bgfx.create_uniform("u_wind", .Vec4, 1);
 		uWindZone = bgfx.create_uniform("u_windZone", .Vec4, 4);

@@ -33,6 +33,8 @@ struct TextureOptions
 	public bool Compression = true;
 	/// Keep every mip level even when a quality preset leaves the largest ones out (pixel art keeps its pixels).
 	public bool FullResolution;
+	/// Made a virtual texture (VirtualTextures) however big it is.
+	public bool Virtual;
 
 	/// Reads the keys the editor writes; unknown keys and lines are ignored, so a file from another version works.
 	public static TextureOptions Parse(StringView text)
@@ -59,6 +61,7 @@ struct TextureOptions
 					options.Wrap = .Repeat;
 			case "mipmaps": options.Mipmaps = value != "0";
 			case "compression": options.Compression = value != "0";
+			case "virtual": options.Virtual = value != "0";
 			case "fullResolution": options.FullResolution = value != "0";
 			}
 		}

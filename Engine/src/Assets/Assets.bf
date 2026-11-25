@@ -621,7 +621,9 @@ static class Assets
 		let texKind = kind == .Color ? Textures.KindOf(path) : kind;
 		// A big picture a surface shows streams its mip levels in (StreamedTextures): its tail now, the rest as it is seen.
 		bgfx.TextureHandle texture = .() { idx = uint16.MaxValue };
-		if (streamable)
+		if (streamable && texKind == .Color)
+			texture = VirtualTextures.TryCreate(path, full);
+		if (!texture.Valid && streamable)
 			texture = StreamedTextures.TryCreate(path, full, texKind);
 		if (!texture.Valid)
 			texture = Gfx.LoadTexture(full, texKind);

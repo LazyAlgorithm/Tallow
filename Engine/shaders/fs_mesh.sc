@@ -27,6 +27,12 @@ uniform vec4 u_lightmapDecode;
 #define TW_LIGHTMAP_MODE u_lightmapDecode.w
 #endif
 
+#ifdef TW_VT
+// Virtual texture (include/virtual_texture.sh): the cache and the page table take the stages of texture1 and texture2.
+#define VT_SAMPLE 1
+#include "virtual_texture.sh"
+#endif
+
 uniform vec4 u_material;      // x metallic, y roughness, z flat shading, w 1 unlit, 2 the editor's preview light
 uniform vec4 u_emissive;
 uniform vec4 u_uvTransform;   // xy tiling, zw offset
@@ -52,7 +58,11 @@ void main()
 	vec3 worldNormal = normalize(v_normal);
 	vec4 vertexColor = v_color0;
 	float time = u_surface.y;
+#ifdef TW_VT
+	vec4 tex = vtSample(uv);
+#else
 	vec4 tex = texture2D(s_albedo, uv);
+#endif
 	vec3 albedo = toLinear3(v_color0.rgb * tex.rgb);
 	float alpha = v_color0.a * tex.a;
 	// An instance's own metallic and roughness, when it carries them, so renderers that differ only in these draw together.

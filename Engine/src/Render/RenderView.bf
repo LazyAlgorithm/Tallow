@@ -1110,6 +1110,8 @@ class RenderView
 		SubmitSky(view, env);
 		SubmitMeshes(view, mItems);
 		GpuCullScene(camera);
+		if (ViewBase == 10)
+			GpuDrawVtFeedback(viewMatrix, projMatrix, (int32)mWidth, (int32)mHeight);
 		GpuDrawScene(view);
 		SubmitMeshes(view, mFoliageItems);
 		SubmitParticles(view, scene, frustum);

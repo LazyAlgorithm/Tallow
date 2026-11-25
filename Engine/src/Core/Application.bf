@@ -292,7 +292,13 @@ class Application
 			test.Run(args);
 			return test.Result;
 		}
-		if (HasArg("--streaming-test") && !(this is TextureStreamTestApp) && !(this is GeometryStreamTestApp))
+		if (GetArg("--streaming-test", streamingTest) && streamingTest == "vt" && !(this is VtStreamTestApp))
+		{
+			let test = scope VtStreamTestApp();
+			test.Run(args);
+			return test.Result;
+		}
+		if (HasArg("--streaming-test") && !(this is TextureStreamTestApp) && !(this is GeometryStreamTestApp) && !(this is VtStreamTestApp))
 			return StreamingTest.Run();
 		// The GPU-driven drawing check runs the whole application (it needs a window), as its own.
 		if (HasArg("--gpu-driven-test") && !(this is GpuDrivenTestApp))

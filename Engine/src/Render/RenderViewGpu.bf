@@ -370,9 +370,13 @@ extension RenderView
 			NoteStreamedTextures(first, surface);
 			surface.cull = FacingCull(surface.cull);
 			SetSurfaceUniforms(first.renderer, ref surface);
+			let vt = GpuBinVt(first);
+			let program = vt != null ? VirtualTextures.LitProgram : GpuDriven.LitProgram;
+			if (vt != null)
+				VirtualTextures.Bind(vt);
 			let state = Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | surface.cull | Gfx.StateMsaa;
 			bgfx.set_state(state, 0);
-			mGpu.SubmitBin(view, GpuDriven.LitProgram, GpuDrivenView.ScenePass, bin);
+			mGpu.SubmitBin(view, program, GpuDrivenView.ScenePass, bin);
 			DrawCalls++;
 			if (mGpuTwoPhase)
 			{
@@ -382,12 +386,53 @@ extension RenderView
 				if (first.lightGrid > 0)
 					LightProbes.Bind(mProbeGrid, first.lightGrid);
 				SetSurfaceUniforms(first.renderer, ref surface);
+				if (vt != null)
+					VirtualTextures.Bind(vt);
 				bgfx.set_state(state, 0);
-				mGpu.SubmitBin(view, GpuDriven.LitProgram, GpuDrivenView.SecondPass, bin);
+				mGpu.SubmitBin(view, program, GpuDrivenView.SecondPass, bin);
 				DrawCalls++;
 			}
 		}
 		Instances += mGpu.SceneCount;
+	}
+
+	/// The virtual texture a bin's albedo is, when it is one and virtual textures can be drawn.
+	VirtualTexture GpuBinVt(RenderItem first)
+	{
+		if (!VirtualTextures.Active || !VirtualTextures.Supported)
+			return null;
+		return VirtualTextures.ForHandle(AlbedoTexture(first).idx);
+	}
+
+	/// The feedback pass (bgfx view 9) for the main camera: draws the virtual-textured bins into a small target so
+	/// VirtualTextures can read which tiles are on screen. Runs after the culling, before the cameras' views.
+	void GpuDrawVtFeedback(Matrix4 viewMatrix, Matrix4 projection, int32 width, int32 height)
+	{
+		if (!mGpuActive || !mGpu.HasPass(GpuDrivenView.ScenePass) || !VirtualTextures.Active)
+			return;
+		if (!VirtualTextures.BeginFeedback(width, height, viewMatrix, projection))
+			return;
+		for (int bin < mGpuBins.Count)
+		{
+			let first = mGpuBins[bin];
+			let vt = GpuBinVt(first);
+			if (vt == null)
+				continue;
+			for (int phase < (mGpuTwoPhase ? 2 : 1))
+			{
+				var uvTransform = Vector4(1, 1, 0, 0);
+				if (first.material != null)
+					uvTransform = .(first.material.tiling.x, first.material.tiling.y, first.material.offset.x, first.material.offset.y);
+				bgfx.set_uniform(RenderResources.uUvTransform, &uvTransform, 1);
+				VirtualTextures.Bind(vt);
+				var matrix = projection * viewMatrix;
+				var depthParams = Vector4(0, 0, 0, 0);
+				bgfx.set_uniform(RenderResources.uDepthViewProj, &matrix, 1);
+				bgfx.set_uniform(RenderResources.uDepthParams, &depthParams, 1);
+				bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | GpuDepthCull(first), 0);
+				mGpu.SubmitBin(VirtualTextures.FeedbackView, VirtualTextures.FeedbackProgram, phase == 0 ? GpuDrivenView.ScenePass : GpuDrivenView.SecondPass, bin);
+			}
+		}
 	}
 
 	/// Draws the scene's bins into the depth pass (and its motion vectors and colours when it makes them).
