@@ -296,6 +296,18 @@ class Application
 			GpuDriven.PixelError = Math.Clamp(pixels, 0.0f, 16);
 			GpuDriven.PixelErrorFromArgs = true;
 		}
+		// --gpu-sw-raster off|classify|on [--gpu-sw-edge px]: the hybrid software raster for tiny triangles (classify counts only).
+		let swRaster = scope String();
+		if (GetArg("--gpu-sw-raster", swRaster))
+		{
+			if (swRaster == "off") GpuDriven.SwRaster = .Off;
+			else if (swRaster == "classify") GpuDriven.SwRaster = .Classify;
+			else if (swRaster == "on") GpuDriven.SwRaster = .On;
+			else Log.Warning(scope $"--gpu-sw-raster takes off, classify or on, not '{swRaster}'");
+		}
+		let swEdge = scope String();
+		if (GetArg("--gpu-sw-edge", swEdge) && float.Parse(swEdge) case .Ok(let edge))
+			GpuDriven.SwEdgePixels = Math.Clamp(edge, 0.1f, 32);
 		if (HasArg("--headless"))
 			Headless = true;
 		if (HasArg("--fixed-step"))

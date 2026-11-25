@@ -33,7 +33,7 @@ static class CSharpGpuDriven
 	public static int32 DebugMip() => GpuDriven.DebugMip;
 
 	/// One statistic: 0 clusters drawn, 1 triangles drawn, 2 instances (this frame), 3 draws (bins), 4 clusters lost to a
-	/// full budget, 5 resident geometry MB, 6 resident texture MB, 7 resident virtual texture MB, 8 pool MB in use.
+	/// full budget, 5 resident geometry MB, 6 resident texture MB, 7 resident virtual texture MB, 8 pool MB in use, 9-11 clusters / triangles the software raster would take and the other clusters.
 	/// Cluster and triangle counts are read back from the graphics card a few frames late.
 	[CSharpExpose]
 	public static double Stat(int32 id)
@@ -49,6 +49,9 @@ static class CSharpGpuDriven
 		case 6: return ResidentMB(.TextureMip);
 		case 7: return ResidentMB(.VtTile);
 		case 8: return (double)GpuDriven.PoolWordsInUse * 4 / 1048576.0;
+		case 9: return (double)GpuDriven.SwClusters;
+		case 10: return (double)GpuDriven.SwTriangles;
+		case 11: return (double)GpuDriven.HwClusters;
 		default: return 0;
 		}
 	}

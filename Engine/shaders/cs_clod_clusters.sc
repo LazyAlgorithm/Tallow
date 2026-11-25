@@ -25,6 +25,7 @@ uniform vec4 u_clodPlanes[6]; // the planes round what is in view, facing in
 uniform vec4 u_clodCam;       // xyz: the eye, w: 1 when the view has no perspective
 uniform vec4 u_clodLod;       // x: pixels per unit of error at distance 1, y: the nearest distance, z: the error that is small enough (pixels), w: 1 to cull clusters turned away
 uniform vec4 u_clodCounts;    // x: the step (0 count, 1 write), y: 1 to take the clusters from the deferred list, z: room for work nodes, w: words in one feedback bitmap
+uniform vec4 u_clodSw;        // x: 0 off, 1 classify, 2 on; y: an average triangle edge under this many pixels is tiny; z: the nearest distance
 uniform vec4 u_clodOcc;       // x: 0 no occlusion, 1 first phase, 2 second phase; y: room for deferred instances, z: room for deferred clusters
 
 float lf(uint index)
@@ -211,6 +212,27 @@ void main()
 				}
 				return;
 			}
+		}
+	}
+
+	// Hybrid software raster: is the cluster's average triangle edge under the threshold? A cluster of radius r with n
+	// triangles covers about 0.5 * pi * r^2 of surface, so an edge is about r * sqrt(pi / n). For now the cluster is still
+	// drawn by its HW bin; the counters (write run only) say how many would go to the software raster.
+	if (u_clodSw.x > 0.5 && u_clodCounts.x > 0.5 && (meta & 0x20000u) != 0u && (meta & 0x10000u) == 0u)
+	{
+		float distance = u_clodCam.w > 0.5 ? 1.0e30 : length(center - u_clodCam.xyz);
+		float edge = radius * sqrt(3.14159265 / max(float(b_pool[cluster + 3u]), 1.0));
+		float edgePx = u_clodCam.w > 0.5 ? edge * u_clodLod.x : edge / max(distance - radius, u_clodSw.z) * u_clodLod.x;
+		bool wholeInFront = u_clodCam.w > 0.5 || distance - radius > u_clodSw.z * 2.0;
+		uint old;
+		if (wholeInFront && edgePx < u_clodSw.y)
+		{
+			atomicFetchAndAdd(b_control[CLOD_CTRL_SW_CLUSTERS], 1u, old);
+			atomicFetchAndAdd(b_control[CLOD_CTRL_SW_TRIANGLES], b_pool[cluster + 3u], old);
+		}
+		else
+		{
+			atomicFetchAndAdd(b_control[CLOD_CTRL_HW_CLUSTERS], 1u, old);
 		}
 	}
 

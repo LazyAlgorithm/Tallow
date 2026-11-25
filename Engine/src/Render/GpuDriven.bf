@@ -106,6 +106,15 @@ static class GpuDriven
 	/// over the budgets.
 	/// Clusters and triangles drawn (C#: GpuDriven.Clusters, Triangles).
 	public static int64 Clusters, Triangles;
+	/// Hybrid software raster (M7b). Off: nothing; Classify: the cull pass counts the clusters whose triangles are tiny
+	/// (SwClusters, SwTriangles) and the rest (HwClusters), all still drawn by the hardware; On: accepted, same as Classify until M7c.
+	public enum SwRasterMode : int32 { Off, Classify, On }
+	/// `--gpu-sw-raster off|classify|on`.
+	public static SwRasterMode SwRaster = .Off;
+	/// `--gpu-sw-edge <px>`: a cluster whose average triangle edge is under this many pixels is tiny.
+	public static float SwEdgePixels = 3.0f;
+	/// Counted by the cull pass of the scene's camera (read back late): tiny clusters and their triangles, other clusters.
+	public static int64 SwClusters, SwTriangles, HwClusters;
 	/// Clusters / work nodes dropped because a buffer was full (C#: GpuDriven.ClustersLost).
 	public static int64 ClustersLost, NodesLost;
 	/// Clusters drawn in each occlusion phase, and the instances and clusters the first phase put off for the second.
@@ -135,7 +144,7 @@ static class GpuDriven
 	public static bgfx.UniformHandle uDebug, uHzbShow;
 	static bgfx.IndexBufferHandle sIndices = .() { idx = uint16.MaxValue };
 	static bgfx.VertexBufferHandle sNoVertices = .() { idx = uint16.MaxValue };
-	public static bgfx.UniformHandle uMode, uPlanes, uCounts, uCam, uLod, uOcc, uView, uProj, uHzb, uScreen, uHzbSize, uHzbLevel, uHzbLevel2, sDistance;
+	public static bgfx.UniformHandle uSw, uMode, uPlanes, uCounts, uCam, uLod, uOcc, uView, uProj, uHzb, uScreen, uHzbSize, uHzbLevel, uHzbLevel2, sDistance;
 	public static bgfx.VertexLayout WordLayout;
 	static bool sTried;
 	static bool sAvailable;
@@ -202,6 +211,7 @@ static class GpuDriven
 		uCam = bgfx.create_uniform("u_clodCam", .Vec4, 1);
 		uLod = bgfx.create_uniform("u_clodLod", .Vec4, 1);
 		uOcc = bgfx.create_uniform("u_clodOcc", .Vec4, 1);
+		uSw = bgfx.create_uniform("u_clodSw", .Vec4, 1);
 		uView = bgfx.create_uniform("u_clodView", .Mat4, 1);
 		uProj = bgfx.create_uniform("u_clodProj", .Mat4, 1);
 		uHzb = bgfx.create_uniform("u_clodHzb", .Vec4, 1);

@@ -80,7 +80,7 @@ extension RenderView
 		let key = ProbeKey(MakeKey(item.renderer, null, item.material), item.probe, item.lightGrid) * 2 + (Mirrored(item.world) ? 1u : 0u);
 		if (mGpuBinIndex.TryGetValue(key, let bin))
 			return bin;
-		if (mGpuBins.Count >= GpuDriven.MaxBins)
+		if (mGpuBins.Count >= GpuDriven.MaxBins - 1) // bin 255 is the software raster's list
 			return -1;
 		mGpuBins.Add(item);
 		mGpuBinIndex[key] = (int32)mGpuBins.Count - 1;
@@ -205,7 +205,7 @@ extension RenderView
 		beforeCenter[0] = before.x; beforeCenter[1] = before.y; beforeCenter[2] = before.z; beforeCenter[3] = 0;
 		words[36] = gpu.entry.clusterBase;
 		words[37] = gpu.entry.clusterCount;
-		words[38] = (uint32)gpu.bin | (noCone ? 0x10000u : 0u);
+		words[38] = (uint32)gpu.bin | (noCone ? 0x10000u : 0u) | (!noCone && GpuSwEligible(gpu.item) ? 0x20000u : 0u);
 		*(float*)(words + 39) = largest;
 	}
 
@@ -226,6 +226,7 @@ extension RenderView
 		p.near = Math.Max(camera.near, 0.001f);
 		p.threshold = GpuDriven.PixelError;
 		p.cone = GpuDriven.ConeCulling;
+		p.swMode = (int32)GpuDriven.SwRaster;
 		mGpuTwoPhase = false;
 		if (GpuOcclusionWanted(camera))
 		{
@@ -439,6 +440,18 @@ extension RenderView
 		bgfx.set_uniform(GpuDriven.uHzbShow, &show, 1);
 		bgfx.set_compute_dynamic_vertex_buffer(4, o.buffer, .Read, 0, uint32.MaxValue);
 		SubmitFullscreen(view, GpuDriven.DebugHzbProgram, Gfx.StateWriteRGB | Gfx.StateWriteA);
+	}
+
+	/// Whether a surface may go to the software raster (instance bit 17): opaque, no alpha cutoff, no palette, no virtual
+	/// texture, no normal map; the instance's own flags rule out custom shaders, lightmaps, wind and two-sided surfaces.
+	bool GpuSwEligible(RenderItem item)
+	{
+		let material = item.material;
+		if (material == null)
+			return GpuBinVt(item) == null;
+		if (material.blend != .Opaque || material.IsPalette || material.doubleSided || material.normalMap.Length > 0)
+			return false;
+		return GpuBinVt(item) == null;
 	}
 
 	/// The virtual texture a bin's albedo is, when it is one and virtual textures can be drawn.

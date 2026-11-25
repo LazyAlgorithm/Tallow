@@ -53,7 +53,7 @@ class GpuBenchApp : Application
 		public List<double> gpuMs = new .() ~ delete _;
 		public double cullMs, occluderMs, hzbMs, mainMs, shadowMs, vtMs;
 		public double submittedTriangles, clusterTriangles, clusters, instances, draws, computes;
-		public int64 maxClusterTriangles, maxClusters;
+		public int64 maxClusterTriangles, maxClusters, maxSwClusters, maxSwTriangles, maxHwClusters;
 		public double poolMB, residentGeoMB, residentTexMB, residentVtMB, peakPoolMB, peakResidentGeoMB;
 		public int64 requests, misses, uploads, pagesRequested;
 		public int64 groupsMissingEnd;
@@ -394,6 +394,9 @@ class GpuBenchApp : Application
 		run.computes += stats.numCompute;
 		run.maxClusterTriangles = Math.Max(run.maxClusterTriangles, GpuDriven.Triangles);
 		run.maxClusters = Math.Max(run.maxClusters, GpuDriven.Clusters);
+		run.maxSwClusters = Math.Max(run.maxSwClusters, GpuDriven.SwClusters);
+		run.maxSwTriangles = Math.Max(run.maxSwTriangles, GpuDriven.SwTriangles);
+		run.maxHwClusters = Math.Max(run.maxHwClusters, GpuDriven.HwClusters);
 		let pool = (double)GpuDriven.PoolWordsInUse * 4 / 1048576.0;
 		let geo = PoolMB(.GeoPage);
 		run.poolMB += pool;
@@ -493,7 +496,7 @@ class GpuBenchApp : Application
 			json.AppendF($"      \"gpuMsPass\": {{ \"cullPhase1\": {run.cullMs / n:0.000}, \"occluderDraws\": {run.occluderMs / n:0.000}, \"hzbPhase2\": {run.hzbMs / n:0.000}, \"mainDraw\": {run.mainMs / n:0.000}, \"shadows\": {run.shadowMs / n:0.000}, \"vtFeedback\": {run.vtMs / n:0.000} }},\n");
 			json.AppendF($"      \"trianglesSubmittedMean\": {run.submittedTriangles / n:0},\n      \"trianglesFromClustersMean\": {run.clusterTriangles / n:0},\n      \"trianglesFromClustersMax\": {run.maxClusterTriangles},\n");
 			json.AppendF($"      \"trianglesTotalMean\": {(run.submittedTriangles + run.clusterTriangles) / n:0},\n");
-			json.AppendF($"      \"clustersMean\": {run.clusters / n:0},\n      \"clustersMax\": {run.maxClusters},\n      \"instancesMean\": {run.instances / n:0},\n");
+			json.AppendF($"      \"clustersMean\": {run.clusters / n:0},\n      \"clustersMax\": {run.maxClusters},\n      \"swClustersMax\": {run.maxSwClusters},\n      \"swTrianglesMax\": {run.maxSwTriangles},\n      \"hwClustersMax\": {run.maxHwClusters},\n      \"instancesMean\": {run.instances / n:0},\n");
 			json.AppendF($"      \"drawsMean\": {run.draws / n:0.0},\n      \"computesMean\": {run.computes / n:0.0},\n");
 			json.AppendF($"      \"poolMBMean\": {run.poolMB / n:0.0},\n      \"poolMBPeak\": {run.peakPoolMB:0.0},\n      \"residentGeometryMBMean\": {run.residentGeoMB / n:0.0},\n      \"residentGeometryMBPeak\": {run.peakResidentGeoMB:0.0},\n");
 			json.AppendF($"      \"residentTextureMBMean\": {run.residentTexMB / n:0.0},\n      \"residentVirtualTextureMBMean\": {run.residentVtMB / n:0.0},\n");

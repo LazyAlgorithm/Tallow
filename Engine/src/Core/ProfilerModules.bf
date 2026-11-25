@@ -22,6 +22,9 @@ static class ProfilerModules
 	static ProfilerCounter sGpuClusters = .("GPU-Driven Clusters Drawn", .Rendering);
 	static ProfilerCounter sGpuTriangles = .("GPU-Driven Triangles", .Rendering);
 	static ProfilerCounter sGpuDeferred = .("GPU-Driven Clusters Put Off By Occlusion", .Rendering);
+	static ProfilerCounter sSwClusters = .("GPU-Driven: SW Clusters", .Rendering);
+	static ProfilerCounter sSwTriangles = .("GPU-Driven: SW Triangles", .Rendering);
+	static ProfilerCounter sHwClusters = .("GPU-Driven: HW Clusters", .Rendering);
 	static ProfilerCounter sGpuLost = .("GPU-Driven Clusters Over Budget", .Rendering);
 	static ProfilerCounter sInstancesDropped = .("Instances Dropped (no instance memory)", .Rendering);
 	static ProfilerCounter sGpuDraws = .("GPU Draws (all passes)", .Rendering);
@@ -169,6 +172,9 @@ static class ProfilerModules
 		sGpuClusters.Set((int32)GpuDriven.Clusters);
 		sGpuTriangles.Set((int32)GpuDriven.Triangles);
 		sGpuDeferred.Set((int32)GpuDriven.DeferredClusters);
+		sSwClusters.Set((int32)GpuDriven.SwClusters);
+		sSwTriangles.Set((int32)GpuDriven.SwTriangles);
+		sHwClusters.Set((int32)GpuDriven.HwClusters);
 		sGpuLost.Set((int32)(GpuDriven.ClustersLost + GpuDriven.NodesLost));
 		if (StreamingCore.Pool(.GeoPage) != null)
 		{

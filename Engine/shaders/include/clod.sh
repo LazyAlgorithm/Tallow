@@ -28,6 +28,12 @@
 #define CLOD_CTRL_CLUSTERS 2u
 #define CLOD_CTRL_CLUSTERS_LOST 3u
 #define CLOD_CTRL_TRIANGLES 4u
+// Hybrid software raster (M7b): clusters classified as tiny (SW), the triangles in them, and the others (HW). Bin 255 is
+// reserved as the SW list; bit 17 of an instance's bin word says its material may be drawn by the software raster.
+#define CLOD_CTRL_SW_CLUSTERS 5u
+#define CLOD_CTRL_SW_TRIANGLES 6u
+#define CLOD_CTRL_HW_CLUSTERS 7u
+#define CLOD_SW_BIN 255u
 #define CLOD_CTRL_BINS 8u
 #define CLOD_NODE_GROUPS_X 32768u
 // The deferred lists of a pass.

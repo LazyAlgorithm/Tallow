@@ -392,6 +392,15 @@ public static class GpuDriven
     /// <summary>Megabytes of the shared cluster pool in use.</summary>
     public static double PoolMB => CSharpGpuDriven.Stat(8);
 
+    /// <summary>Clusters the hybrid software raster would take (average triangle edge under SwEdge pixels); read back a few frames late. Counted only with --gpu-sw-raster classify or on.</summary>
+    public static long SwClusters => (long)CSharpGpuDriven.Stat(9);
+
+    /// <summary>Triangles in those clusters.</summary>
+    public static long SwTriangles => (long)CSharpGpuDriven.Stat(10);
+
+    /// <summary>The other clusters drawn (counted together with SwClusters).</summary>
+    public static long HwClusters => (long)CSharpGpuDriven.Stat(11);
+
     private static string Value(string name) =>
         ActionText.Read(buffer => CSharpPlatform.QualityValueText(name, buffer)) ?? "";
 

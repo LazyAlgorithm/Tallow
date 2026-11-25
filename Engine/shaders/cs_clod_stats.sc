@@ -35,4 +35,8 @@ void main()
 	b_stats[17] = b_cascade2[CLOD_CTRL_NODES_LOST];
 	b_stats[18] = b_cascade3[CLOD_CTRL_CLUSTERS_LOST];
 	b_stats[19] = b_cascade3[CLOD_CTRL_NODES_LOST];
+	b_stats[20] = b_control1[CLOD_CTRL_SW_CLUSTERS] + b_control2[CLOD_CTRL_SW_CLUSTERS];
+	b_stats[21] = b_control1[CLOD_CTRL_SW_TRIANGLES] + b_control2[CLOD_CTRL_SW_TRIANGLES];
+	b_stats[22] = b_control1[CLOD_CTRL_HW_CLUSTERS] + b_control2[CLOD_CTRL_HW_CLUSTERS];
+	b_stats[23] = 0u;
 }

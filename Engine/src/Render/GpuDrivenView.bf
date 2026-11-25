@@ -22,6 +22,8 @@ struct GpuCullParams
 	/// The occlusion test: 0 none, 1 the first phase (against last frame's picture), 2 the second (against this frame's first).
 	public int32 occlusion;
 	public GpuOccluder occluder;
+	/// The software raster mode of GpuDriven (0 off, 1 classify, 2 on); only the scene camera sets it.
+	public int32 swMode;
 }
 
 /// One RenderView's part of GPU-driven drawing: the instances it hands the graphics card each frame, and for every
@@ -267,6 +269,8 @@ class GpuDrivenView
 		bgfx.set_uniform(GpuDriven.uCam, &camera, 1);
 		bgfx.set_uniform(GpuDriven.uLod, &lod, 1);
 		bgfx.set_uniform(GpuDriven.uCounts, &counts, 1);
+		Vector4 sw = .(p.swMode, GpuDriven.SwEdgePixels, p.near, 0);
+		bgfx.set_uniform(GpuDriven.uSw, &sw, 1);
 		SetOcclusion(p, first);
 		bgfx.dispatch_indirect(view, GpuDriven.ClusterProgram, pass.indirect, retest ? 258 : 0, 1, 0xff);
 	}
@@ -348,7 +352,7 @@ class GpuDrivenView
 	}
 
 	/// The sizes of the statistics: where each number is in the stats buffer (cs_clod_stats.sc).
-	const int StatWords = 20;
+	const int StatWords = 24;
 	uint32[StatWords] mStatValues;
 	bgfx.DynamicVertexBufferHandle mStats = .() { idx = uint16.MaxValue };
 	int64 mStatsFrame = -1000;
@@ -422,6 +426,9 @@ class GpuDrivenView
 		GpuDriven.NodesLost = (int64)v[3] + v[7];
 		GpuDriven.DeferredInstances = v[8];
 		GpuDriven.DeferredClusters = v[9];
+		GpuDriven.SwClusters = v[20];
+		GpuDriven.SwTriangles = v[21];
+		GpuDriven.HwClusters = v[22];
 		GpuDriven.StatsReads++;
 		// A pass that had no room for clusters: its budget doubles for the next frames.
 		if (v[2] + v[6] + v[10] > 0 && mSceneVisible < MaxVisible)
