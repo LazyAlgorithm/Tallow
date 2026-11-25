@@ -19,6 +19,7 @@ namespace Tallow;
 ///                                                      and exit 0 or 1 (builtin:sphere_smooth, sphere:512x300, a model)
 ///   --gpu-driven on|off                                draw big meshes from clusters picked on the graphics card (or
 ///                                                      not), whatever the quality setting says
+///   --gpu-debug-view <name> [--gpu-debug-mip N]       show clusters, lod, triangles, hzb, residency or vt instead of the lit picture
 ///   --gpu-occlusion on|off                             leave out what is hidden behind other things in the GPU-driven
 ///                                                      path (on by default, with the camera's occlusion culling)
 ///   --gpu-no-local-shadows                             draw point and spot light shadows the usual way
@@ -252,6 +253,26 @@ class Application
 			else
 				Log.Warning(scope $"--gpu-occlusion takes on or off, not '{gpuOcclusion}'");
 		}
+		// --gpu-debug-view off|clusters|lod|triangles|hzb|residency|vt [--gpu-debug-mip N]: draw the GPU-driven path's debug picture.
+		let debugView = scope String();
+		if (GetArg("--gpu-debug-view", debugView))
+		{
+			let debugName = scope String(debugView)..ToLower();
+			switch (debugName)
+			{
+			case "off": GpuDriven.View = .Off;
+			case "clusters": GpuDriven.View = .Clusters;
+			case "lod", "lodlevel": GpuDriven.View = .LodLevel;
+			case "triangles": GpuDriven.View = .Triangles;
+			case "hzb": GpuDriven.View = .Hzb;
+			case "residency": GpuDriven.View = .Residency;
+			case "vt", "vtpages": GpuDriven.View = .VtPages;
+			default: Log.Warning(scope $"--gpu-debug-view takes off, clusters, lod, triangles, hzb, residency or vt, not '{debugView}'");
+			}
+		}
+		let debugMip = scope String();
+		if (GetArg("--gpu-debug-mip", debugMip) && int32.Parse(debugMip) case .Ok(let mip))
+			GpuDriven.DebugMip = Math.Max(mip, 0);
 		if (HasArg("--gpu-no-local-shadows"))
 			GpuDriven.LocalShadows = false;
 		// Meshes with fewer triangles than this are drawn the usual way (default 2000): lower it to try small meshes.

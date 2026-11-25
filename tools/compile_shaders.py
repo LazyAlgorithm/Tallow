@@ -21,7 +21,9 @@ def main():
     # Shaders that are another shader's source with a define added after its first ($input) line: fs_cluster is fs_mesh
     # without lightmaps, which draws from buffers in the stages the lightmaps use (cluster LOD drawing).
     variants = {'fs_cluster': ('fs_mesh.sc', '#define TW_NO_LIGHTMAP 1\n'),
-                'fs_cluster_vt': ('fs_mesh.sc', '#define TW_NO_LIGHTMAP 1\n#define TW_VT 1\n')}
+                'fs_cluster_vt': ('fs_mesh.sc', '#define TW_NO_LIGHTMAP 1\n#define TW_VT 1\n'),
+                'vs_cluster_debug': ('vs_cluster.sc', '#define TW_DEBUG 1\n'),
+                'fs_cluster_debug_vt': ('fs_cluster_debug.sc', '#define TW_VT 1\n')}
     scratch = root / 'build' / 'shader-variants'
     scratch.mkdir(parents=True, exist_ok=True)
     for name, (original, define) in variants.items():
@@ -32,7 +34,7 @@ def main():
             if shader.name == 'cs_template.sc':
                 continue
             for backend in args.backend or list(targets):
-                if backend == 'webgl' and (stage == 'compute' or shader.name.startswith(('vs_cluster', 'cs_clod', 'fs_cluster', 'fs_vt_feedback'))):
+                if backend == 'webgl' and (stage == 'compute' or shader.name.startswith(('vs_cluster', 'cs_clod', 'fs_cluster', 'fs_vt_feedback', 'fs_hzb_debug'))):
                     continue
                 profile, platform = targets[backend]
                 output = root / 'Engine/assets/shaders' / backend / (shader.stem + '.bin')

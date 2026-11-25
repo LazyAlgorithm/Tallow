@@ -371,11 +371,32 @@ extension RenderView
 			surface.cull = FacingCull(surface.cull);
 			SetSurfaceUniforms(first.renderer, ref surface);
 			let vt = GpuBinVt(first);
-			let program = vt != null ? VirtualTextures.LitProgram : GpuDriven.LitProgram;
+			var program = vt != null ? VirtualTextures.LitProgram : GpuDriven.LitProgram;
+			var debugMode = 0.0f;
+			if (GpuDriven.DebugProgram.Valid && GpuDriven.View != .Off && GpuDriven.View != .Hzb)
+			{
+				program = GpuDriven.DebugProgram;
+				switch (GpuDriven.View)
+				{
+				case .Clusters: debugMode = 1;
+				case .LodLevel: debugMode = 2;
+				case .Triangles: debugMode = 3;
+				case .Residency: debugMode = 6;
+				case .VtPages:
+					if (vt != null && GpuDriven.DebugVtProgram.Valid)
+						program = GpuDriven.DebugVtProgram;
+					else
+						debugMode = 7;
+				default:
+				}
+			}
 			if (vt != null)
 				VirtualTextures.Bind(vt);
 			let state = Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | surface.cull | Gfx.StateMsaa;
 			bgfx.set_state(state, 0);
+			var debugValues = Vector4(debugMode, GpuDriven.DebugMaxLevel, 0, 0);
+			if (debugMode > 0 || program.idx == GpuDriven.DebugVtProgram.idx)
+				bgfx.set_uniform(GpuDriven.uDebug, &debugValues, 1);
 			mGpu.SubmitBin(view, program, GpuDrivenView.ScenePass, bin);
 			DrawCalls++;
 			if (mGpuTwoPhase)
@@ -389,11 +410,35 @@ extension RenderView
 				if (vt != null)
 					VirtualTextures.Bind(vt);
 				bgfx.set_state(state, 0);
+				if (debugMode > 0 || program.idx == GpuDriven.DebugVtProgram.idx)
+					bgfx.set_uniform(GpuDriven.uDebug, &debugValues, 1);
 				mGpu.SubmitBin(view, program, GpuDrivenView.SecondPass, bin);
 				DrawCalls++;
 			}
 		}
 		Instances += mGpu.SceneCount;
+	}
+
+	/// The Hzb debug view: one level of the occlusion pyramid (the finished picture of this frame), over the scene.
+	void GpuDrawDebugHzb(uint16 view, CameraData camera)
+	{
+		if (GpuDriven.View != .Hzb || !mGpuActive || !GpuDriven.DebugHzbProgram.Valid || mGpuOcc == null || !mGpuOcc.Ready)
+			return;
+		let o = mGpuOcc.History(camera);
+		let level = Math.Clamp(GpuDriven.DebugMip, 0, o.levels - 1);
+		var w = (int)o.baseWidth;
+		var h = (int)o.baseHeight;
+		var start = 0;
+		for (int i < level)
+		{
+			start += w * h;
+			w = Math.Max(w / 2, 1);
+			h = Math.Max(h / 2, 1);
+		}
+		Vector4 show = .(w, h, start, 100.0f);
+		bgfx.set_uniform(GpuDriven.uHzbShow, &show, 1);
+		bgfx.set_compute_dynamic_vertex_buffer(4, o.buffer, .Read, 0, uint32.MaxValue);
+		SubmitFullscreen(view, GpuDriven.DebugHzbProgram, Gfx.StateWriteRGB | Gfx.StateWriteA);
 	}
 
 	/// The virtual texture a bin's albedo is, when it is one and virtual textures can be drawn.

@@ -1113,6 +1113,7 @@ class RenderView
 		if (ViewBase == 10)
 			GpuDrawVtFeedback(viewMatrix, projMatrix, (int32)mWidth, (int32)mHeight);
 		GpuDrawScene(view);
+		GpuDrawDebugHzb(view, camera);
 		SubmitMeshes(view, mFoliageItems);
 		SubmitParticles(view, scene, frustum);
 		SubmitLines(view, DebugDraw.Lines);

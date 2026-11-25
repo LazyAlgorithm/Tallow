@@ -409,6 +409,21 @@ extension EditorApp
 				mSceneOcclusion = !mSceneOcclusion;
 			if (ImGui.MenuItem("Occlusion Picture", null, mShowOcclusionPicture))
 				mShowOcclusionPicture = !mShowOcclusionPicture;
+			// What the GPU-driven draw shows (GpuDriven.DebugView): the viewport's debug views.
+			if (ImGui.BeginMenu("GPU Debug View", GpuDriven.Available))
+			{
+				StringView[7] names = .("Off", "Clusters", "LOD Level", "Triangles", "HZB", "Residency", "Virtual Texture Pages");
+				for (int k < 7)
+				{
+					if (ImGui.MenuItem(scope String(names[k]).CStr(), null, (int)GpuDriven.View == k))
+						GpuDriven.View = (GpuDriven.DebugView)k;
+				}
+				if (GpuDriven.View == .Hzb)
+				{
+					ImGui.DragInt("HZB level", ref GpuDriven.DebugMip, 0.2f, 0, 10);
+				}
+				ImGui.EndMenu();
+			}
 			ImGui.EndMenu();
 		}
 		DrawExtensionsMenu();

@@ -12,6 +12,29 @@ BUFFER_RO(b_pool, uint, 8);
 BUFFER_RO(b_instances, uint, 9);
 BUFFER_RO(b_visible, uint, 10);
 
+#ifdef TW_DEBUG
+// vs_cluster_debug (tools/compile_shaders.py): the debug views (GpuDriven.DebugView) colour the surface by what the
+// cluster is, in place of its material. x: 1 clusters, 2 LOD level, 3 triangles, 6 residency.
+uniform vec4 u_clodDebug;
+
+vec3 debugHash(uint n)
+{
+	n = (n ^ 61u) ^ (n >> 16u);
+	n *= 9u;
+	n = n ^ (n >> 4u);
+	n *= 0x27d4eb2du;
+	n = n ^ (n >> 15u);
+	return vec3(float(n & 255u), float((n >> 8u) & 255u), float((n >> 16u) & 255u)) / 255.0 * 0.75 + vec3_splat(0.2);
+}
+
+vec3 debugRamp(float t)
+{
+	// Blue (finest) to red (coarsest).
+	t = clamp(t, 0.0, 1.0);
+	return clamp(vec3(t * 2.0 - 0.6, 1.0 - abs(t * 2.0 - 1.0) * 1.2, 1.4 - t * 2.0), 0.0, 1.0);
+}
+#endif
+
 
 void main()
 {
@@ -60,5 +83,33 @@ void main()
 	float orientation = dot(i_data0.xyz, co0) < 0.0 ? -1.0 : 1.0;
 	v_normal = (co0 * normal.x + co1 * normal.y + co2 * normal.z) * orientation;
 	v_color0 = a_color0 * i_data4;
+#ifdef TW_DEBUG
+	vec3 debugColor = vec3_splat(1.0);
+	if (u_clodDebug.x < 1.5)
+	{
+		debugColor = debugHash(cluster);
+	}
+	else if (u_clodDebug.x < 2.5)
+	{
+		debugColor = debugRamp(float(b_pool[b_pool[cluster + 14u] + 6u]) / max(u_clodDebug.y, 1.0));
+	}
+	else if (u_clodDebug.x < 3.5)
+	{
+		debugColor = debugHash(cluster * 128u + tri);
+	}
+	else if (u_clodDebug.x > 6.5)
+	{
+		debugColor = vec3_splat(0.25);
+	}
+	else
+	{
+		// A cluster whose finer group is not in the pool yet is what the screen may be showing in its place (orange); a
+		// cluster at full detail or whose finer group is resident is green.
+		uint refined = b_pool[cluster + 15u];
+		bool coarse = refined != 0xFFFFFFFFu && b_pool[refined + CLOD_GROUP_RESIDENT] == 0u;
+		debugColor = coarse ? vec3(1.0, 0.35, 0.05) : vec3(0.1, 0.8, 0.2);
+	}
+	v_color0 = vec4(debugColor, 1.0);
+#endif
 	v_depth = gl_Position.w;
 }

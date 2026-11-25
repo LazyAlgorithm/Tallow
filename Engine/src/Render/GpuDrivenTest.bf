@@ -44,6 +44,7 @@ class GpuDrivenTestApp : Application
 		TileSetup,
 		TileOnShot,
 		TileOffShot,
+		DebugShots,
 		Done
 	}
 
@@ -93,6 +94,9 @@ class GpuDrivenTestApp : Application
 	int32[PathFrames] mPathCovered;
 	uint8[] mTileOn ~ delete _;
 	uint8[] mTileOff ~ delete _;
+	/// A picture per debug view (GpuDriven.DebugView, Off first), taken in the tile scene.
+	List<uint8[]> mDebugShots = new .() ~ { for (let shot in _) delete shot; delete _; };
+	int mDebugIndex;
 	GameObject mWall;
 	GameObject mCameraObject;
 	GameObject mPointLight;
@@ -354,7 +358,28 @@ class GpuDrivenTestApp : Application
 			if (mStageFrames == 1)
 				GpuDriven.LocalShadows = false;
 			if (mStageFrames > WarmFrames && Shoot(ref mTileOff))
-				Next(.Done);
+			{
+				GpuDriven.LocalShadows = true;
+				GpuDriven.Occlusion = true;
+				Next(.DebugShots);
+			}
+		case .DebugShots:
+			// One picture per view; the view is set on the stage's first frame and the picture taken a few frames later.
+			while (mDebugShots.Count < 7)
+				mDebugShots.Add(null);
+			GpuDriven.View = (GpuDriven.DebugView)mDebugIndex;
+			GpuDriven.DebugMip = 2;
+			if (mStageFrames > WarmFrames && Shoot(ref mDebugShots[mDebugIndex]))
+			{
+				mDebugIndex++;
+				if (mDebugIndex >= 7)
+				{
+					GpuDriven.View = .Off;
+					Next(.Done);
+				}
+				else
+					Next(.DebugShots);
+			}
 		case .Done:
 			Finish();
 		}
@@ -388,7 +413,7 @@ class GpuDrivenTestApp : Application
 	{
 		switch (mStage)
 		{
-		case .OccSetup, .OccWarm, .OccOn, .OccOffWarm, .OccOff, .TileSetup, .TileOnShot, .TileOffShot:
+		case .OccSetup, .OccWarm, .OccOn, .OccOffWarm, .OccOff, .TileSetup, .TileOnShot, .TileOffShot, .DebugShots:
 			PathPose(0);
 		case .PathOn, .PathOff:
 			PathPose(Math.Max(mStageFrames - PathWarm, 0));
@@ -597,7 +622,7 @@ class GpuDrivenTestApp : Application
 	{
 		Close();
 		mStage = .Done;
-		if (mOld == null || mNew == null || mEmpty == null || mTileOn == null || mTileOff == null)
+		if (mOld == null || mNew == null || mEmpty == null || mTileOn == null || mTileOff == null || mDebugShots.Count < 7 || mDebugShots[6] == null)
 		{
 			Result = 1;
 			return;
@@ -731,6 +756,41 @@ class GpuDrivenTestApp : Application
 		Console.WriteLine(scope $"gpu-driven-test: point light shadow tiles from clusters against the usual way: mean difference {tileSum / (Size * Size):0.00} / 255, {tileBig} pixels over 40");
 		Check(tileBig * 50 <= Size * Size, scope $"the point light's shadows differ in {tileBig} pixels");
 		Check(tileSum / (Size * Size) < 6.0, "the point light's pictures differ on average");
+
+		// The debug views: each picture must differ from the normal one and not be black; the normal one must be what the
+		// run drew before the views were switched on.
+		StringView[7] names = .("off", "clusters", "lod", "triangles", "hzb", "residency", "vt");
+		for (int v < 7)
+		{
+			let shot = mDebugShots[v];
+			if (shot == null)
+			{
+				Check(false, scope $"debug view {names[v]}: no picture");
+				continue;
+			}
+			if (!mSavePrefix.IsEmpty)
+				Save(shot, scope $"{mSavePrefix}-debug-{names[v]}.png");
+			var bright = 0.0;
+			var changed = 0;
+			var same = 0;
+			for (int p < Size * Size)
+			{
+				bright += (shot[p * 4] + shot[p * 4 + 1] + shot[p * 4 + 2]) / 3.0;
+				if (Differs(shot, mDebugShots[0], p * 4, 12))
+					changed++;
+				if (Differs(shot, mTileOn, p * 4, 3))
+					same++;
+			}
+			bright /= Size * Size;
+			Console.WriteLine(scope $"gpu-driven-test: debug view {names[v],-10} mean brightness {bright:0.0}, {changed} pixels differ from Off, {same} from the tile scene's lit picture");
+			if (v == 0)
+				Check(same * 50 <= Size * Size, scope $"the normal picture changed after the debug views ran ({same} pixels)");
+			else
+			{
+				Check(bright > 5, scope $"debug view {names[v]} is black");
+				Check(changed * 100 >= Size * Size, scope $"debug view {names[v]} does not differ from Off ({changed} pixels)");
+			}
+		}
 		Console.WriteLine(failures == 0 ? "gpu-driven-test: PASS" : "gpu-driven-test: FAILED");
 		Result = failures == 0 ? 0 : 1;
 	}

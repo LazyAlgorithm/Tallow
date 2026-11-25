@@ -19,6 +19,25 @@ namespace Tallow;
 /// (GpuDrivenView.bf has the rules); until then, and for everything else, the usual path draws it.
 static class GpuDriven
 {
+	/// What the GPU-driven draw shows in place of the lit picture (`--gpu-debug-view <name>`, the viewport's menu).
+	public enum DebugView : int32
+	{
+		/// The normal picture.
+		Off,
+		/// A colour per cluster.
+		Clusters,
+		/// A colour per level of the hierarchy (blue: the mesh's own triangles, red: the coarsest).
+		LodLevel,
+		/// A colour per triangle, so the density of the triangles shows.
+		Triangles,
+		/// One level of the occlusion pyramid (DebugMip), over the whole screen.
+		Hzb,
+		/// Green: clusters at the detail they ask for; orange: clusters whose finer group is not in memory yet (virtual geometry).
+		Residency,
+		/// The mip level of the virtual texture each pixel shows: green is the level it needs, orange to red a coarser one.
+		VtPages
+	}
+
 	/// The bgfx view the culling dispatches go in: after the skinning's (Compute.View) and before every camera's.
 	public const uint16 CullView = 2;
 	/// The views of the occlusion test (views 3 to 9 are free; every camera's start at 10): each of the two cameras that
@@ -65,6 +84,12 @@ static class GpuDriven
 	public static bool StreamGeometry = true;
 	/// `--no-geometry-streaming` was given: the quality preset must not overwrite it.
 	public static bool StreamGeometryFromArgs;
+	/// The debug view in use, and which level of the occlusion pyramid the Hzb view shows.
+	public static DebugView View = .Off;
+	public static int32 DebugMip = 0;
+	/// Highest level the LodLevel view's colours go to.
+	public const float DebugMaxLevel = 12;
+
 	/// Whether the point and spot lights' shadow tiles are drawn from clusters picked for each tile (off: the usual way).
 	public static bool LocalShadows = true;
 
@@ -95,6 +120,11 @@ static class GpuDriven
 	public static bgfx.ProgramHandle DepthAlbedoProgram = .() { idx = uint16.MaxValue };
 	public static bgfx.ProgramHandle DepthAlbedoVelProgram = .() { idx = uint16.MaxValue };
 	public static bgfx.ProgramHandle ShadowProgram = .() { idx = uint16.MaxValue };
+	/// The debug views' programs (the clusters' and the virtual textures' colours, the pyramid); optional.
+	public static bgfx.ProgramHandle DebugProgram = .() { idx = uint16.MaxValue };
+	public static bgfx.ProgramHandle DebugVtProgram = .() { idx = uint16.MaxValue };
+	public static bgfx.ProgramHandle DebugHzbProgram = .() { idx = uint16.MaxValue };
+	public static bgfx.UniformHandle uDebug, uHzbShow;
 	static bgfx.IndexBufferHandle sIndices = .() { idx = uint16.MaxValue };
 	static bgfx.VertexBufferHandle sNoVertices = .() { idx = uint16.MaxValue };
 	public static bgfx.UniformHandle uMode, uPlanes, uCounts, uCam, uLod, uOcc, uView, uProj, uHzb, uScreen, uHzbSize, uHzbLevel, uHzbLevel2, sDistance;
@@ -148,6 +178,11 @@ static class GpuDriven
 		DepthAlbedoProgram = Gfx.LoadProgram("vs_cluster_depth_albedo", "fs_depth_albedo");
 		DepthAlbedoVelProgram = Gfx.LoadProgram("vs_cluster_depth_albedo_vel", "fs_depth_albedo_vel");
 		ShadowProgram = Gfx.LoadProgram("vs_cluster_shadow", "fs_shadow");
+		DebugProgram = Gfx.LoadProgram("vs_cluster_debug", "fs_cluster_debug");
+		DebugVtProgram = Gfx.LoadProgram("vs_cluster_debug", "fs_cluster_debug_vt");
+		DebugHzbProgram = Gfx.LoadProgram("vs_fullscreen", "fs_hzb_debug");
+		uDebug = bgfx.create_uniform("u_clodDebug", .Vec4, 1);
+		uHzbShow = bgfx.create_uniform("u_hzbShow", .Vec4, 1);
 		if (!sSetup.Valid || !sInstances.Valid || !sClusters.Valid || !sStats.Valid || !sHzbCopy.Valid || !sHzbReduce.Valid || !LitProgram.Valid || !DepthProgram.Valid || !DepthVelProgram.Valid || !DepthAlbedoProgram.Valid || !DepthAlbedoVelProgram.Valid || !ShadowProgram.Valid)
 		{
 			Log.Warning(scope $"GPU-driven drawing: off (the shaders did not load: setup {sSetup.Valid}, instances {sInstances.Valid}, clusters {sClusters.Valid}, lit {LitProgram.Valid}, depth {DepthProgram.Valid}, shadow {ShadowProgram.Valid})");
@@ -706,7 +741,7 @@ static class GpuDriven
 			words[at++] = *(uint32*)&group.radius;
 			words[at++] = 0;
 			words[at++] = firstId + (uint32)groupIndex;
-			words[at++] = 0;
+			words[at++] = (uint32)group.depth;
 			words[at++] = 0;
 			groupIndex++;
 		}
