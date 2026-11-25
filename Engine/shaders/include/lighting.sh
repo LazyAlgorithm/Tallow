@@ -193,11 +193,11 @@ vec3 shadeLight(int index, vec3 wpos, vec3 n, vec3 v, vec3 albedo, float metalli
 	return brdf(n, v, l, albedo, metallic, roughness, specularLevel) * colorType.rgb * atten * PI;
 }
 
-float shadowTap(mat4 mtx, vec3 wpos)
+float shadowTap(mat4 mtx, vec3 wpos, float slopeBias)
 {
 	vec4 sc = mul(mtx, vec4(wpos, 1.0));
 	float texel = u_shadowParams.x;
-	float depth = sc.z - u_shadowParams.y;
+	float depth = sc.z - u_shadowParams.y * slopeBias;
 	float sum = 0.0;
 	sum += shadow2D(s_shadowMap, vec3(sc.xy + vec2(-0.5, -0.5) * texel, depth));
 	sum += shadow2D(s_shadowMap, vec3(sc.xy + vec2( 0.5, -0.5) * texel, depth));
@@ -216,23 +216,29 @@ float sunShadow(vec3 wpos, vec3 n, float viewDepth)
 	{
 		return 1.0;
 	}
-	vec3 p = wpos + n * u_shadowParams.w;
+	// A surface the sunlight grazes covers many shadow-map texels in depth, so it would shadow itself in stripes
+	// (shadow acne): push the point out along its normal and bias its depth more the more slanted the light is.
+	float ndl = clamp(dot(n, u_sunDir.xyz), 0.0, 1.0);
+	float sinAngle = sqrt(1.0 - ndl * ndl);
+	float slopeBias = 1.0 + min(sinAngle / max(ndl, 0.05), 8.0);
+	vec3 offset = n * (u_shadowParams.w * (0.6 + 1.4 * sinAngle));
+	vec3 p = wpos + offset;
 	float s;
 	if (viewDepth < u_cascadeSplits.x)
 	{
-		s = shadowTap(u_shadowMtx[0], p);
+		s = shadowTap(u_shadowMtx[0], p, slopeBias);
 	}
 	else if (viewDepth < u_cascadeSplits.y)
 	{
-		s = shadowTap(u_shadowMtx[1], p + n * u_shadowParams.w);
+		s = shadowTap(u_shadowMtx[1], p + offset, slopeBias);
 	}
 	else if (viewDepth < u_cascadeSplits.z)
 	{
-		s = shadowTap(u_shadowMtx[2], p + n * u_shadowParams.w * 3.0);
+		s = shadowTap(u_shadowMtx[2], p + offset * 3.0, slopeBias);
 	}
 	else
 	{
-		s = shadowTap(u_shadowMtx[3], p + n * u_shadowParams.w * 7.0);
+		s = shadowTap(u_shadowMtx[3], p + offset * 7.0, slopeBias);
 	}
 	// Fade out towards the end of the last cascade so the shadow distance has no hard edge.
 	float fade = clamp((u_cascadeSplits.w - viewDepth) / (u_cascadeSplits.w * 0.1), 0.0, 1.0);
