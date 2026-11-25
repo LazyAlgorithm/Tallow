@@ -19,11 +19,14 @@ def main():
                'webgl': ('300_es', 'asm.js'), 'metal': ('metal', 'osx')}
     failed = []
     # Shaders that are another shader's source with a define added after its first ($input) line: fs_cluster is fs_mesh
-    # without lightmaps, which draws from buffers in the stages the lightmaps use (cluster LOD drawing).
+    # without lightmaps, which draws from buffers in the stages the lightmaps use (cluster LOD drawing); the _blend skies
+    # draw the physical sky under a custom skybox (Skybox.bf).
     variants = {'fs_cluster': ('fs_mesh.sc', '#define TW_NO_LIGHTMAP 1\n'),
                 'fs_cluster_vt': ('fs_mesh.sc', '#define TW_NO_LIGHTMAP 1\n#define TW_VT 1\n'),
                 'vs_cluster_debug': ('vs_cluster.sc', '#define TW_DEBUG 1\n'),
-                'fs_cluster_debug_vt': ('fs_cluster_debug.sc', '#define TW_VT 1\n')}
+                'fs_cluster_debug_vt': ('fs_cluster_debug.sc', '#define TW_VT 1\n'),
+                'fs_sky_custom_blend': ('fs_sky_custom.sc', '#define TW_SKY_BLEND 1\n'),
+                'fs_env_sky_custom_blend': ('fs_env_sky_custom.sc', '#define TW_SKY_BLEND 1\n')}
     scratch = root / 'build' / 'shader-variants'
     scratch.mkdir(parents=True, exist_ok=True)
     for name, (original, define) in variants.items():

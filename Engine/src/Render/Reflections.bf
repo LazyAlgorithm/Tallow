@@ -543,6 +543,8 @@ static class Reflections
 					bgfx.set_uniform(uEnvFace, &faceParams, 1);
 					// A custom skybox that loads is the sky's cube (and so the ambient light); otherwise the sky drawn.
 					var program = Skybox.BindReflection(env, sJobSize);
+					if (program.Valid && Skybox.ShowsPhysical(env))
+						PhysicalSky.SetUniforms(env, sunDir, sunColor);
 					if (!program.Valid)
 					{
 						PhysicalSky.SetUniforms(env, sunDir, sunColor);

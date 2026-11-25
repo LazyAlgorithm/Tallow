@@ -17,7 +17,8 @@ extension Native
 /// file (an equirectangular 2:1 panorama in .hdr, .exr, .png or .jpg, or a .ktx / .dds cubemap) or a folder of six
 /// face pictures named px/nx/py/ny/pz/nz or right/left/up/down/front/back. Cross layouts are not read. The first use
 /// turns it into a linear RGBA16F cube with every mip level, cached as <project>/.cache/sky/<key>.ktx (made again when
-/// the source changes), then drawn by fs_sky_custom with the scene's rotation, exposure and tint.
+/// the source changes), then drawn by fs_sky_custom with the scene's rotation, exposure and tint. With Day / Night the skybox follows the
+/// sun (LookFor) and a night skybox fades in after sunset; Skybox Blend draws the physical sky under it.
 static class Skybox
 {
 	/// The largest face size an import makes (a .tmeta "maxSize N" line on the asset can lower it).
@@ -40,8 +41,10 @@ static class Skybox
 	}
 
 	static Dictionary<String, Entry> sEntries = new .() ~ DeleteDictionaryAndKeysAndValues!(_);
-	static bgfx.UniformHandle uSkybox = .() { idx = uint16.MaxValue }, uSkyboxTint = .() { idx = uint16.MaxValue }, sSkyboxCube = .() { idx = uint16.MaxValue };
+	static bgfx.UniformHandle uSkybox = .() { idx = uint16.MaxValue }, uSkyboxTint = .() { idx = uint16.MaxValue }, uSkyboxNight = .() { idx = uint16.MaxValue };
+	static bgfx.UniformHandle sSkyboxCube = .() { idx = uint16.MaxValue }, sSkyboxNightCube = .() { idx = uint16.MaxValue };
 	static bgfx.ProgramHandle sProgram = .() { idx = uint16.MaxValue }, sReflectionProgram = .() { idx = uint16.MaxValue };
+	static bgfx.ProgramHandle sBlendProgram = .() { idx = uint16.MaxValue }, sBlendReflectionProgram = .() { idx = uint16.MaxValue };
 
 	/// Imports made since start (for tests: a cached skybox is not imported again).
 	public static int Imports { get; private set; }
@@ -320,26 +323,120 @@ static class Skybox
 		return failed > 0 ? 1 : 0;
 	}
 
-	/// The scene's skybox as two ambient colours (linear, exposure and tint applied, before Ambient Intensity): the
-	/// light from the sky above and from below. False when the sky is not drawn from a skybox. For lighting that
-	/// can't read the sky's cube (DynamicGI's probe grid).
+	/// Day / Night: the darkest the day skybox gets at night, as a share of its noon brightness.
+	public const float NightFloor = 0.02f;
+	/// Day / Night: the sun's height (degrees) where the night skybox has fully faded in (it starts at 0, sunset).
+	public const float NightFadeElevation = -8;
+
+	/// How the sky's skyboxes are drawn now: linear colours their cubes are multiplied by (the day one's before its
+	/// exposure, which the shader applies; the night one's with it), and how much physical sky shows under them.
+	public struct Look
+	{
+		public Vector3 day;
+		public Vector3 night;
+		public float underneath;
+	}
+
+	static float sEffectElevation = float.NaN, sEffectNoon = float.NaN;
+	static float sEffectBrightness;
+	static Vector3 sEffectColor;
+
+	static float Smoothstep(float a, float b, float x)
+	{
+		let t = Math.Clamp((x - a) / (b - a), 0, 1);
+		return t * t * (3 - 2 * t);
+	}
+
+	/// Day / Night: what the sun does to a skybox painted for noon, with the sun at `elevation` degrees and at `noon`
+	/// degrees at midday. Brightness: the sky's light now over noon's (Atmosphere.SkyIrradiance, so twilight still
+	/// glows after sunset). Colour: the sun's colour now over noon's (Atmosphere.SunTransmittance, held at its 1 degree
+	/// colour below that), brightness 1, half way to white, so a painted sky turns orange then red at sunset. Cached:
+	/// worked out again only when the sun has moved more than 0.1 degrees.
+	public static void SunEffect(float elevation, float noon, out float brightness, out Vector3 color)
+	{
+		if (!(Math.Abs(elevation - sEffectElevation) <= 0.1f && Math.Abs(noon - sEffectNoon) <= 0.1f))
+		{
+			sEffectElevation = elevation;
+			sEffectNoon = noon;
+			let noonSky = Atmosphere.SkyIrradiance(noon).Luminance;
+			sEffectBrightness = noonSky > 1e-9 ? (float)Math.Min(Atmosphere.SkyIrradiance(elevation).Luminance / noonSky, 1.5) : 0;
+			let now = Atmosphere.SunTransmittance(Math.Max(elevation, 1));
+			let atNoon = Atmosphere.SunTransmittance(noon);
+			var ratio = Vector3((float)(now.r / Math.Max(atNoon.r, 1e-9)), (float)(now.g / Math.Max(atNoon.g, 1e-9)), (float)(now.b / Math.Max(atNoon.b, 1e-9)));
+			let luminance = 0.2126f * ratio.x + 0.7152f * ratio.y + 0.0722f * ratio.z;
+			ratio = luminance > 1e-6f ? ratio / luminance : Vector3(1, 1, 1);
+			sEffectColor = (ratio + Vector3(1, 1, 1)) * 0.5f;
+		}
+		brightness = sEffectBrightness;
+		color = sEffectColor;
+	}
+
+	/// The sun's height at midday (degrees) for the environment's latitude, day of the year and axis tilt.
+	public static float NoonElevation(SceneEnvironment env)
+	{
+		let declination = (float)(DayNight.SunDeclination(env) * 180 / Math.PI_d);
+		return Math.Clamp(90 - Math.Abs(env.latitude - declination), 5, 90);
+	}
+
+	static Vector3 LinearTint(Color tint) => .(Math.Pow(tint.r, 2.2f), Math.Pow(tint.g, 2.2f), Math.Pow(tint.b, 2.2f));
+
+	/// Whether the night skybox is set, Day / Night is on and it loads.
+	static bool NightUsable(SceneEnvironment env) => env.dayNight && !env.nightSkybox.IsEmpty && Get(env.nightSkybox).Valid;
+
+	/// How the skyboxes are drawn now. With Day / Night off: the tint (nothing else changes). With it on: the day
+	/// skybox follows the sun (SunEffect, times Sky Brightness, never under NightFloor; its colour goes back to white as
+	/// night falls) and, when there is a night skybox, fades out as the night skybox fades in, from sunset to
+	/// NightFadeElevation.
+	public static Look LookFor(SceneEnvironment env)
+	{
+		Look look;
+		let tint = LinearTint(env.skyboxTint);
+		look.day = tint;
+		look.night = .Zero;
+		look.underneath = Math.Clamp(env.skyboxBlend, 0, 1);
+		if (!env.dayNight)
+			return look;
+		let elevation = DayNight.SunElevation(env);
+		SunEffect(elevation, NoonElevation(env), let brightness, let color);
+		let dark = Smoothstep(0, NightFadeElevation, elevation);
+		let sky = Math.Max(env.skyBrightness, 0);
+		let fade = NightUsable(env) ? dark : 0;
+		look.day = tint * (color + (Vector3(1, 1, 1) - color) * dark) * (sky * Math.Max(brightness, NightFloor) * (1 - fade));
+		look.night = tint * (Math.Pow(2.0f, env.skyboxExposure) * sky * fade);
+		return look;
+	}
+
+	/// The scene's skybox as two ambient colours (linear, exposure, tint and, with Day / Night, the sun and the night
+	/// skybox applied, before Ambient Intensity): the light from the sky above and from below. False when the sky is not
+	/// drawn from a skybox, or when Day / Night's Auto Colours sets the ambient light (the atmosphere's, so a painted
+	/// sky still gets red sunsets). For lighting that can't read the sky's cube (DynamicGI's probe grid).
 	public static bool AmbientColors(SceneEnvironment env, out Vector3 sky, out Vector3 ground)
 	{
 		sky = ground = .Zero;
-		if (!Active(env))
+		if (!DrivesAmbient(env))
 			return false;
 		Entry entry;
 		if (!sEntries.TryGetValueAlt(env.skybox, out entry))
 			return false;
-		let tint = env.skyboxTint;
-		let scale = Vector3(Math.Pow(tint.r, 2.2f), Math.Pow(tint.g, 2.2f), Math.Pow(tint.b, 2.2f)) * Math.Pow(2.0f, env.skyboxExposure);
-		sky = entry.up * scale;
-		ground = entry.down * scale;
+		let look = LookFor(env);
+		let exposure = Math.Pow(2.0f, env.skyboxExposure);
+		sky = entry.up * look.day * exposure;
+		ground = entry.down * look.day * exposure;
+		if (look.night != .Zero && sEntries.TryGetValueAlt(env.nightSkybox, let night))
+		{
+			sky += night.up * look.night;
+			ground += night.down * look.night;
+		}
 		return true;
 	}
 
+	/// Whether the scene's ambient light comes from its skybox (its reflection cube and AmbientColors): a skybox is
+	/// drawn, unless Day / Night with Auto Colours sets the ambient colours from the atmosphere.
+	public static bool DrivesAmbient(SceneEnvironment env) => Active(env) && !(env.dayNight && env.autoColors);
+
 	/// What the reflection cube made from the scene's skybox depends on (0 when the sky is not drawn from one): the
-	/// skybox, the import loaded and its settings.
+	/// skyboxes, the imports loaded and their settings. The sun's effect follows the Day / Night clock, which
+	/// Reflections hashes itself.
 	public static int64 State(SceneEnvironment env)
 	{
 		if (!Active(env))
@@ -350,6 +447,13 @@ static class Skybox
 		int64 hash = entry.generation;
 		for (var number in float[?](env.skyboxRotation, env.skyboxExposure, env.skyboxTint.r, env.skyboxTint.g, env.skyboxTint.b))
 			hash = hash * 1099511628211 ^ (int64) * (uint32*)&number;
+		if (env.skyboxBlend > 0)
+		{
+			var blend = env.skyboxBlend;
+			hash = hash * 1099511628211 ^ (int64) * (uint32*)&blend ^ 0x5b1e;
+		}
+		if (NightUsable(env) && sEntries.TryGetValueAlt(env.nightSkybox, let night))
+			hash = hash * 1099511628211 ^ (night.generation + 0x4e19);
 		return hash;
 	}
 
@@ -379,7 +483,9 @@ static class Skybox
 	/// Whether the scene's sky is drawn from its skybox now (Custom with a skybox that loads).
 	public static bool Active(SceneEnvironment env) => env.skyMode == .Custom && !env.skybox.IsEmpty && Get(env.skybox).Valid;
 
-	/// The skybox program, with its texture and settings set for the next submit; Invalid when the skybox isn't usable.
+	/// The skybox program, with its textures and settings set for the next submit; Invalid when the skybox isn't usable.
+	/// When ShowsPhysical, it is the variant that draws the physical sky under the skybox: the caller sets the physical
+	/// sky's uniforms too (PhysicalSky.SetUniforms).
 	public static bgfx.ProgramHandle Bind(SceneEnvironment env)
 	{
 		if (env.skyMode != .Custom || env.skybox.IsEmpty)
@@ -387,12 +493,16 @@ static class Skybox
 		let texture = Get(env.skybox);
 		if (!texture.Valid)
 			return .() { idx = uint16.MaxValue };
-		SetUniforms(env, texture, 0);
-		return sProgram;
+		let look = LookFor(env);
+		SetUniforms(env, look, texture, 0, 0);
+		return look.underneath > 0 ? sBlendProgram : sProgram;
 	}
 
-	/// The program for a face of the sky's reflection cube (size texels a side) drawn from the skybox, with its
-	/// texture and settings set; Invalid when the skybox isn't usable.
+	/// Whether the sky is drawn as the physical sky with the skybox over it (Skybox Blend above 0).
+	public static bool ShowsPhysical(SceneEnvironment env) => env.skyboxBlend > 0;
+
+	/// The program for a face of the sky's reflection cube (size texels a side) drawn from the skyboxes, with their
+	/// textures and settings set; Invalid when the skybox isn't usable. As Bind for ShowsPhysical.
 	public static bgfx.ProgramHandle BindReflection(SceneEnvironment env, int32 size)
 	{
 		if (env.skyMode != .Custom || env.skybox.IsEmpty)
@@ -400,29 +510,48 @@ static class Skybox
 		let texture = Get(env.skybox);
 		if (!texture.Valid)
 			return .() { idx = uint16.MaxValue };
-		let faceSize = Math.Max(FaceSize(env.skybox), 1);
 		// The level whose texels are about the reflection cube's: each then averages what it covers.
-		SetUniforms(env, texture, Math.Max(Math.Log((float)faceSize / size) / Math.Log(2.0f), 0));
-		return sReflectionProgram;
+		float Level(StringView skybox) => Math.Max(Math.Log((float)Math.Max(FaceSize(skybox), 1) / size) / Math.Log(2.0f), 0);
+		let look = LookFor(env);
+		SetUniforms(env, look, texture, Level(env.skybox), Level(env.nightSkybox));
+		return look.underneath > 0 ? sBlendReflectionProgram : sReflectionProgram;
 	}
 
-	static void SetUniforms(SceneEnvironment env, bgfx.TextureHandle texture, float level)
+	static void SetUniforms(SceneEnvironment env, Look look, bgfx.TextureHandle texture, float level, float nightLevel)
 	{
 		if (!sProgram.Valid)
 		{
 			sProgram = Gfx.LoadProgram("vs_fullscreen", "fs_sky_custom");
 			sReflectionProgram = Gfx.LoadProgram("vs_fullscreen", "fs_env_sky_custom");
+			sBlendProgram = Gfx.LoadProgram("vs_fullscreen", "fs_sky_custom_blend");
+			sBlendReflectionProgram = Gfx.LoadProgram("vs_fullscreen", "fs_env_sky_custom_blend");
 			uSkybox = bgfx.create_uniform("u_skybox", .Vec4, 1);
 			uSkyboxTint = bgfx.create_uniform("u_skyboxTint", .Vec4, 1);
+			uSkyboxNight = bgfx.create_uniform("u_skyboxNight", .Vec4, 1);
 			sSkyboxCube = bgfx.create_uniform("s_skybox", .Sampler, 1);
+			sSkyboxNightCube = bgfx.create_uniform("s_skyboxNight", .Sampler, 1);
 		}
 		let angle = env.skyboxRotation * Mathf.Deg2Rad;
 		Vector4 settings = .(Math.Sin(angle), Math.Cos(angle), Math.Pow(2.0f, env.skyboxExposure), level);
-		let tint = env.skyboxTint;
-		Vector4 tintLinear = .(Math.Pow(tint.r, 2.2f), Math.Pow(tint.g, 2.2f), Math.Pow(tint.b, 2.2f), 1);
+		Vector4 day = .(look.day.x, look.day.y, look.day.z, look.underneath);
+		Vector4 night = .(look.night.x, look.night.y, look.night.z, nightLevel);
+		// Without a night skybox showing, the day cube stands in on its stage (times 0).
+		var nightTexture = texture;
+		if (look.night != .Zero)
+		{
+			let loaded = Get(env.nightSkybox);
+			if (loaded.Valid)
+				nightTexture = loaded;
+			else
+				night = .(0, 0, 0, level);
+		}
+		else
+			night.w = level;
 		bgfx.set_uniform(uSkybox, &settings, 1);
-		bgfx.set_uniform(uSkyboxTint, &tintLinear, 1);
-		bgfx.set_texture(0, sSkyboxCube, texture, uint32.MaxValue);
+		bgfx.set_uniform(uSkyboxTint, &day, 1);
+		bgfx.set_uniform(uSkyboxNight, &night, 1);
+		bgfx.set_texture(2, sSkyboxCube, texture, uint32.MaxValue);
+		bgfx.set_texture(3, sSkyboxNightCube, nightTexture, uint32.MaxValue);
 	}
 
 	public static void Shutdown()
@@ -432,7 +561,9 @@ static class Skybox
 		{
 			bgfx.destroy_program(sProgram);
 			bgfx.destroy_program(sReflectionProgram);
-			for (let uniform in bgfx.UniformHandle[?](uSkybox, uSkyboxTint, sSkyboxCube))
+			bgfx.destroy_program(sBlendProgram);
+			bgfx.destroy_program(sBlendReflectionProgram);
+			for (let uniform in bgfx.UniformHandle[?](uSkybox, uSkyboxTint, uSkyboxNight, sSkyboxCube, sSkyboxNightCube))
 				bgfx.destroy_uniform(uniform);
 			sProgram = .() { idx = uint16.MaxValue };
 		}

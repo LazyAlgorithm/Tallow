@@ -292,6 +292,22 @@ extension EditorApp
 						ImGui.SetTooltip("Brightness in stops: +1 twice as bright, -1 half.");
 					BeginProperty("Tint");
 					changed |= ImGui.ColorEdit3("##sbt", ref env.skyboxTint);
+					BeginProperty("Night Skybox");
+					ImGui.PushID("nightSkybox");
+					if (DrawAssetPicker(env.nightSkybox, "skybox"))
+					{
+						if (!env.nightSkybox.IsEmpty)
+							Skybox.MarkMeta(env.nightSkybox);
+						changed = true;
+					}
+					let nightHovered = ImGui.IsItemHovered();
+					ImGui.PopID();
+					if (nightHovered)
+						ImGui.SetTooltip("With Day / Night on: a skybox for the night, faded in from sunset until the sun is 8 degrees below the horizon (same rotation, exposure and tint). Without one, the day skybox just darkens. With Day / Night on, the skybox follows the sun: dimmer and redder at sunset.");
+					BeginProperty("Physical Sky Under");
+					changed |= ImGui.SliderFloat("##sbb", ref env.skyboxBlend, 0, 1);
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("0: the skybox replaces the physical sky. Above 0: the physical sky (with its sun, moon and stars) is drawn under the skybox and added to it, so a skybox of clouds on black works.");
 				}
 				BeginProperty("Sky Brightness");
 				changed |= ImGui.SliderFloat("##skb", ref env.skyBrightness, 0, 4);

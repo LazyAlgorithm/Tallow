@@ -217,6 +217,13 @@ public readonly record struct SceneEnvironment(ulong SessionId)
         get => Color(31);
         set => Set(31, value.R, value.G, value.B, value.A);
     }
+    /// <summary>How much of the physical sky (with its sun, moon and stars) shows under the skybox: 0 the skybox
+    /// replaces it, above 0 the physical sky is drawn under it and added to it.</summary>
+    public float SkyboxBlend
+    {
+        get => Float(32);
+        set => Set(32, value, 0, 0, 0);
+    }
 
     private float Float(int which)
     {

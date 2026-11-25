@@ -109,6 +109,9 @@ static class SceneSerializer
 		Number(text, "skyboxExposure", env.skyboxExposure, defaults.skyboxExposure);
 		if (env.skyboxTint.r != 1 || env.skyboxTint.g != 1 || env.skyboxTint.b != 1 || env.skyboxTint.a != 1)
 			WriteColor(text, "skyboxTint", env.skyboxTint);
+		if (!env.nightSkybox.IsEmpty)
+			text.AppendF("env nightSkybox {}\n", Quote(env.nightSkybox, .. scope .()));
+		Number(text, "skyboxBlend", env.skyboxBlend, defaults.skyboxBlend);
 	}
 
 	/// Writes an environment number only when it differs from a new scene's.
@@ -806,6 +809,8 @@ static class SceneSerializer
 		case "skyboxRotation": env.skyboxRotation = value;
 		case "skyboxExposure": env.skyboxExposure = Math.Clamp(value, -16, 16);
 		case "skyboxTint": env.skyboxTint = color;
+		case "nightSkybox": env.nightSkybox.Set(tokens[2]);
+		case "skyboxBlend": env.skyboxBlend = Math.Clamp(value, 0, 1);
 		}
 	}
 

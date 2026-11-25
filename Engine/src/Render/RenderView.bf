@@ -447,7 +447,7 @@ class RenderView
 		DynamicGI.Update(scene, env, camera.position, CapturesReflections && !Capture);
 		mReflectionIntensity = Math.Max(env.reflectionIntensity, 0);
 		// A custom skybox lights the scene too: its ambient light comes from the sky's cube made from it.
-		mCubeAmbient = env.ambientFromSurroundings || Skybox.Active(env) ? Math.Max(env.ambientIntensity, 0.0001f) : 0;
+		mCubeAmbient = env.ambientFromSurroundings || Skybox.DrivesAmbient(env) ? Math.Max(env.ambientIntensity, 0.0001f) : 0;
 
 		ClearItems();
 		var shadowRange = env.shadowDistance * ShadowDistanceScale + ShadowRangeMargin;
@@ -1667,10 +1667,13 @@ class RenderView
 	void SubmitSky(uint16 view, SceneEnvironment env)
 	{
 		bgfx.set_uniform(RenderResources.uCamPos, &mCamPos, 1);
-		// A Custom sky with a skybox that loads draws the skybox; without one, the physical sky.
+		// A Custom sky with a skybox that loads draws the skybox (over the physical sky with Skybox Blend); without one,
+		// the physical sky.
 		let skybox = Skybox.Bind(env);
 		if (skybox.Valid)
 		{
+			if (Skybox.ShowsPhysical(env))
+				PhysicalSky.SetUniforms(env, mSunDir, mSunColor);
 			SubmitFullscreen(view, skybox, Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateDepthLequal | Gfx.StateMsaa);
 			return;
 		}

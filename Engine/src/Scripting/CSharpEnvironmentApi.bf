@@ -49,6 +49,7 @@ static class CSharpEnvironment
 		case 29: values[0] = env.skyboxRotation;
 		case 30: values[0] = env.skyboxExposure;
 		case 31: values[0] = env.skyboxTint.r; values[1] = env.skyboxTint.g; values[2] = env.skyboxTint.b; values[3] = env.skyboxTint.a;
+		case 32: values[0] = env.skyboxBlend;
 		default: return false;
 		}
 		return true;
@@ -94,6 +95,7 @@ static class CSharpEnvironment
 		case 29: env.skyboxRotation = x;
 		case 30: env.skyboxExposure = Math.Clamp(x, -16, 16);
 		case 31: env.skyboxTint = .(x, y, z, w);
+		case 32: env.skyboxBlend = Math.Clamp(x, 0, 1);
 		default: return false;
 		}
 		return true;

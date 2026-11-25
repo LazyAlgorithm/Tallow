@@ -182,6 +182,12 @@ class SceneEnvironment
 	public float skyboxExposure;
 	/// Custom sky: a colour the skybox is multiplied by (white: as it is).
 	public Color skyboxTint = .(1, 1, 1);
+	/// Custom sky with Day / Night: a second skybox for the night, faded in as the sun goes down (gone at sunset, full
+	/// 8 degrees below the horizon), with the same rotation, exposure and tint. Empty: the day skybox just darkens.
+	public String nightSkybox = new .() ~ delete _;
+	/// Custom sky: how much of the physical sky shows under the skybox. 0: the skybox replaces it; 1: the physical sky
+	/// (sun disc, stars, moon) is drawn first and the skybox added over it, so a skybox of clouds on black works.
+	public float skyboxBlend;
 
 	/// The radius of the depth of field's largest blur as a share of the screen's height, at Depth Of Field 1.
 	public const float DepthOfFieldReach = 0.015f;
@@ -273,6 +279,8 @@ class SceneEnvironment
 		skyboxRotation = other.skyboxRotation;
 		skyboxExposure = other.skyboxExposure;
 		skyboxTint = other.skyboxTint;
+		nightSkybox.Set(other.nightSkybox);
+		skyboxBlend = other.skyboxBlend;
 	}
 }
 

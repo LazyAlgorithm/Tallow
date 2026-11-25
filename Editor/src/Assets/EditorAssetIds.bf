@@ -158,6 +158,7 @@ extension EditorApp
 		}
 		RemapInPlace(mScene.Environment.colorLookup, moves);
 		RemapInPlace(mScene.Environment.skybox, moves);
+		RemapInPlace(mScene.Environment.nightSkybox, moves);
 		RemapInPlace(mScene.Environment.lightProbes, moves);
 		String[?] open = .(mScene.Path, mPrefabPath, mStashedScenePath, mAnimControllerPath, mClipPath, mDialoguePath,
 			mEditedDataPath, mGraphPath, mImportSettingsPath, mMaterialPath, mSeqPath, mTreePath, mUiPath, mRigPath,

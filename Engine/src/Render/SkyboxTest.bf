@@ -11,7 +11,9 @@ namespace Tallow;
 /// Also checks rotation, exposure and tint, that a cached skybox is not imported again, that a picture that is not a
 /// panorama fails to the physical sky, and that the settings save and load. Then two balls (rough white, mirror) under
 /// the default sky and under an all-red skybox: the skybox's cube must be the sky's reflection cube and its ambient
-/// light, so both turn red (S2b). Needs a window.
+/// light, so both turn red (S2b). Then Day / Night (S2c): a day skybox at noon, late afternoon, sunset and night, a
+/// night skybox fading in, nothing changed with Day / Night off, the physical sky under a skybox of clouds on black,
+/// and the ambient light at sunset from the atmosphere (Auto Colours). Needs a window.
 class SkyboxTestApp : Application
 {
 	const int32 ShotWidth = 480;
@@ -27,13 +29,17 @@ class SkyboxTestApp : Application
 		public float rotation;
 		public float exposure;
 		public Color tint = .(1, 1, 1);
+		// S2c: the Day / Night clock (hours; below 0 Day / Night off), the night skybox and Skybox Blend.
+		public float hours = -1;
+		public String night;
+		public float blend;
 	}
 
 	Scene mScene ~ delete _;
 	RenderView mView ~ delete _;
 	Camera mCamera;
 	String mDir = new .() ~ delete _;
-	List<Phase> mPhases = new .() ~ { for (let p in _) { delete p.name; delete p.skybox; } delete _; };
+	List<Phase> mPhases = new .() ~ { for (let p in _) { delete p.name; delete p.skybox; delete p.night; } delete _; };
 	int mPhase = -1;
 	int mFrame;
 	CompareShot mShot ~ delete _;
@@ -41,6 +47,9 @@ class SkyboxTestApp : Application
 	GameObject mBalls;
 	// Per shot: the colour in the middle, at the right and left edges' middle, and the top and bottom middle (0..1).
 	List<Vector3[5]> mSamples = new .() ~ delete _;
+	// S2c: the Day / Night off shot's pixels, and whether setting a night skybox with Day / Night off left them alone.
+	uint8[] mDayOffPixels ~ delete _;
+	bool mDayOffNightSetSame;
 
 	protected override bool LoadsPlayerQuality => false;
 
@@ -110,9 +119,17 @@ class SkyboxTestApp : Application
 		return ok;
 	}
 
-	void AddPhase(StringView name, StringView skybox, float rotation = 0, float exposure = 0, Color tint = .(1, 1, 1))
+	void AddPhase(StringView name, StringView skybox, float rotation = 0, float exposure = 0, Color tint = .(1, 1, 1), float hours = -1, StringView night = "", float blend = 0)
 	{
-		mPhases.Add(.() { name = new .(name), skybox = new .(skybox), rotation = rotation, exposure = exposure, tint = tint });
+		mPhases.Add(.() { name = new .(name), skybox = new .(skybox), rotation = rotation, exposure = exposure, tint = tint, hours = hours, night = new .(night), blend = blend });
+	}
+
+	int PhaseIndex(StringView name)
+	{
+		for (int i < mPhases.Count)
+			if (mPhases[i].name == name)
+				return i;
+		return -1;
 	}
 
 	protected override bool OnInit()
@@ -159,6 +176,25 @@ class SkyboxTestApp : Application
 			red[i * 4 + 3] = 1;
 		}
 		Write(scope $"{skies}/red.hdr", 2, PanoW, PanoH, red.Ptr);
+		// S2c: a plain day sky (light blue, white below) and a night sky (dark violet), and clouds on black for the blend.
+		let day = scope float[PanoW * PanoH * 4];
+		let night = scope float[PanoW * PanoH * 4];
+		let clouds = scope float[PanoW * PanoH * 4];
+		for (int i < PanoW * PanoH)
+		{
+			let upper = i < PanoW * PanoH / 2;
+			day[i * 4] = upper ? 0.35f : 0.6f;
+			day[i * 4 + 1] = upper ? 0.55f : 0.6f;
+			day[i * 4 + 2] = upper ? 0.9f : 0.6f;
+			night[i * 4] = 0.06f;
+			night[i * 4 + 1] = 0.02f;
+			night[i * 4 + 2] = 0.12f;
+			clouds[i * 4] = clouds[i * 4 + 1] = clouds[i * 4 + 2] = (i % PanoW) < PanoW / 2 ? 0.5f : 0;
+			day[i * 4 + 3] = night[i * 4 + 3] = clouds[i * 4 + 3] = 1;
+		}
+		Write(scope $"{skies}/day.hdr", 2, PanoW, PanoH, day.Ptr);
+		Write(scope $"{skies}/night.hdr", 2, PanoW, PanoH, night.Ptr);
+		Write(scope $"{skies}/clouds.hdr", 2, PanoW, PanoH, clouds.Ptr);
 		// Not a panorama: a square picture.
 		Write(scope $"{skies}/square.png", 0, 64, 64, pano.Ptr);
 
@@ -173,6 +209,18 @@ class SkyboxTestApp : Application
 		// Lighting from the sky (S2b): the balls under the default sky, then under the red skybox.
 		AddPhase("lit-default", "");
 		AddPhase("lit-red", "Skies/red.hdr");
+		// S2c: the day skybox with Day / Night at noon, sunset and night (with and without a night skybox), and
+		// with Day / Night off and a night skybox set (must match the plain shot); the clouds over the physical sky.
+		AddPhase("day-off", "Skies/day.hdr");
+		AddPhase("day-off-night-set", "Skies/day.hdr", 0, 0, .(1, 1, 1), -1, "Skies/night.hdr");
+		AddPhase("dn-noon", "Skies/day.hdr", 0, 0, .(1, 1, 1), 12, "Skies/night.hdr");
+		AddPhase("dn-golden", "Skies/day.hdr", 0, 0, .(1, 1, 1), 18.6f, "Skies/night.hdr");
+		AddPhase("dn-sunset", "Skies/day.hdr", 0, 0, .(1, 1, 1), 19.35f, "Skies/night.hdr");
+		AddPhase("dn-night", "Skies/day.hdr", 0, 0, .(1, 1, 1), 0, "Skies/night.hdr");
+		AddPhase("dn-night-no-night-sky", "Skies/day.hdr", 0, 0, .(1, 1, 1), 0);
+		AddPhase("blend-physical", "Skies/clouds.hdr", 0, 0, .(1, 1, 1), 12, "", 1);
+		AddPhase("blend-none", "Skies/clouds.hdr", 0, 0, .(1, 1, 1), 12, "", 0);
+		AddPhase("lit-dn-sunset", "Skies/day.hdr", 0, 0, .(1, 1, 1), 19.35f, "Skies/night.hdr");
 
 		mScene = new Scene();
 		let cameraObject = mScene.CreateGameObject("Camera");
@@ -208,17 +256,19 @@ class SkyboxTestApp : Application
 			env.skyboxRotation = 45;
 			env.skyboxExposure = -1.5f;
 			env.skyboxTint = .(1, 0.5f, 0.25f);
+			env.nightSkybox.Set("Skies/night.hdr");
+			env.skyboxBlend = 0.5f;
 			text.Clear();
 			SceneSerializer.Save(mScene, text);
 			let back = scope Scene();
 			SceneSerializer.Load(back, text);
 			let b = back.Environment;
-			Check(b.skyMode == .Custom && b.skybox == "Skies/pano.hdr" && b.skyboxRotation == 45 && b.skyboxExposure == -1.5f && b.skyboxTint.g == 0.5f && b.skyboxTint.b == 0.25f, "skybox settings saved and loaded");
+			Check(b.skyMode == .Custom && b.skybox == "Skies/pano.hdr" && b.skyboxRotation == 45 && b.skyboxExposure == -1.5f && b.skyboxTint.g == 0.5f && b.skyboxTint.b == 0.25f && b.nightSkybox == "Skies/night.hdr" && b.skyboxBlend == 0.5f, "skybox settings saved and loaded");
 			let copy = scope SceneEnvironment();
 			copy.CopyFrom(env);
-			Check(copy.skybox == env.skybox && copy.skyboxRotation == 45 && copy.skyboxTint.b == 0.25f, "skybox settings copied");
+			Check(copy.skybox == env.skybox && copy.skyboxRotation == 45 && copy.skyboxTint.b == 0.25f && copy.nightSkybox == env.nightSkybox && copy.skyboxBlend == 0.5f, "skybox settings copied");
 			env.Reset();
-			Check(env.skybox.IsEmpty && env.skyMode == .Gradient, "reset clears the skybox");
+			Check(env.skybox.IsEmpty && env.nightSkybox.IsEmpty && env.skyboxBlend == 0 && env.skyMode == .Gradient, "reset clears the skybox");
 		}
 		mView = new RenderView(10);
 		mView.AllowPostAa = false;
@@ -239,7 +289,20 @@ class SkyboxTestApp : Application
 		env.skyboxRotation = phase.rotation;
 		env.skyboxExposure = phase.exposure;
 		env.skyboxTint = phase.tint;
+		env.nightSkybox.Set(phase.night);
+		env.skyboxBlend = phase.blend;
 		env.bloom = 0;
+		if (phase.hours >= 0)
+		{
+			// The template's Day / Night: latitude 40, midsummer, the clock stopped at the phase's hour, Auto Colours.
+			env.dayNight = true;
+			env.dayNightPaused = true;
+			env.latitude = 40;
+			env.dayOfYear = 172;
+			env.timeOfDay = phase.hours;
+			env.autoColors = true;
+			DayNight.Apply(mScene);
+		}
 	}
 
 	protected override void OnUpdate()
@@ -305,12 +368,53 @@ class SkyboxTestApp : Application
 		}
 		mSamples.Add(s);
 		Console.WriteLine(scope $"skybox-test: {phase.name} middle {s[0].x:F2} {s[0].y:F2} {s[0].z:F2}, right {s[1].x:F2} {s[1].y:F2} {s[1].z:F2}, left {s[2].x:F2} {s[2].y:F2} {s[2].z:F2}, top {s[3].x:F2} {s[3].y:F2} {s[3].z:F2}, bottom {s[4].x:F2} {s[4].y:F2} {s[4].z:F2}, face {Skybox.FaceSize(phase.skybox)} px");
-		if (phase.rotation != 0 || phase.exposure != 0 || phase.tint.r != 1 || phase.name.StartsWith("lit"))
+		if (phase.rotation != 0 || phase.exposure != 0 || phase.tint.r != 1 || phase.name.StartsWith("lit") || phase.skybox.Contains("day") || phase.skybox.Contains("clouds"))
+		{
+			if (phase.name == "day-off")
+			{
+				mDayOffPixels = new .[pixels.Count];
+				Internal.MemCpy(mDayOffPixels.Ptr, pixels.Ptr, pixels.Count);
+			}
+			else if (phase.name == "day-off-night-set")
+				mDayOffNightSetSame = mDayOffPixels != null && mDayOffPixels.Count == pixels.Count && Internal.MemCmp(mDayOffPixels.Ptr, pixels.Ptr, pixels.Count) == 0;
 			return;
+		}
 		Check(s[0].x > s[0].y * 1.5f && s[0].x > s[0].z * 1.5f, scope $"{phase.name}: red ahead (+Z)");
 		Check(s[1].y > s[2].y + 0.2f, scope $"{phase.name}: green to the right (+X)");
 		Check(s[3].z > s[4].z + 0.2f, scope $"{phase.name}: blue above (+Y)");
 		Check(Skybox.FaceSize(phase.skybox) == (phase.name.StartsWith("pano") ? 64 : 32), scope $"{phase.name}: face size");
+	}
+
+	static float Redness(Vector3 c) => c.x / Math.Max(c.z, 0.004f);
+	static float Luma(Vector3 c) => 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z;
+
+	/// S2c: the skybox with Day / Night. Samples: [0] middle (at the horizon), [3] top.
+	void DayNightChecks()
+	{
+		let off = mSamples[PhaseIndex("day-off")];
+		let noon = mSamples[PhaseIndex("dn-noon")];
+		let golden = mSamples[PhaseIndex("dn-golden")];
+		let sunset = mSamples[PhaseIndex("dn-sunset")];
+		let night = mSamples[PhaseIndex("dn-night")];
+		let darkDay = mSamples[PhaseIndex("dn-night-no-night-sky")];
+		let blended = mSamples[PhaseIndex("blend-physical")];
+		let unblended = mSamples[PhaseIndex("blend-none")];
+		let litSunset = mSamples[PhaseIndex("lit-dn-sunset")];
+		Check(mDayOffNightSetSame, "Day / Night off: a night skybox set changes nothing (identical shot)");
+		Check(Math.Abs(Luma(noon[3]) - Luma(off[3])) < 0.06f && Math.Abs(noon[3].z - off[3].z) < 0.06f, scope $"noon with Day / Night looks like Day / Night off (top {noon[3].x:F2} {noon[3].y:F2} {noon[3].z:F2} vs {off[3].x:F2} {off[3].y:F2} {off[3].z:F2})");
+		// The skybox's white lower half shows the sun's colour best.
+		Check(Redness(golden[4]) > Redness(noon[4]) * 1.1f, scope $"late afternoon is warmer than noon (bottom R/B {Redness(golden[4]):F2} vs {Redness(noon[4]):F2})");
+		Check(Redness(sunset[4]) > Redness(noon[4]) * 1.6f && Luma(sunset[3]) < Luma(noon[3]) * 0.8f, scope $"sunset is redder and darker (bottom {sunset[4].x:F2} {sunset[4].y:F2} {sunset[4].z:F2}, top {sunset[3].x:F2} {sunset[3].y:F2} {sunset[3].z:F2})");
+		Check(night[3].z > night[3].y * 1.5f && night[3].x > night[3].y && Luma(night[3]) < Luma(noon[3]) * 0.5f, scope $"night shows the violet night skybox (top {night[3].x:F2} {night[3].y:F2} {night[3].z:F2})");
+		Check(Luma(darkDay[3]) < Luma(noon[3]) * 0.4f, scope $"without a night skybox the day skybox darkens at night (top {darkDay[3].x:F2} {darkDay[3].y:F2} {darkDay[3].z:F2})");
+		// Clouds on black at the left half: with the physical sky under it, the black half shows the blue sky.
+		Check(Luma(unblended[1]) < 0.05f && blended[1].z > 0.2f && blended[1].z > blended[1].x, scope $"Physical Sky Under 1 shows the physical sky through the skybox's black (right {blended[1].x:F2} {blended[1].y:F2} {blended[1].z:F2} vs {unblended[1].x:F2} {unblended[1].y:F2} {unblended[1].z:F2})");
+		// Sunset with Auto Colours: the ambient light is the atmosphere's (D1c), not the blue-white skybox's: the rough
+		// ball (lit by ambient alone) has the ambient colour's hue.
+		let rough = litSunset[2];
+		let ambient = mScene.Environment.ambientSky;
+		Check(Math.Abs(Redness(rough) / Math.Max(ambient.r / Math.Max(ambient.b, 0.004f), 0.01f) - 1) < 0.25f, scope $"sunset ambient follows the atmosphere, not the painted sky (rough ball {rough.x:F2} {rough.y:F2} {rough.z:F2}, ambient {ambient.r:F2} {ambient.g:F2} {ambient.b:F2})");
+		Check(mScene.Environment.dayNight && !Skybox.DrivesAmbient(mScene.Environment), "Day / Night with Auto Colours: the ambient light is the atmosphere's, not the skybox's");
 	}
 
 	void Finish()
@@ -319,11 +423,12 @@ class SkyboxTestApp : Application
 		if (mSamples.Count == mPhases.Count)
 		{
 			let plain = mSamples[0];
-			let rotated = mSamples[mPhases.Count - 5];
-			let brighter = mSamples[mPhases.Count - 4];
-			let tinted = mSamples[mPhases.Count - 3];
-			let litDefault = mSamples[mPhases.Count - 2];
-			let litRed = mSamples[mPhases.Count - 1];
+			let rotated = mSamples[PhaseIndex("rotated")];
+			let brighter = mSamples[PhaseIndex("exposure")];
+			let tinted = mSamples[PhaseIndex("tint")];
+			let litDefault = mSamples[PhaseIndex("lit-default")];
+			let litRed = mSamples[PhaseIndex("lit-red")];
+			DayNightChecks();
 			// The red skybox's cube is the sky's reflection cube and its ambient light: both balls turn red.
 			Check(litRed[2].x > 2 * litRed[2].z && litRed[2].x > 0.05f, scope $"red skybox: ambient light red (rough ball {litRed[2].x:F2} {litRed[2].y:F2} {litRed[2].z:F2})");
 			Check(litRed[1].x > 2 * litRed[1].z && litRed[1].x > 0.05f && litRed[1].x < litRed[0].x * 0.8f, scope $"red skybox: reflections red (mirror ball {litRed[1].x:F2} {litRed[1].y:F2} {litRed[1].z:F2})");
