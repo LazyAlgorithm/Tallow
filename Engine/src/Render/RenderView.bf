@@ -206,6 +206,7 @@ class RenderView
 	int32 mOutWidth, mOutHeight;
 	float mBuiltScale;
 	int32 mBuiltSamples;
+	UpscalerKind mBuiltUpscaler;
 	bgfx.TextureHandle mSceneColor = .() { idx = uint16.MaxValue };
 	bgfx.FrameBufferHandle mSceneFb = .() { idx = uint16.MaxValue };
 	bgfx.TextureHandle mOutputColor = .() { idx = uint16.MaxValue };
@@ -333,16 +334,33 @@ class RenderView
 		if (MaxSceneHeight > 0 && !Capture)
 			scale = Math.Max(Math.Min(scale, (float)MaxSceneHeight / Math.Min(outWidth, outHeight)), 0.25f);
 		// Multisampling in the scene target; the filters (FXAA, SMAA) are passes after the tonemap.
+		// A temporal upscaler in a view that cannot run it (the editor's Scene view): drawn at full size, not stretched.
+		if (!AllowPostAa && !Capture && Upscaling.IsTemporal(Upscaling.Effective))
+			scale = 1;
 		let samples = ViewSamples();
-		if (outWidth == mOutWidth && outHeight == mOutHeight && scale == mBuiltScale && samples == mBuiltSamples && mSceneFb.Valid)
+		let upscaler = ViewTemporalUpscaler();
+		if (outWidth == mOutWidth && outHeight == mOutHeight && scale == mBuiltScale && samples == mBuiltSamples && upscaler == mBuiltUpscaler && mSceneFb.Valid)
 			return;
 		ReleaseTargets();
 		mOutWidth = outWidth;
 		mOutHeight = outHeight;
 		mBuiltScale = scale;
 		mBuiltSamples = samples;
-		let w = Math.Max((int32)(outWidth * scale), 8);
-		let h = Math.Max((int32)(outHeight * scale), 8);
+		mBuiltUpscaler = upscaler;
+		var w = Math.Max((int32)(outWidth * scale), 8);
+		var h = Math.Max((int32)(outHeight * scale), 8);
+#if BF_PLATFORM_WINDOWS || BF_PLATFORM_LINUX
+		// DLSS has its own sizes for its quality modes.
+		if (upscaler == .DLSS && Upscaling.ModeOfScale(scale) >= 0)
+		{
+			int32 renderW = 0, renderH = 0;
+			if (UpscaleNative.tn_upscale_optimal_size(Upscaling.NativeKind(.DLSS), outWidth, outHeight, Upscaling.NativeQualityMode(scale), &renderW, &renderH) == 1 && renderW >= 8 && renderH >= 8)
+			{
+				w = renderW;
+				h = renderH;
+			}
+		}
+#endif
 		mWidth = w;
 		mHeight = h;
 
@@ -385,6 +403,7 @@ class RenderView
 		if (!mSceneFb.Valid)
 			return;
 		RenderResources.EnsureCreated();
+
 		BeginTemporal(camera);
 		sRenderMarker.Begin();
 		defer
@@ -478,9 +497,10 @@ class RenderView
 		var picture = DrawScreenEffects(camera, env);
 		let bloom = Math.Max(env.bloom, 0);
 		let drawsBloom = bloom > MinimumEffect;
+		mBloomDrawn = drawsBloom;
 		if (drawsBloom)
 			DrawBloom(env, picture);
-		// DLSS and FSR 3 would replace the scene's picture with one at the window's size here (UpscaleTemporal).
+		// DLSS and FSR 2 would replace the scene's picture with one at the window's size here (UpscaleTemporal).
 		mTemporalUpscaled = false;
 		if (mUpscaleTemporalOn && UpscaleTemporal(Upscaling.Effective, camera, picture, let upscaled))
 		{

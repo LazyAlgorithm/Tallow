@@ -445,6 +445,26 @@ internal static class Exporter
                 else
                     Console.WriteLine($"Note: {library} was not found, so this build runs without Steam. Put the file from the Steamworks SDK in {project} and build again.");
             }
+            // DLSS (NVIDIA's upscaler) needs its dlssRuntime library next to the game, and its licence notice goes with it. They
+            // come from the SDK the engine's native build downloaded; without them the game still runs, DLSS is just not offered.
+            if (!web && !android && !ios && !macos)
+            {
+                string sdkRoot = Path.Combine(engine, "build", "native", "sdk");
+                string? dlss = Directory.Exists(sdkRoot) ? Directory.GetDirectories(sdkRoot, "dlss-*").OrderDescending().FirstOrDefault() : null;
+                string dlssFolder = Path.Combine(dlss ?? "", "lib", windows ? "Windows_x86_64" : "Linux_x86_64", "rel");
+                string? dlssRuntime = dlss != null && Directory.Exists(dlssFolder)
+                    ? Directory.GetFiles(dlssFolder, windows ? "nvngx_dlss.dll" : "libnvidia-ngx-dlss.so*").FirstOrDefault() : null;
+                if (dlssRuntime != null)
+                {
+                    File.Copy(dlssRuntime, Path.Combine(staging, Path.GetFileName(dlssRuntime)), true);
+                    string notice = Path.Combine(dlss!, "LICENSE.txt");
+                    if (File.Exists(notice))
+                        File.Copy(notice, Path.Combine(staging, "NVIDIA-DLSS-LICENSE.txt"), true);
+                    Console.WriteLine($"DLSS: copied {Path.GetFileName(dlssRuntime)}");
+                }
+                else
+                    Console.WriteLine("Note: the DLSS dlssRuntime library was not found in the engine's build folder, so this build does not offer DLSS.");
+            }
             string hrtf = settings.Get("audioHrtf");
             // How the game starts out: the project's Build setting, unless this run says otherwise. In a browser the
             // page fills the window, and the player chooses full screen.

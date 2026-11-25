@@ -146,7 +146,7 @@ extension EditorApp
 				ImGui.SetTooltip(scope String()..AppendF("Draws the scene at {:0.00} of the window's size.", Upscaling.ModeScales[i]).CStr());
 		}
 
-		StringView[4] upscalerNames = .("Off (bilinear)", "FSR 1", "FSR 3", "DLSS");
+		StringView[4] upscalerNames = .("Off (bilinear)", "FSR 1", "FSR 2", "DLSS");
 		let upIndex = Math.Clamp((int)v.upscaler, 0, 3);
 		if (ImGui.BeginCombo("Upscaler", scope String(upscalerNames[upIndex]).CStr()))
 		{
@@ -167,6 +167,8 @@ extension EditorApp
 		}
 		if (v.upscaler != .Off && Upscaling.Effective != v.upscaler)
 			ImGui.TextDisabled(scope String()..AppendF("In use: {}", upscalerNames[(int)Upscaling.Effective]).CStr());
+		if (Upscaling.IsTemporal(Upscaling.Effective))
+			ImGui.TextDisabled("DLSS and FSR 2 run in the Game view and the player; the Scene view is drawn at full size.");
 		ImGui.SliderFloat("FSR Sharpness", ref Upscaling.Sharpness, 0, 1, "%.2f");
 		return changed;
 	}

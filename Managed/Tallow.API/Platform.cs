@@ -121,7 +121,7 @@ public enum UpscalerKind
     /// <summary>AMD FidelityFX Super Resolution 1: edge-adaptive upsampling and sharpening. Runs on any graphics card.</summary>
     FSR1,
     /// <summary>AMD FidelityFX Super Resolution 3 (temporal). Vulkan on Windows or Linux.</summary>
-    FSR3,
+    FSR2,
     /// <summary>NVIDIA DLSS (temporal). An NVIDIA RTX card with Vulkan on Windows or Linux.</summary>
     DLSS
 }

@@ -4,7 +4,7 @@ using Bgfx;
 
 namespace Tallow;
 
-/// What a temporal upscaler (DLSS, FSR 3) is given by the render path for one frame: everything at the scene's
+/// What a temporal upscaler (DLSS, FSR 2) is given by the render path for one frame: everything at the scene's
 /// (render) resolution except `output`. All textures are the view's own and valid until the next frame.
 struct TemporalInputs
 {
@@ -46,7 +46,7 @@ struct TemporalInputs
 /// which TAA does not otherwise need (it replaces FXAA or SMAA) and it runs after the tonemap rather than before the
 /// bloom for that reason. No view was added.
 ///
-/// Motion vector convention (what DLSS and FSR 3 take, with a scale of 1; they read x and y of the RGBA16F target): per pixel of the scene's render
+/// Motion vector convention (what DLSS and FSR 2 take, with a scale of 1; they read x and y of the RGBA16F target): per pixel of the scene's render
 /// resolution, the offset from the pixel to where that surface was in the previous frame, in pixels: previous = current +
 /// velocity. +x is right, +y is DOWN the picture on every graphics API. The jitter is not in it. It covers solid
 /// objects (their transforms, wind sway) and the camera, the sky (the camera's rotation) and the viewmodel; not
@@ -65,7 +65,7 @@ extension RenderView
 
 	/// Whether the upscalers' temporal path (UpscaleTemporal) is built into the render path. False: the jitter and motion
 	/// vectors are only produced for TAA, and a temporal upscaler falls back to FSR 1. Set by the code that wires it.
-	public static bool TemporalUpscaleWired = false;
+	public static bool TemporalUpscaleWired = true;
 
 	/// A cut of the camera longer than this (metres in a frame) drops the history.
 	const float TemporalCutDistance = 5.0f;
@@ -106,7 +106,7 @@ extension RenderView
 	/// Whether this frame is drawn with a camera jitter and motion vectors.
 	public bool TemporalActive => mTemporalOn;
 	/// The sub-pixel shift of this frame's projection, in scene pixels (+x right, +y down; -0.5 to 0.5). The projection
-	/// moves the picture by this much, which is what FSR 3's and DLSS's jitter offsets are (negate where the API says
+	/// moves the picture by this much, which is what FSR 2's and DLSS's jitter offsets are (negate where the API says
 	/// the opposite).
 	public Vector2 JitterPixels => mJitterPixels;
 	/// The same as the shift of normalised device coordinates (+x right, +y up).
@@ -146,11 +146,14 @@ extension RenderView
 		return result;
 	}
 
-	/// How many different jitters repeat: 8 for TAA, and for an upscaler 8 times (output / render)^2 as FSR 3 advises.
+	/// How many different jitters repeat: 8 for TAA, and for an upscaler 8 times (output / render)^2 as FSR 2 advises.
 	int32 JitterPhases()
 	{
 		if (!mUpscaleTemporalOn)
 			return 8;
+#if BF_PLATFORM_WINDOWS || BF_PLATFORM_LINUX
+		return UpscaleNative.tn_upscale_jitter_phases(Upscaling.NativeKind(mUpscaleKind), mWidth, mOutWidth);
+#endif
 		let ratio = Math.Max((float)mOutWidth / Math.Max(mWidth, 1), 1.0f);
 		return (int32)Math.Ceiling(8.0f * ratio * ratio);
 	}
@@ -177,7 +180,10 @@ extension RenderView
 		mTemporalReset = false;
 		if (Capture || shading != .Rendered || !AllowPostAa)
 			return;
-		let upscaler = TemporalUpscaleWired && Upscaling.IsTemporal(Upscaling.Effective);
+		var upscalerKind = ViewTemporalUpscaler();
+		if (upscalerKind != .Off && !EnsureUpscaleContext(upscalerKind))
+			upscalerKind = .Off;
+		let upscaler = upscalerKind != .Off;
 		var taa = !upscaler && ViewAntialias() == .TAA;
 		if (taa)
 			taa = ClaimPostViews();
@@ -191,15 +197,30 @@ extension RenderView
 		// The history is dropped on the first frame, after a gap, a size change, a camera cut or by request.
 		let frame = Time.FrameCount;
 		let moved = (camera.position - mLastTemporalPosition).Length;
-		mTemporalReset = mResetRequested || mLastTemporalFrame != frame - 1 || mLastTemporalWidth != mWidth || mLastTemporalHeight != mHeight || moved > TemporalCutDistance;
+		mTemporalReset = mResetRequested || mUpscaleFresh || mLastTemporalFrame != frame - 1 || mLastTemporalWidth != mWidth || mLastTemporalHeight != mHeight || moved > TemporalCutDistance;
 		mResetRequested = false;
+		mUpscaleFresh = false;
 
 		let phases = JitterPhases();
 		mJitterIndex = (mJitterIndex + 1) % phases;
+		// The same generator for TAA and the upscalers: Halton (2, 3), centred (UpscaleNative, else the local one).
 		mJitterPixels = .(Halton(mJitterIndex + 1, 2) - 0.5f, Halton(mJitterIndex + 1, 3) - 0.5f);
+#if BF_PLATFORM_WINDOWS || BF_PLATFORM_LINUX
+		float jx = 0, jy = 0;
+		UpscaleNative.tn_upscale_jitter_offset(0, mJitterIndex, phases, &jx, &jy);
+		mJitterPixels = .(jx, jy);
+#endif
 		if (JitterOverride.x != 0 || JitterOverride.y != 0)
 			mJitterPixels = JitterOverride;
-		mJitterNdc = .(2.0f * mJitterPixels.x / mWidth, -2.0f * mJitterPixels.y / mHeight);
+		// The native convention is clip y += 2 * jy / H in Vulkan clip space (y down); bgfx's is y up, hence the sign.
+		let signText = scope String();
+		if (!sJitterSignRead && (sJitterSignRead = true) && Environment.GetEnvironmentVariable("TALLOW_JITTER_SIGN", signText) case .Ok)
+		{
+			var parts = signText.Split(',');
+			if (parts.GetNext() case .Ok(let a) && parts.GetNext() case .Ok(let b))
+				JitterSign = .((float.Parse(a) case .Ok(let ax)) ? ax : 1.0f, (float.Parse(b) case .Ok(let bx)) ? bx : -1.0f);
+		}
+		mJitterNdc = .(JitterSign.x * 2.0f * mJitterPixels.x / mWidth, JitterSign.y * 2.0f * mJitterPixels.y / mHeight);
 		mProjJittered = Jittered(camera.projection, mJitterNdc.x, mJitterNdc.y);
 		mViewmodelProjJittered = Jittered(camera.viewmodelProjection, mJitterNdc.x, mJitterNdc.y);
 
@@ -220,6 +241,9 @@ extension RenderView
 
 	/// A test switch: when not zero, the jitter used every frame (in pixels), to see which way it moves the picture.
 	public static Vector2 JitterOverride;
+	/// A test switch (TALLOW_JITTER_SIGN="1,-1"): the signs the jitter is applied to the projection with.
+	public static Vector2 JitterSign = .(1, -1);
+	static bool sJitterSignRead;
 
 	/// The projection the scene's passes use: the camera's with the jitter when a temporal mode is on.
 	Matrix4 SceneProjection(CameraData camera) => mTemporalOn ? mProjJittered : camera.projection;
@@ -389,15 +413,103 @@ extension RenderView
 		return mTaaHistory[write];
 	}
 
-	/// Where DLSS and FSR 3 draw the window-sized picture from the render-sized one (UpscaleTemporal calls this): the
-	/// view's pictures and the jitter go to the native upscaler in `inputs`. Returns false until the native side is
-	/// wired, when the caller falls back to FSR 1.
+	// ---- DLSS and FSR 2 (UpscaleNative)
+
+	void* mUpscaleCtx;
+	UpscalerKind mUpscaleKind;
+	int32 mUpscaleRenderW, mUpscaleRenderH, mUpscaleOutW, mUpscaleOutH, mUpscaleQuality;
+	bgfx.TextureHandle mUpscaleOutput = .() { idx = uint16.MaxValue };
+	bool mUpscaleFresh;
+	/// Whether the bloom drew its three views this frame (the upscaler runs in the last of them: Render).
+	bool mBloomDrawn;
+	/// A temporal upscaler is on for a view that has no way to draw the passes round it (the editor's Scene view): it is
+	/// drawn at full size and plain.
+	public static bool UpscalerNeedsPlainView => Upscaling.IsTemporal(Upscaling.Effective);
+
+	/// The temporal upscaler this view runs this frame (Off: none): the effective one, in a view that may use the post
+	/// passes (the player's picture and the editor's Game view).
+	UpscalerKind ViewTemporalUpscaler()
+	{
+		if (!TemporalUpscaleWired || Capture || shading != .Rendered || !AllowPostAa)
+			return .Off;
+		let kind = Upscaling.Effective;
+		return Upscaling.IsTemporal(kind) ? kind : .Off;
+	}
+
+	void ReleaseUpscaleContext()
+	{
+#if BF_PLATFORM_WINDOWS || BF_PLATFORM_LINUX
+		if (mUpscaleCtx != null)
+			UpscaleNative.tn_upscale_destroy(mUpscaleCtx);
+#endif
+		mUpscaleCtx = null;
+		if (mUpscaleOutput.Valid && Gfx.Initialized)
+			bgfx.destroy_texture(mUpscaleOutput);
+		mUpscaleOutput.idx = uint16.MaxValue;
+	}
+
+	/// The native context for this view, made when first needed and again when the size, the quality or the kind changed.
+	/// False (and the upscaler marked failed) when it cannot be made or hit an error.
+	bool EnsureUpscaleContext(UpscalerKind kind)
+	{
+#if BF_PLATFORM_WINDOWS || BF_PLATFORM_LINUX
+		if (mUpscaleCtx != null && UpscaleNative.tn_upscale_failed(mUpscaleCtx) != 0)
+		{
+			ReleaseUpscaleContext();
+			Upscaling.MarkFailed(kind, "an error on the graphics card");
+			return false;
+		}
+		let quality = Upscaling.NativeQualityMode(mBuiltScale);
+		if (mUpscaleCtx != null && mUpscaleKind == kind && mUpscaleRenderW == mWidth && mUpscaleRenderH == mHeight && mUpscaleOutW == mOutWidth && mUpscaleOutH == mOutHeight && mUpscaleQuality == quality)
+			return true;
+		ReleaseUpscaleContext();
+		// HDR colour, the motion vectors in render pixels, and the upscaler's own exposure.
+		mUpscaleCtx = UpscaleNative.tn_upscale_create(Upscaling.NativeKind(kind), mWidth, mHeight, mOutWidth, mOutHeight, quality, 1 | 4 | 8);
+		if (mUpscaleCtx == null)
+		{
+			Upscaling.MarkFailed(kind, "it could not be started");
+			return false;
+		}
+		mUpscaleKind = kind;
+		mUpscaleRenderW = mWidth;
+		mUpscaleRenderH = mHeight;
+		mUpscaleOutW = mOutWidth;
+		mUpscaleOutH = mOutHeight;
+		mUpscaleQuality = quality;
+		mUpscaleFresh = true;
+		mUpscaleOutput = bgfx.create_texture_2d((uint16)mOutWidth, (uint16)mOutHeight, false, 1, .RGBA16F, Gfx.SamplerClamp | (uint64)bgfx.TextureFlags.ComputeWrite, null, 0);
+		return mUpscaleOutput.Valid;
+#else
+		return false;
+#endif
+	}
+
+	/// Where DLSS and FSR 2 draw the window-sized picture from the render-sized one (UpscaleTemporal calls this): the
+	/// view's pictures and the jitter go to the native upscaler, which records its work after the last of the bloom's
+	/// views (so before the tonemap, which then reads `output`: RGBA16F at the window's size). False when it cannot run.
 	bool ApplyTemporalUpscale(UpscalerKind kind, TemporalInputs inputs, out bgfx.TextureHandle output)
 	{
-		// The native side (UpscaleNative.bf) takes the texture handles' images, the jitter in pixels, the motion vector
-		// scale (1, 1: they are in render pixels) and `inputs.reset`, and writes the output-size picture (RGBA16F) here.
 		output = default;
+#if BF_PLATFORM_WINDOWS || BF_PLATFORM_LINUX
+		if (mUpscaleCtx == null || !mUpscaleOutput.Valid || !inputs.depthDevice.Valid || !inputs.velocity.Valid)
+			return false;
+		let view = (uint16)(ViewBase + BloomView + 2);
+		if (!mBloomDrawn)
+		{
+			// Something has to be drawn in the view for it to run (bgfx::touch).
+			SetUpView(view, "Temporal upscale", mBloomFb[0], 0, 0, mBloomWidth, mBloomHeight);
+			bgfx.touch(view);
+		}
+		let sharpness = kind == .FSR2 ? Math.Clamp(Upscaling.Sharpness, 0.0f, 1.0f) : 0.0f;
+		if (UpscaleNative.tn_upscale_evaluate(mUpscaleCtx, inputs.color.idx, inputs.depthDevice.idx, inputs.velocity.idx, mUpscaleOutput.idx,
+			inputs.jitterPixels.x, inputs.jitterPixels.y, 1, 1, inputs.reset ? 1 : 0, sharpness, inputs.deltaTime * 1000.0f,
+			inputs.nearPlane, inputs.farPlane, inputs.fieldOfViewY * (Math.PI_f / 180.0f), view) == 0)
+			return false;
+		output = mUpscaleOutput;
+		return true;
+#else
 		return false;
+#endif
 	}
 
 	/// What a temporal upscaler is given this frame (valid after the depth pass and the screen effects).

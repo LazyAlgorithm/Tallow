@@ -214,6 +214,10 @@ static class Gfx
 			return;
 		bgfx.destroy_texture(WhiteTexture);
 		Antialiasing.Shutdown();
+#if BF_PLATFORM_WINDOWS || BF_PLATFORM_LINUX
+		// DLSS and FSR 2 hold graphics objects: let them go while the device is alive.
+		UpscaleNative.tn_upscale_shutdown();
+#endif
 		Native.tn_gfx_shutdown();
 		Initialized = false;
 	}

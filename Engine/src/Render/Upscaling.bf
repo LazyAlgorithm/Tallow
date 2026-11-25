@@ -14,7 +14,7 @@ enum UpscalerKind : int32
 	/// Works on every graphics card and in browsers.
 	FSR1,
 	/// AMD FidelityFX Super Resolution 3: temporal upscaling. Needs Vulkan on Windows or Linux.
-	FSR3,
+	FSR2,
 	/// NVIDIA DLSS: temporal upscaling by the card's tensor cores. Needs an NVIDIA RTX card and Vulkan on Windows or
 	/// Linux.
 	DLSS
@@ -89,17 +89,52 @@ static class Upscaling
 	/// The card's maker, as the PCI vendor id bgfx reports.
 	public static uint16 VendorId => Gfx.Initialized ? bgfx.get_caps().vendorId : 0;
 
+	/// The number the native library (UpscaleNative) uses for an upscaler: 1 DLSS, 2 FSR.
+	public static int32 NativeKind(UpscalerKind kind) => kind == .DLSS ? 1 : 2;
+
+	/// The native quality mode (0 Quality, 1 Balanced, 2 Performance, 3 Ultra Performance, 4 Native AA) of a render scale:
+	/// the named mode it is, else the nearest one.
+	public static int32 NativeQualityMode(float scale)
+	{
+		var best = 0;
+		var distance = float.MaxValue;
+		for (int32 i < 5)
+		{
+			let d = Math.Abs(ModeScales[i] - scale);
+			if (d < distance)
+			{
+				distance = d;
+				best = i;
+			}
+		}
+		// ModeNames start with Native AA; the library's modes put it last.
+		return best == 0 ? 4 : (int32)best - 1;
+	}
+
+	static bool[4] sFailed;
+
+	/// A temporal upscaler hit an error while running: it is not used again (until Reset), FSR 1 is, and a log line says why.
+	public static void MarkFailed(UpscalerKind kind, StringView why)
+	{
+		if ((int)kind < 4 && !sFailed[(int)kind])
+		{
+			sFailed[(int)kind] = true;
+			Log.Info(scope $"{(kind == .DLSS ? "DLSS" : "FSR 2")} stopped working ({why}): using FSR 1 instead.");
+		}
+		sEffectiveReady = false;
+	}
+
 	/// Whether an upscaler needs the temporal passes (motion vectors, camera jitter) rather than being a filter.
-	public static bool IsTemporal(UpscalerKind kind) => kind == .FSR3 || kind == .DLSS;
+	public static bool IsTemporal(UpscalerKind kind) => kind == .FSR2 || kind == .DLSS;
 
 	/// Whether this upscaler can run here; if not, `reason` (when given) gets why, for the settings screen. Off and
-	/// FSR 1 always can where the engine's shaders run. FSR 3 and DLSS need Vulkan on Windows or Linux (DLSS also an
+	/// FSR 1 always can where the engine's shaders run. FSR 2 and DLSS need Vulkan on Windows or Linux (DLSS also an
 	/// NVIDIA card) and then the native library has the last word.
 	public static bool IsSupported(UpscalerKind kind, String reason = null)
 	{
 		if (kind == .Off || kind == .FSR1)
 			return true;
-		let name = kind == .DLSS ? "DLSS" : "FSR 3";
+		let name = kind == .DLSS ? "DLSS" : "FSR 2";
 #if BF_PLATFORM_WINDOWS || BF_PLATFORM_LINUX
 		if (!Gfx.Initialized)
 		{
@@ -117,7 +152,8 @@ static class Upscaling
 			return false;
 		}
 		char8[256] buffer = default;
-		if (tn_upscale_supported((int32)kind, &buffer, 256) == 0)
+		// The native library numbers them 1 DLSS, 2 FSR (not this enum's values).
+		if (tn_upscale_supported(kind == .DLSS ? 1 : 2, &buffer, 256) == 0)
 		{
 			let text = StringView(&buffer);
 			if (reason != null)
@@ -154,7 +190,7 @@ static class Upscaling
 			if (sEffectiveReady && sEffectiveFor == Current)
 				return sEffective;
 			let reason = scope String();
-			sEffective = IsSupported(Current, reason) ? Current : .FSR1;
+			sEffective = (IsSupported(Current, reason) && !sFailed[(int)Current]) ? Current : .FSR1;
 			sEffectiveFor = Current;
 			sEffectiveReady = true;
 			if (sEffective != Current && sLogged.Add((int32)Current))
@@ -167,5 +203,7 @@ static class Upscaling
 	public static void Reset()
 	{
 		sEffectiveReady = false;
+		for (int i < 4)
+			sFailed[i] = false;
 	}
 }

@@ -138,7 +138,7 @@ static class CSharpPlatform
 		return true;
 	}
 
-	/// Whether an upscaler (0 Off, 1 FSR 1, 2 FSR 3, 3 DLSS) can run on this machine: -1 when it can, else the length of
+	/// Whether an upscaler (0 Off, 1 FSR 1, 2 FSR 2, 3 DLSS) can run on this machine: -1 when it can, else the length of
 	/// the reason it cannot (written to the buffer).
 	[CSharpExpose]
 	public static int32 UpscalerReason(int32 kind, Span<uint8> buffer)

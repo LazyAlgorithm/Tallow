@@ -35,7 +35,7 @@ extension RenderView
 	bgfx.FrameBufferHandle mSmaaEdgesFb = .() { idx = uint16.MaxValue };
 	bgfx.TextureHandle mSmaaWeightsColor = .() { idx = uint16.MaxValue };
 	bgfx.FrameBufferHandle mSmaaWeightsFb = .() { idx = uint16.MaxValue };
-	/// A temporal upscaler (DLSS, FSR 3) produced the output-size picture this frame (UpscaleTemporal).
+	/// A temporal upscaler (DLSS, FSR 2) produced the output-size picture this frame (UpscaleTemporal).
 	bool mTemporalUpscaled;
 	int32 mPostViewNext;
 
@@ -63,6 +63,7 @@ extension RenderView
 		Release(ref mSmaaEdgesFb);
 		Release(ref mSmaaWeightsFb);
 		ReleaseTaaTargets();
+		ReleaseUpscaleContext();
 		mLdrWidth = mLdrHeight = 0;
 	}
 
@@ -87,14 +88,14 @@ extension RenderView
 	/// picture) and the filters, the mode's own for MSAA.
 	int32 ViewSamples()
 	{
-		if (TemporalUpscaleWired && AllowPostAa && Upscaling.IsTemporal(Upscaling.Effective))
+		if (ViewTemporalUpscaler() != .Off)
 			return 0;
 		return Antialiasing.Samples(ViewAntialias());
 	}
 
 	/// The temporal antialiasing (TAA) resolve is DrawTaa (RenderViewTemporal.bf), after the tonemap: see DrawFinish.
 
-	/// The temporal upscalers' hook (DLSS, FSR 3), called with the HDR scene picture at the scene's size once the
+	/// The temporal upscalers' hook (DLSS, FSR 2), called with the HDR scene picture at the scene's size once the
 	/// screen effects have run. When it draws the picture at the window's size into `output` and returns true, the
 	/// bloom and tonemap run on that and EASU and RCAS are skipped. Returns false until they are built into the render
 	/// path, which then uses FSR 1 (Upscaling.Effective already says FSR 1 while the native upscaler is missing).
@@ -137,7 +138,7 @@ extension RenderView
 		var plan = PostPlan();
 		if (Capture || shading != .Rendered)
 			return plan;
-		plan.aa = ViewAntialias();
+		plan.aa = mTemporalUpscaled ? .Off : ViewAntialias();
 		if (plan.aa == .TAA)
 		{
 			// Decided at the start of the frame (BeginTemporal), which also claimed the view ids.
