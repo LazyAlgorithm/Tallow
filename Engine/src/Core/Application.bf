@@ -38,6 +38,8 @@ namespace Tallow;
 ///   --streaming-log                                    print streaming requests and uploads
 ///   --gpu-driven-test [mesh]                           draw a crowd of a big mesh both ways, compare the pictures and
 ///                                                      the timings, and exit 0 or 1 (sphere:1000x700, a model)
+///   --gpu-bench <scene> [--frames N] [--out f.json]    benchmark scene (mixed, crowd, closeup, stream, tiny or 1-5): old
+///                                                      path then GPU path along one camera path, JSON out (Render/GpuBench.bf)
 [CSharpExpose]
 class Application
 {
@@ -111,6 +113,9 @@ class Application
 
 	/// Ends the program, even in the editor while playing.
 	public void Close() => mRunning = false;
+
+	/// For apps that use --frames for something else (--gpu-bench: the length of its camera path): the program no longer stops after that many frames.
+	protected void ClearFrameLimit() => mFrameLimit = -1;
 
 	/// Something asked to quit (Running set to false, or Quit). Return true to have handled it and keep running.
 	protected virtual bool OnQuitRequested() => false;
@@ -347,6 +352,12 @@ class Application
 			let test = scope GpuDrivenTestApp();
 			test.Run(args);
 			return test.Result;
+		}
+		if (HasArg("--gpu-bench") && !(this is GpuBenchApp))
+		{
+			let bench = scope GpuBenchApp();
+			bench.Run(args);
+			return bench.Result;
 		}
 		StartStreaming();
 		// A server with no window has no ears either.

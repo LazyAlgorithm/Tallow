@@ -266,6 +266,9 @@ static class ProfilerModules
 
 	/// After bgfx.frame: turns bgfx's own timing on while recording, sets the GPU and memory counters from its latest
 	/// finished frame, records each pass's GPU time, and returns the GPU frame time in nanoseconds (0 without them).
+	/// The latest frame's GPU time per pass in ms (what the "GPU Time: ..." counters show; read by --gpu-bench).
+	public static double CullMs, OccluderMs, HzbMs, MainMs, ShadowMs, VtMs;
+
 	public static int64 ReadGpu()
 	{
 		if (!Gfx.Initialized)
@@ -342,6 +345,12 @@ static class ProfilerModules
 			sGpuMainMs.Set(main);
 			sGpuShadowMs.Set(shadow);
 			sGpuVtMs.Set(vt);
+			CullMs = cull;
+			OccluderMs = occluder;
+			HzbMs = hzb;
+			MainMs = main;
+			ShadowMs = shadow;
+			VtMs = vt;
 			sPasses.Set(passes);
 		}
 		return gpu;
