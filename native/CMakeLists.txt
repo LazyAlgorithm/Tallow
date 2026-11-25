@@ -275,6 +275,7 @@ add_library(tallow_native STATIC
 	tallow_code.cpp
 	${TALLOW_MANAGED_HOST_SOURCE}
 	tallow_bake.cpp
+	tallow_skybox.cpp
 	tallow_upscale.cpp
 	tallow_rig.cpp
 	tallow_assets.c
@@ -309,6 +310,8 @@ target_include_directories(tallow_native PRIVATE
 	${TP}/cgltf
 	${TP}/joltc/include
 	${TP}/bgfx.cmake/bgfx/examples/common/imgui
+	${TP}/bgfx.cmake/bimg/include
+	${TP}/bgfx.cmake/bimg/3rdparty/tinyexr
 )
 target_compile_definitions(tallow_native PRIVATE
 	IMGUI_DISABLE_OBSOLETE_FUNCTIONS=1

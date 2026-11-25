@@ -392,6 +392,13 @@ class Application
 			test.Run(args);
 			return test.Result;
 		}
+		// The skybox check imports a skybox of every kind and draws each (S2a).
+		if (HasArg("--skybox-test") && !(this is SkyboxTestApp))
+		{
+			let test = scope SkyboxTestApp();
+			test.Run(args);
+			return test.Result;
+		}
 		if (HasArg("--gpu-bench") && !(this is GpuBenchApp))
 		{
 			let bench = scope GpuBenchApp();
@@ -665,6 +672,7 @@ class Application
 			GpuDriven.Shutdown();
 			Reflections.Shutdown();
 			PhysicalSky.Shutdown();
+			Skybox.Shutdown();
 			Textures.LogTotals();
 			Reflections.LogTotals();
 			RenderResources.Destroy();

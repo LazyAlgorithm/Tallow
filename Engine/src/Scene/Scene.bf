@@ -12,7 +12,8 @@ enum SkyMode : int32
 	/// Light scattered by the air, from the sun's direction: blue by day, orange and red at sunset, stars and the moon
 	/// at night. New scenes use it.
 	Physical,
-	/// A skybox picture (coming: until then drawn as Physical).
+	/// A skybox picture (SceneEnvironment.skybox: a panorama, a cubemap or six faces).
+	/// Without one that loads, drawn as Physical.
 	Custom
 }
 
@@ -172,6 +173,15 @@ class SceneEnvironment
 	/// Physical sky: how hazy the air is. 2.5 is a clear day; higher is hazier, with a whiter sky and a wider glow
 	/// round the sun.
 	public float turbidity = 2.5f;
+	/// Custom sky: the skybox, a project path (an .hdr / .exr / .png / .jpg 2:1 panorama, a .ktx / .dds cubemap, or a
+	/// folder of six faces named px/nx/py/ny/pz/nz or right/left/up/down/front/back). Empty: none.
+	public String skybox = new .() ~ delete _;
+	/// Custom sky: how far the skybox is turned round the vertical axis, in degrees (clockwise seen from above).
+	public float skyboxRotation;
+	/// Custom sky: the skybox's brightness in stops (EV): +1 twice as bright, -1 half.
+	public float skyboxExposure;
+	/// Custom sky: a colour the skybox is multiplied by (white: as it is).
+	public Color skyboxTint = .(1, 1, 1);
 
 	/// The radius of the depth of field's largest blur as a share of the screen's height, at Depth Of Field 1.
 	public const float DepthOfFieldReach = 0.015f;
@@ -259,6 +269,10 @@ class SceneEnvironment
 		moonSize = other.moonSize;
 		sunDiscSize = other.sunDiscSize;
 		turbidity = other.turbidity;
+		skybox.Set(other.skybox);
+		skyboxRotation = other.skyboxRotation;
+		skyboxExposure = other.skyboxExposure;
+		skyboxTint = other.skyboxTint;
 	}
 }
 

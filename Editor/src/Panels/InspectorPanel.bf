@@ -252,7 +252,7 @@ extension EditorApp
 				ImGui.EndCombo();
 			}
 			if (ImGui.IsItemHovered())
-				ImGui.SetTooltip("Gradient: three colours you pick (older scenes).\nPhysical: the air lit by the sun: blue by day, red at sunset, stars and the moon at night.\nCustom: a skybox picture (coming; drawn as Physical for now).");
+				ImGui.SetTooltip("Gradient: three colours you pick (older scenes).\nPhysical: the air lit by the sun: blue by day, red at sunset, stars and the moon at night.\nCustom: a skybox picture: a 2:1 panorama (.hdr, .exr, .png, .jpg), a cubemap (.ktx, .dds) or a folder of six faces. Drop one on the Scene view or the Hierarchy.");
 			if (env.skyMode == .Gradient)
 			{
 				BeginProperty("");
@@ -272,6 +272,27 @@ extension EditorApp
 			}
 			else
 			{
+				if (env.skyMode == .Custom)
+				{
+					BeginProperty("Skybox");
+					if (DrawAssetPicker(env.skybox, "skybox"))
+					{
+						Skybox.MarkMeta(env.skybox);
+						changed = true;
+					}
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("A 2:1 panorama (.hdr, .exr, .png, .jpg), a cubemap (.ktx, .dds), or a folder of six faces named px/nx/py/ny/pz/nz or right/left/up/down/front/back. Without one, the physical sky is drawn.");
+					BeginProperty("Rotation");
+					changed |= ImGui.SliderFloat("##sbr", ref env.skyboxRotation, 0, 360, "%.0f deg");
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("Turns the skybox round the vertical axis (clockwise seen from above).");
+					BeginProperty("Exposure");
+					changed |= ImGui.SliderFloat("##sbe", ref env.skyboxExposure, -8, 8, "%.2f EV");
+					if (ImGui.IsItemHovered())
+						ImGui.SetTooltip("Brightness in stops: +1 twice as bright, -1 half.");
+					BeginProperty("Tint");
+					changed |= ImGui.ColorEdit3("##sbt", ref env.skyboxTint);
+				}
 				BeginProperty("Sky Brightness");
 				changed |= ImGui.SliderFloat("##skb", ref env.skyBrightness, 0, 4);
 				if (ImGui.IsItemHovered())
@@ -1410,6 +1431,7 @@ extension EditorApp
 	{
 		if (kind == "mesh" || kind == "model") return IsModelFile(path);
 		if (kind == "texture") return IsImageFile(path);
+		if (kind == "skybox") return Skybox.IsSkyboxFile(path) || Skybox.IsSkyboxAsset(path);
 		if (kind == "bakedData") return HasExtension(path, ".tnav");
 		if (kind == "audioClip") return IsAudioFile(path);
 		if (kind == "tree") return HasExtension(path, ".tbt");

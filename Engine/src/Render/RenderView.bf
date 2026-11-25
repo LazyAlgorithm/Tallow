@@ -1666,6 +1666,13 @@ class RenderView
 	void SubmitSky(uint16 view, SceneEnvironment env)
 	{
 		bgfx.set_uniform(RenderResources.uCamPos, &mCamPos, 1);
+		// A Custom sky with a skybox that loads draws the skybox; without one, the physical sky.
+		let skybox = Skybox.Bind(env);
+		if (skybox.Valid)
+		{
+			SubmitFullscreen(view, skybox, Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateDepthLequal | Gfx.StateMsaa);
+			return;
+		}
 		PhysicalSky.SetUniforms(env, mSunDir, mSunColor);
 		SubmitFullscreen(view, PhysicalSky.Mode(env) == 0 ? RenderResources.SkyProgram : RenderResources.SkyPhysicalProgram, Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateDepthLequal | Gfx.StateMsaa);
 	}

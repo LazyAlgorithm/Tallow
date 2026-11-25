@@ -147,8 +147,10 @@ method	Tallow.CSharpDraw	Line	void	layer:int	a:System.Numerics.Vector3	b:System.
 method	Tallow.CSharpDraw	Sphere	void	layer:int	center:System.Numerics.Vector3	radius:float	color:System.Numerics.Vector4
 method	Tallow.CSharpEnvironment	Get	bool	session:ulong	which:int	values:System.Span<float>
 method	Tallow.CSharpEnvironment	GetScreenEffect	float	which:int
+method	Tallow.CSharpEnvironment	GetSkybox	int	session:ulong	buffer:System.Span<byte>
 method	Tallow.CSharpEnvironment	Set	bool	session:ulong	which:int	x:float	y:float	z:float	w:float
 method	Tallow.CSharpEnvironment	SetScreenEffect	void	which:int	value:float
+method	Tallow.CSharpEnvironment	SetSkybox	bool	session:ulong	path:string
 method	Tallow.CSharpGUI	Bar	void	x:float	y:float	width:float	height:float	fraction:float	color:System.Numerics.Vector4
 method	Tallow.CSharpGUI	Box	void	x:float	y:float	width:float	height:float	color:System.Numerics.Vector4
 method	Tallow.CSharpGUI	Label	void	x:float	y:float	text:string	color:System.Numerics.Vector4

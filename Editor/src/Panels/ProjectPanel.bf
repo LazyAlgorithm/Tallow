@@ -1268,6 +1268,18 @@ extension EditorApp
 			OpenScene(scope $"{Assets.ProjectPath}/{relative}");
 			return;
 		}
+		// A skybox (an .hdr / .exr / .ktx / .dds file, a folder of six faces, or a 2:1 .png / .jpg panorama while no Mesh
+		// Renderer is selected to take it as a texture) becomes the scene's Custom sky.
+		if (Skybox.IsSkyboxAsset(relative) && !(IsImageFile(relative) && Selected != null && Selected.GetComponent<MeshRenderer>() != null))
+		{
+			let env = mScene.Environment;
+			env.skybox.Set(relative);
+			env.skyMode = .Custom;
+			Skybox.MarkMeta(relative);
+			MarkDirty();
+			Log.Info(scope $"Sky: {relative} (Custom). Rotation, exposure and tint are under Environment > Sky and Fog.");
+			return;
+		}
 		if (IsImageFile(relative))
 		{
 			MeshRenderer renderer = Selected != null ? Selected.GetComponent<MeshRenderer>() : default;

@@ -103,6 +103,12 @@ static class SceneSerializer
 		Number(text, "moonSize", env.moonSize, defaults.moonSize);
 		Number(text, "sunDiscSize", env.sunDiscSize, defaults.sunDiscSize);
 		Number(text, "turbidity", env.turbidity, defaults.turbidity);
+		if (!env.skybox.IsEmpty)
+			text.AppendF("env skybox {}\n", Quote(env.skybox, .. scope .()));
+		Number(text, "skyboxRotation", env.skyboxRotation, defaults.skyboxRotation);
+		Number(text, "skyboxExposure", env.skyboxExposure, defaults.skyboxExposure);
+		if (env.skyboxTint.r != 1 || env.skyboxTint.g != 1 || env.skyboxTint.b != 1 || env.skyboxTint.a != 1)
+			WriteColor(text, "skyboxTint", env.skyboxTint);
 	}
 
 	/// Writes an environment number only when it differs from a new scene's.
@@ -796,6 +802,10 @@ static class SceneSerializer
 		case "moonSize": env.moonSize = Math.Clamp(value, 0, 20);
 		case "sunDiscSize": env.sunDiscSize = Math.Clamp(value, 0, 20);
 		case "turbidity": env.turbidity = Math.Clamp(value, 1, 10);
+		case "skybox": env.skybox.Set(tokens[2]);
+		case "skyboxRotation": env.skyboxRotation = value;
+		case "skyboxExposure": env.skyboxExposure = Math.Clamp(value, -16, 16);
+		case "skyboxTint": env.skyboxTint = color;
 		}
 	}
 

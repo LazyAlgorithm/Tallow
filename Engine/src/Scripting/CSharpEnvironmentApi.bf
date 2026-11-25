@@ -45,6 +45,10 @@ static class CSharpEnvironment
 		case 25: values[0] = env.vignette;
 		case 26: values[0] = env.colorLookupStrength;
 		case 27: values[0] = env.globalIllumination;
+		case 28: values[0] = (int32)env.skyMode;
+		case 29: values[0] = env.skyboxRotation;
+		case 30: values[0] = env.skyboxExposure;
+		case 31: values[0] = env.skyboxTint.r; values[1] = env.skyboxTint.g; values[2] = env.skyboxTint.b; values[3] = env.skyboxTint.a;
 		default: return false;
 		}
 		return true;
@@ -86,8 +90,37 @@ static class CSharpEnvironment
 		case 25: env.vignette = x;
 		case 26: env.colorLookupStrength = x;
 		case 27: env.globalIllumination = Math.Clamp(x, 0, 4);
+		case 28: env.skyMode = (SkyMode)(int32)Math.Clamp(x, 0, 2);
+		case 29: env.skyboxRotation = x;
+		case 30: env.skyboxExposure = Math.Clamp(x, -16, 16);
+		case 31: env.skyboxTint = .(x, y, z, w);
 		default: return false;
 		}
+		return true;
+	}
+
+	/// The skybox (SkyMode.Custom): its project path, copied into buffer; the full length is returned (-1 without a
+	/// scene).
+	[CSharpExpose]
+	public static int32 GetSkybox(uint64 session, Span<uint8> buffer)
+	{
+		let env = CSharpRuntime.PhysicsScene(session)?.Environment;
+		if (env == null)
+			return -1;
+		let count = Math.Min(env.skybox.Length, buffer.Length);
+		for (int i < count)
+			buffer[i] = (uint8)env.skybox[i];
+		return (int32)env.skybox.Length;
+	}
+
+	/// Sets the skybox's project path (empty: none). Loaded on its first draw.
+	[CSharpExpose]
+	public static bool SetSkybox(uint64 session, StringView path)
+	{
+		let env = CSharpRuntime.PhysicsScene(session)?.Environment;
+		if (env == null)
+			return false;
+		env.skybox.Set(path);
 		return true;
 	}
 

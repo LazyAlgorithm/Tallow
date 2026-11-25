@@ -176,6 +176,47 @@ public readonly record struct SceneEnvironment(ulong SessionId)
         get => Float(27);
         set => Set(27, value, 0, 0, 0);
     }
+    /// <summary>What the sky is drawn from: three colours, the physical sky that follows the sun, or a skybox picture
+    /// (<see cref="Skybox"/>).</summary>
+    public SkyMode SkyMode
+    {
+        get => (SkyMode)(int)Float(28);
+        set => Set(28, (int)value, 0, 0, 0);
+    }
+    /// <summary>The skybox drawn when <see cref="SkyMode"/> is <see cref="Tallow.SkyMode.Custom"/>: a project path to a
+    /// 2:1 panorama (.hdr, .exr, .png, .jpg), a cubemap (.ktx, .dds) or a folder of six faces named px/nx/py/ny/pz/nz or
+    /// right/left/up/down/front/back. Empty for none (the physical sky is drawn). It is loaded when first drawn.</summary>
+    public string Skybox
+    {
+        get
+        {
+            ulong session = SessionId;
+            return ActionText.Read(buffer => CSharpEnvironment.GetSkybox(session, buffer)) ?? "";
+        }
+        set
+        {
+            if (!CSharpEnvironment.SetSkybox(SessionId, value ?? ""))
+                throw new InvalidOperationException("The scene's environment cannot be changed (no scene).");
+        }
+    }
+    /// <summary>How far the skybox is turned round the vertical axis, in degrees (clockwise seen from above).</summary>
+    public float SkyboxRotation
+    {
+        get => Float(29);
+        set => Set(29, value, 0, 0, 0);
+    }
+    /// <summary>The skybox's brightness in stops (EV): +1 twice as bright, -1 half.</summary>
+    public float SkyboxExposure
+    {
+        get => Float(30);
+        set => Set(30, value, 0, 0, 0);
+    }
+    /// <summary>A colour the skybox is multiplied by (white: as it is).</summary>
+    public Color SkyboxTint
+    {
+        get => Color(31);
+        set => Set(31, value.R, value.G, value.B, value.A);
+    }
 
     private float Float(int which)
     {
@@ -200,6 +241,17 @@ public readonly partial record struct Scene
 {
     /// <summary>The scene's sky, light, fog and screen effects.</summary>
     public SceneEnvironment Environment => new(SessionId);
+}
+
+/// <summary>What the sky is drawn from (<see cref="SceneEnvironment.SkyMode"/>).</summary>
+public enum SkyMode
+{
+    /// <summary>Three colours: zenith, horizon and ground.</summary>
+    Gradient,
+    /// <summary>The air lit by the sun: blue by day, red at sunset, stars and the moon at night.</summary>
+    Physical,
+    /// <summary>A skybox picture (<see cref="SceneEnvironment.Skybox"/>).</summary>
+    Custom,
 }
 
 /// <summary>How light bounced off surfaces onto others (global illumination) is worked out, cheapest first. Each
