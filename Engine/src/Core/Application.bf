@@ -25,6 +25,7 @@ namespace Tallow;
 ///   --gpu-no-local-shadows                             draw point and spot light shadows the usual way
 ///   --gpu-pixel-error PX                               how many pixels of error a cluster level may have before a finer one
 ///                                                      is used (1; lower = more triangles, fewer holes)
+///   --gpu-driven-caps-off                              act as if compute shaders / indirect draws were missing (fallback test)
 ///   --gpu-driven-min-triangles N                       the fewest triangles a mesh needs to be drawn that way (2000)
 ///   --cook-streaming <staging> [--cook-kinds <file>]  the export's cooking step: .tmips/.tvt beside pictures, .tclod/.tclodp
 ///                                                      under <staging>/.cache/clod, no window (Streaming/StreamingCook.bf)
@@ -249,6 +250,9 @@ class Application
 			else
 				Log.Warning(scope $"--gpu-driven takes on or off, not '{gpuDriven}'");
 		}
+		// Pretend the card has no compute shaders or indirect draws (tests the fallback path).
+		if (HasArg("--gpu-driven-caps-off"))
+			GpuDriven.ForceUnavailable = true;
 		let gpuOcclusion = scope String();
 		if (GetArg("--gpu-occlusion", gpuOcclusion))
 		{

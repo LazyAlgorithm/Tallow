@@ -64,6 +64,8 @@ static class GpuDriven
 	public static bool QualitySetting = true;
 	/// `--gpu-driven on|off`: -1 follows the setting.
 	public static int32 Override = -1;
+	/// --gpu-driven-caps-off: behave as if the backend lacked compute and indirect draws.
+	public static bool ForceUnavailable;
 	/// How many pixels of error a cluster may have on screen before a finer one is drawn (the quality setting).
 	public static float PixelError = 1.0f;
 	/// `--gpu-pixel-error` was given: the quality preset must not overwrite it.
@@ -161,7 +163,7 @@ static class GpuDriven
 		let caps = bgfx.get_caps();
 		let renderer = bgfx.get_renderer_type();
 		let needed = (uint64)bgfx.CapsFlags.Compute | (uint64)bgfx.CapsFlags.DrawIndirect;
-		if ((caps.supported & needed) != needed || (renderer != .Vulkan && renderer != .Metal))
+		if (ForceUnavailable || (caps.supported & needed) != needed || (renderer != .Vulkan && renderer != .Metal))
 		{
 			Log.Info("GPU-driven drawing: off (needs compute shaders and indirect draws on Vulkan or Metal)");
 			return;
