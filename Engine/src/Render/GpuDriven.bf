@@ -84,8 +84,9 @@ static class GpuDriven
 	public static bool StreamGeometry = true;
 	/// `--no-geometry-streaming` was given: the quality preset must not overwrite it.
 	public static bool StreamGeometryFromArgs;
-	/// The debug view in use, and which level of the occlusion pyramid the Hzb view shows.
+	/// The debug view in use (C#: GpuDriven.DebugView).
 	public static DebugView View = .Off;
+	/// Which level of the occlusion pyramid the Hzb view shows (C#: GpuDriven.DebugMip).
 	public static int32 DebugMip = 0;
 	/// Highest level the LodLevel view's colours go to.
 	public const float DebugMaxLevel = 12;
@@ -101,10 +102,15 @@ static class GpuDriven
 	/// Statistics of the culling, read back from the graphics card a few frames late (the last values): what the scene's
 	/// passes drew (both phases of the occlusion test together), what the first phase put off for the second, and what ran
 	/// over the budgets.
-	public static int64 Clusters, Triangles, ClustersLost, NodesLost;
+	/// Clusters and triangles drawn (C#: GpuDriven.Clusters, Triangles).
+	public static int64 Clusters, Triangles;
+	/// Clusters / work nodes dropped because a buffer was full (C#: GpuDriven.ClustersLost).
+	public static int64 ClustersLost, NodesLost;
+	/// Clusters drawn in each occlusion phase, and the instances and clusters the first phase put off for the second.
 	public static int64 ClustersFirst, ClustersSecond, DeferredInstances, DeferredClusters;
-	/// Frames in which the GPU path drew something, and draws and instances it was given (since the start).
+	/// Frames in which the GPU path drew something (since the start).
 	public static int64 FramesDrawn;
+	/// Draws (bins) and instances the GPU path was given this frame (C#: GpuDriven.Instances).
 	public static int32 FrameBins, FrameInstances;
 
 	static bgfx.ProgramHandle sSetup = .() { idx = uint16.MaxValue };

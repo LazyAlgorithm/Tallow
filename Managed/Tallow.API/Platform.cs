@@ -295,6 +295,119 @@ public static class Quality
     }
 }
 
+/// <summary>What <see cref="GpuDriven.DebugView"/> shows in place of the lit picture.</summary>
+public enum GpuDebugView
+{
+    /// <summary>The normal picture.</summary>
+    Off,
+    /// <summary>A colour per cluster.</summary>
+    Clusters,
+    /// <summary>A colour per level of the hierarchy (blue: the mesh's own triangles, red: the coarsest).</summary>
+    LodLevel,
+    /// <summary>A colour per triangle, so the density of the triangles shows.</summary>
+    Triangles,
+    /// <summary>One level of the occlusion pyramid (<see cref="GpuDriven.DebugMip"/>) over the whole screen.</summary>
+    Hzb,
+    /// <summary>Green: clusters at the detail they ask for; orange: clusters whose finer group is not in memory yet.</summary>
+    Residency,
+    /// <summary>The mip level of the virtual texture each pixel shows: green is the level it needs, orange to red a coarser one.</summary>
+    VtPages
+}
+
+/// <summary>
+/// Virtual geometry and GPU-driven drawing: settings and statistics. The settings are the quality values of the same
+/// names, so they apply at once, make the quality level Custom, and are kept by <see cref="Quality.Save"/>. Where the
+/// graphics card cannot do it (see <see cref="Available"/>), meshes are drawn the usual way and the statistics stay zero.
+/// </summary>
+public static class GpuDriven
+{
+    /// <summary>Whether this device and renderer can draw clusters on the graphics card (Vulkan or Metal with compute and
+    /// indirect draws).</summary>
+    public static bool Available => CSharpGpuDriven.Available();
+
+    /// <summary>Whether big meshes are drawn that way now: <see cref="Available"/> and switched on. Setting it changes the
+    /// quality setting <see cref="Quality.GpuDriven"/>.</summary>
+    public static bool Enabled { get => CSharpGpuDriven.Enabled(); set => Quality.GpuDriven = value; }
+
+    /// <summary>How many pixels of error a cluster may have on screen before a finer one is drawn (0.25-16): lower is
+    /// sharper and costs more.</summary>
+    public static float PixelError { get => Quality.PixelError; set => Quality.PixelError = value; }
+
+    /// <summary>Whether what is hidden behind other things is left out of the draw (the camera's occlusion culling must be
+    /// on too).</summary>
+    public static bool Occlusion { get => Flag("gpuOcclusion"); set => Set("gpuOcclusion", value ? "1" : "0"); }
+
+    /// <summary>Whether big meshes' geometry streams in pages as needed; off loads every page with the mesh.</summary>
+    public static bool StreamGeometry { get => Flag("streamGeometry"); set => Set("streamGeometry", value ? "1" : "0"); }
+
+    /// <summary>Memory for streamed geometry pages, in megabytes (16-16384).</summary>
+    public static int GeometryBudgetMB { get => Whole("geometryBudgetMB"); set => Set("geometryBudgetMB", value.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
+
+    /// <summary>Memory for streamed texture mip levels, in megabytes (16-16384).</summary>
+    public static int TextureBudgetMB { get => Whole("textureBudgetMB"); set => Set("textureBudgetMB", value.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
+
+    /// <summary>Memory for virtual texture tiles, in megabytes (16-16384).</summary>
+    public static int VirtualTextureBudgetMB { get => Whole("vtBudgetMB"); set => Set("vtBudgetMB", value.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
+
+    /// <summary>What the GPU-driven draw shows in place of the lit picture (for finding problems; the editor has the same in
+    /// Window > GPU Debug View). Not a quality setting, so it is not saved.</summary>
+    public static GpuDebugView DebugView
+    {
+        get => (GpuDebugView)CSharpGpuDriven.DebugView();
+        set
+        {
+            if (!CSharpGpuDriven.SetDebugView((int)value, DebugMip))
+                throw new ArgumentOutOfRangeException(nameof(value), "Not a debug view.");
+        }
+    }
+
+    /// <summary>Which level of the occlusion pyramid <see cref="GpuDebugView.Hzb"/> shows (0 is the full size).</summary>
+    public static int DebugMip
+    {
+        get => CSharpGpuDriven.DebugMip();
+        set => CSharpGpuDriven.SetDebugView((int)DebugView, value);
+    }
+
+    /// <summary>Clusters the scene's passes drew in a frame, read back from the graphics card a few frames late.</summary>
+    public static long Clusters => (long)CSharpGpuDriven.Stat(0);
+
+    /// <summary>Triangles those clusters hold (read back like <see cref="Clusters"/>).</summary>
+    public static long Triangles => (long)CSharpGpuDriven.Stat(1);
+
+    /// <summary>Mesh instances given to the culling this frame.</summary>
+    public static int Instances => (int)CSharpGpuDriven.Stat(2);
+
+    /// <summary>Clusters dropped because a buffer was full (should stay 0).</summary>
+    public static long ClustersLost => (long)CSharpGpuDriven.Stat(4);
+
+    /// <summary>Megabytes of streamed geometry pages in memory.</summary>
+    public static double ResidentGeometryMB => CSharpGpuDriven.Stat(5);
+
+    /// <summary>Megabytes of streamed texture mip levels in memory.</summary>
+    public static double ResidentTextureMB => CSharpGpuDriven.Stat(6);
+
+    /// <summary>Megabytes of virtual texture tiles in memory.</summary>
+    public static double ResidentVirtualTextureMB => CSharpGpuDriven.Stat(7);
+
+    /// <summary>Megabytes of the shared cluster pool in use.</summary>
+    public static double PoolMB => CSharpGpuDriven.Stat(8);
+
+    private static string Value(string name) =>
+        ActionText.Read(buffer => CSharpPlatform.QualityValueText(name, buffer)) ?? "";
+
+    private static bool Flag(string name) => Value(name) == "1";
+
+    private static int Whole(string name) =>
+        int.TryParse(Value(name), System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out int value) ? value : 0;
+
+    private static void Set(string name, string value)
+    {
+        if (!CSharpPlatform.QualitySetValue(name, value, false))
+            throw new InvalidOperationException($"{name} is not a quality setting.");
+    }
+}
+
 /// <summary>
 /// Achievements and stats: on Steam when the game runs there, otherwise kept locally. Ids are those in the
 /// project's achievement definitions.
