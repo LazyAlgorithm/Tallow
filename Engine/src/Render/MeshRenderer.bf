@@ -135,6 +135,17 @@ struct MeshRenderer : ComponentHandle<MeshRendererData>
 	static void OnRemove(void* world, uint64 entity) => ComponentState<RenderProxy>.Release(world, entity);
 }
 
+/// Whether a Mesh Renderer is drawn from clusters (Virtual Geometry).
+enum VirtualGeometryMode
+{
+	/// Big meshes (GpuDriven.MinTriangles and up) that are still and not skinned.
+	Auto,
+	/// Every mesh that can be drawn from clusters at all, small ones too.
+	On,
+	/// Never: the mesh is drawn the ordinary way.
+	Off
+}
+
 /// A Mesh Renderer's settings.
 [Component, HandleData]
 struct MeshRendererData
@@ -212,6 +223,10 @@ struct MeshRendererData
 	public bool useModelMaterials = true;
 	/// Whether it hides what is behind it from cameras with Occlusion Culling (tallowengine.com/docs/occlusion-culling).
 	public OccluderMode occluder = .Auto;
+	/// Draws the mesh from clusters on the graphics card (Virtual Geometry: it gets simpler with distance and is culled
+	/// per cluster) when the device supports it. Auto: meshes with 2000 triangles or more that are still and not skinned.
+	/// On: any such mesh, however small. Off: always the ordinary way, for a mesh that looks wrong from clusters.
+	public VirtualGeometryMode virtualGeometry = .Auto;
 
 	public this() { }
 }

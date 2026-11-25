@@ -13,6 +13,8 @@ namespace Tallow;
 ///
 ///   --gpu-driven-test [mesh] [--quality ultra]  (the quality's antialiasing and screen effects take part, TAA included)
 ///   --gpu-driven-instances N                    how many copies (1024)
+///   --gpu-driven-off                            the crowd's Virtual Geometry setting is Off: it must be drawn the old way
+///                                               in both runs (no compute work for it, pictures equal)
 ///   --gpu-driven-save prefix                    keep the pictures as prefix-old.png, prefix-new.png, prefix-empty.png
 ///
 /// After that comparison, three more checks run on the GPU-driven path: an occlusion scene (a wall of a big mesh in front
@@ -100,6 +102,7 @@ class GpuDrivenTestApp : Application
 	int32 mDrawSum, mComputeSum;
 	int64 mInstanceSum, mTriangleSum;
 	bool mVsyncOff;
+	bool mCrowdOff;
 
 	protected override bool LoadsPlayerQuality => false;
 
@@ -119,6 +122,7 @@ class GpuDrivenTestApp : Application
 		if (GetArg("--gpu-driven-instances", count) && int32.Parse(count) case .Ok(let n))
 			mInstances = Math.Clamp(n, 1, 20000);
 		GetArg("--gpu-driven-save", mSavePrefix);
+		mCrowdOff = HasArg("--gpu-driven-off");
 		// The command line's own on/off must not decide this: the test turns it on and off itself.
 		GpuDriven.Override = 0;
 		GpuDriven.StatsInterval = 5;
@@ -175,6 +179,8 @@ class GpuDrivenTestApp : Application
 			ball.Transform.LocalScale = Vector3(0.9f + (i % 5) * 0.12f, 0.9f + (i % 3) * 0.1f, 1.1f - (i % 4) * 0.08f);
 			let renderer = ball.AddComponent<MeshRenderer>();
 			renderer.mesh.Set("gpu-driven-test-crowd");
+			if (mCrowdOff)
+				renderer.virtualGeometry = .Off;
 			renderer.color = .(0.35f + 0.65f * ((i * 37) % 11) / 10.0f, 0.35f + 0.65f * ((i * 17) % 7) / 6.0f, 0.4f + 0.6f * ((i * 53) % 5) / 4.0f);
 			renderer.metallic = (i % 9 == 0) ? 0.8f : 0;
 			renderer.roughness = 0.4f + (i % 4) * 0.15f;
@@ -658,9 +664,19 @@ class GpuDrivenTestApp : Application
 			}
 		}
 		Check(oldCovered > Size * Size / 20, "the crowd covers hardly anything: the scene is not what the test expects");
-		Check(mNewTiming.computes > 0, "no compute dispatches in the GPU-driven frames: the path was not used");
-		Check(mNewTiming.triangles < mOldTiming.triangles, "no fewer triangles drawn with the GPU-driven path");
-		Check(mOldTiming.gpuMs <= 0 || mNewTiming.gpuMs < mOldTiming.gpuMs, "the graphics card takes longer with the GPU-driven path");
+		if (mCrowdOff)
+		{
+			// Virtual Geometry Off: the crowd must stay on the old path although its clusters are built.
+			Check(mCrowdMesh.GpuEntry != null, "the clusters were not built");
+			Check(mNewTiming.computes == 0, "compute work in the GPU-driven frames although the crowd is set to Off");
+			Check(mNewTiming.triangles * 10 >= mOldTiming.triangles * 9, "the Off crowd was drawn with fewer triangles");
+		}
+		else
+		{
+			Check(mNewTiming.computes > 0, "no compute dispatches in the GPU-driven frames: the path was not used");
+			Check(mNewTiming.triangles < mOldTiming.triangles, "no fewer triangles drawn with the GPU-driven path");
+			Check(mOldTiming.gpuMs <= 0 || mNewTiming.gpuMs < mOldTiming.gpuMs, "the graphics card takes longer with the GPU-driven path");
+		}
 		Check(holes * 400 <= oldCovered, scope $"holes: {holes} pixels the old path draws and the GPU-driven path does not");
 		Check(extra * 400 <= oldCovered, scope $"extra: {extra} pixels only the GPU-driven path draws");
 		let slack = mMeshArg.StartsWith("sphere:") ? 1.0 : 3.0;
@@ -674,7 +690,7 @@ class GpuDrivenTestApp : Application
 		Console.WriteLine(scope $"  GPU (ms)                                   {mOccOnTiming.gpuMs,10:0.00}     {mOccOffTiming.gpuMs,10:0.00}");
 		Console.WriteLine(scope $"  CPU, view.Render call (ms)                 {mOccOnTiming.renderMs,10:0.00}     {mOccOffTiming.renderMs,10:0.00}");
 		Console.WriteLine(scope $"  compute dispatches / draw calls            {mOccOnTiming.computes,5}/{mOccOnTiming.draws,-5}     {mOccOffTiming.computes,5}/{mOccOffTiming.draws,-5}");
-		Check(mOccOffClusters > 0 && mOccOnClusters * 10 < mOccOffClusters * 9, "occlusion left out fewer than a tenth of the clusters");
+		Check(mCrowdOff || (mOccOffClusters > 0 && mOccOnClusters * 10 < mOccOffClusters * 9), "occlusion left out fewer than a tenth of the clusters");
 		Check(mOccOnTiming.computes > mOccOffTiming.computes, "no extra compute dispatches with occlusion on: it was not used");
 		var worst = 0;
 		var total = 0;

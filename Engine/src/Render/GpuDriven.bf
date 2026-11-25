@@ -405,13 +405,13 @@ static class GpuDriven
 
 	/// The mesh's clusters when they are in the pool; otherwise null, having started building them (on a worker thread,
 	/// not stalling the frame) when the mesh is big enough and has its vertices on the CPU.
-	public static MeshEntry Lookup(Mesh mesh)
+	public static MeshEntry Lookup(Mesh mesh, bool force = false)
 	{
 		if (mesh.GpuEntry != null)
 			return mesh.GpuEntry;
 		if (mesh.GpuJob != 0 || mesh.GpuFailed)
 			return null;
-		if (mesh.Indices.Count / 3 < MinTriangles || mesh.Vertices.Count == 0 || mesh.VertexSource != null || mesh.IsDynamic)
+		if ((!force && mesh.Indices.Count / 3 < MinTriangles) || mesh.Indices.Count < 3 || mesh.Vertices.Count == 0 || mesh.VertexSource != null || mesh.IsDynamic)
 			return null;
 		let job = new BuildJob();
 		job.whole = !StreamGeometry || !StreamingCore.Started;

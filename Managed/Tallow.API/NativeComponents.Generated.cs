@@ -1308,6 +1308,12 @@ public readonly partial record struct MeshRenderer
     /// Whether it hides what is behind it from cameras with Occlusion Culling (tallowengine.com/docs/occlusion-culling).
     /// </summary>
     public OccluderMode Occluder { get => Fields.GetEnum<OccluderMode>("occluder"); set => Fields.Set("occluder", value); }
+    /// <summary>
+    /// Draws the mesh from clusters on the graphics card (Virtual Geometry: it gets simpler with distance and is culled
+    /// per cluster) when the device supports it. Auto: meshes with 2000 triangles or more that are still and not skinned.
+    /// On: any such mesh, however small. Off: always the ordinary way, for a mesh that looks wrong from clusters.
+    /// </summary>
+    public VirtualGeometryMode VirtualGeometry { get => Fields.GetEnum<VirtualGeometryMode>("virtualGeometry"); set => Fields.Set("virtualGeometry", value); }
 }
 
 /// <summary>
@@ -3212,6 +3218,25 @@ public enum TerrainMode
 }
 
 /// <summary>
+/// Whether a Mesh Renderer is drawn from clusters (Virtual Geometry).
+/// </summary>
+public enum VirtualGeometryMode
+{
+    /// <summary>
+    /// Big meshes (GpuDriven.MinTriangles and up) that are still and not skinned.
+    /// </summary>
+    Auto = 0,
+    /// <summary>
+    /// Every mesh that can be drawn from clusters at all, small ones too.
+    /// </summary>
+    On = 1,
+    /// <summary>
+    /// Never: the mesh is drawn the ordinary way.
+    /// </summary>
+    Off = 2,
+}
+
+/// <summary>
 /// Values of the engine's VoxelShape.
 /// </summary>
 public enum VoxelShape
@@ -3328,7 +3353,7 @@ internal static partial class NativeComponentTypes
         [typeof(CharacterController)] = ["Shape", "BoxSize", "Center", "StepHeight", "MaxSlope", "Mass", "GravityScale", "TurnShapeWithObject", "JumpGrace", "SoftCharacterContact", "SeparationSpeed", "CanSwim", "SwimDepth", "SwimSpeed"],
         [typeof(CharacterMotor)] = ["MoveSpeed", "SprintSpeed", "JumpSpeed", "Acceleration", "AirControl", "MouseSensitivity", "FaceLookDirection"],
         [typeof(Light)] = ["InverseSquare", "BakedOnly", "ShadowMaskChannel", "InnerSpotAngle", "ShadowStrength"],
-        [typeof(MeshRenderer)] = ["EmissiveFromColor", "Lightmap", "LightmapDirection", "LightmapShadowmask", "LightmapScaleOffset", "LightmapDecode", "WindSway", "ShadowOnly", "BakedLighting", "ScreenReflections", "InReflectionProbes", "PlanarReflection", "UseModelMaterials", "Occluder"],
+        [typeof(MeshRenderer)] = ["EmissiveFromColor", "Lightmap", "LightmapDirection", "LightmapShadowmask", "LightmapScaleOffset", "LightmapDecode", "WindSway", "ShadowOnly", "BakedLighting", "ScreenReflections", "InReflectionProbes", "PlanarReflection", "UseModelMaterials", "Occluder", "VirtualGeometry"],
         [typeof(NavigationAgent)] = ["SnapDistance", "BaseOffset", "RepathInterval", "FaceMovement", "TurnSpeed", "SmoothPath", "AvoidOthers", "Radius", "AvoidancePriority", "UseLinks"],
         [typeof(NavigationSurface)] = ["BakedData", "Size", "CellSize", "AgentRadius", "AgentHeight", "MaxStep", "MaxSlope", "ChunkSize", "Flying", "Backend", "IncludeRenderMeshes", "RebuildOnStart", "DrawNavigation"],
         [typeof(Rigidbody)] = ["GravityScale"],

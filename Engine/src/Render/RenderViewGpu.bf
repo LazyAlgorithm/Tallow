@@ -58,7 +58,7 @@ extension RenderView
 	bool GpuEligible(RenderItem item)
 	{
 		let renderer = item.renderer;
-		if (renderer.GameObject == null || item.prevSlot != 0 || renderer.windSway > 0 || renderer.HasLightmap || renderer.screenReflections || renderer.planarReflection)
+		if (renderer.GameObject == null || item.prevSlot != 0 || renderer.virtualGeometry == .Off || renderer.windSway > 0 || renderer.HasLightmap || renderer.screenReflections || renderer.planarReflection)
 			return false;
 		let material = item.material;
 		if (material != null)
@@ -70,7 +70,7 @@ extension RenderView
 				return false;
 		}
 		let mesh = item.mesh;
-		return !mesh.IsDynamic && mesh.VertexSource == null && GpuDriven.Lookup(mesh) != null;
+		return !mesh.IsDynamic && mesh.VertexSource == null && GpuDriven.Lookup(mesh, renderer.virtualGeometry == .On) != null;
 	}
 
 	/// The kind of surface an item is drawn with (everything MakeKey tells apart except the mesh), or -1 when this view has
