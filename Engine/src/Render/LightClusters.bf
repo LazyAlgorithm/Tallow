@@ -403,7 +403,8 @@ class LightClusters
 			Set(texel + 1, color.x, color.y, color.z, type);
 			Set(texel + 2, forward.x, forward.y, forward.z, outer);
 			Set(texel + 3, inner, light.inverseSquare ? 1 : 0, light.shadowMaskChannel + 1, light.bakedOnly ? 1 : 0);
-			Set(texel + 4, 0, 0, 0, 0);
+			// w: how much the light scatters in the volumetric fog (vfog_local.sh).
+			Set(texel + 4, 0, 0, 0, Math.Max(light.volumetric, 0));
 		}
 		// Each shadowed light's first tile and how many it has (tiles of one light are next to each other).
 		for (int t < Tiles.Count)
@@ -412,7 +413,7 @@ class LightClusters
 			let lightIndex = Lights.IndexOf(tile.light);
 			let lightTexel = (lightIndex * TexelsPerLight + 4) * 4;
 			if (Data[lightTexel] <= 0)
-				Set(lightIndex * TexelsPerLight + 4, Math.Clamp(tile.light.shadowStrength, 0, 1), t, tile.light.type == .Point ? 6 : 1, 0);
+				Set(lightIndex * TexelsPerLight + 4, Math.Clamp(tile.light.shadowStrength, 0, 1), t, tile.light.type == .Point ? 6 : 1, Data[lightTexel + 3]);
 			let texel = TileRow * Width + t * 8;
 			SetColumns(texel, tile.sampleMtx);
 			// The tile's bounds in texture coordinates, kept a texel and a half in for filtering.

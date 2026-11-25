@@ -1011,6 +1011,11 @@ public readonly partial record struct Light
     /// degrees above the horizon to 4 below) and out again at dawn. With Day / Night off it is always on.
     /// </summary>
     public bool OnlyAtNight { get => Fields.GetBool("onlyAtNight"); set => Fields.Set("onlyAtNight", value); }
+    /// <summary>
+    /// How much the light scatters in the volumetric fog (1 as it should; 0 keeps it out of the fog, higher gives a
+    /// stronger glow or cone). Only point and spot lights with Volumetric Fog on are lit in it.
+    /// </summary>
+    public float Volumetric { get => Fields.GetFloat("volumetric"); set => Fields.Set("volumetric", value); }
 }
 
 /// <summary>
@@ -3357,7 +3362,7 @@ internal static partial class NativeComponentTypes
         [typeof(AudioSource)] = ["AudioClip", "Group", "LocalOnly", "Volume", "Pitch", "Loop", "PlayOnStart", "Stream", "Spatial", "MinDistance", "MaxDistance", "Rolloff", "Doppler", "Occlusion", "AirAbsorption", "ReverbSend", "ConeAngle", "ConeOuterVolume", "Subtitles", "Lowpass", "OtherWorldVolume", "OtherWorldLowpass"],
         [typeof(CharacterController)] = ["Shape", "BoxSize", "Center", "StepHeight", "MaxSlope", "Mass", "GravityScale", "TurnShapeWithObject", "JumpGrace", "SoftCharacterContact", "SeparationSpeed", "CanSwim", "SwimDepth", "SwimSpeed"],
         [typeof(CharacterMotor)] = ["MoveSpeed", "SprintSpeed", "JumpSpeed", "Acceleration", "AirControl", "MouseSensitivity", "FaceLookDirection"],
-        [typeof(Light)] = ["InverseSquare", "BakedOnly", "ShadowMaskChannel", "InnerSpotAngle", "ShadowStrength", "OnlyAtNight"],
+        [typeof(Light)] = ["InverseSquare", "BakedOnly", "ShadowMaskChannel", "InnerSpotAngle", "ShadowStrength", "OnlyAtNight", "Volumetric"],
         [typeof(MeshRenderer)] = ["EmissiveFromColor", "Lightmap", "LightmapDirection", "LightmapShadowmask", "LightmapScaleOffset", "LightmapDecode", "WindSway", "ShadowOnly", "BakedLighting", "ScreenReflections", "InReflectionProbes", "PlanarReflection", "UseModelMaterials", "Occluder", "VirtualGeometry"],
         [typeof(NavigationAgent)] = ["SnapDistance", "BaseOffset", "RepathInterval", "FaceMovement", "TurnSpeed", "SmoothPath", "AvoidOthers", "Radius", "AvoidancePriority", "UseLinks"],
         [typeof(NavigationSurface)] = ["BakedData", "Size", "CellSize", "AgentRadius", "AgentHeight", "MaxStep", "MaxSlope", "ChunkSize", "Flying", "Backend", "IncludeRenderMeshes", "RebuildOnStart", "DrawNavigation"],

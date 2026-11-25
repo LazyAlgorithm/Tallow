@@ -4,14 +4,15 @@ using Bgfx;
 
 namespace Tallow;
 
-/// Volumetric fog (tallowengine.com/docs/day-night): fog lit by the sun, with light shafts where shadows cut it. A grid
-/// of cells over the view (froxels) is filled with the fog's density and the light it scatters towards the camera (the
-/// sun's, shadowed by the cascades, and the ambient sky's), summed outwards from the camera in each column, then laid
-/// over the picture at each pixel's depth from the depth pass. The distance fog (fogDensity) is off while it is on.
+/// Volumetric fog (tallowengine.com/docs/day-night): fog lit by the sun, with light shafts where shadows cut it, and by
+/// the scene's point and spot lights. A grid of cells over the view (froxels) is filled with the fog's density and the
+/// light it scatters towards the camera (the sun's, shadowed by the cascades, the ambient sky's, and the point and spot
+/// lights' by cluster with their shadow tiles), summed outwards from the camera in each column, then laid over the
+/// picture at each pixel's depth from the depth pass. The distance fog (fogDensity) is off while it is on.
 ///
 /// Passes (compute, plus a fullscreen apply): cs_vfog_inject.sc fills the cells, cs_vfog_integrate.sc sums them and
-/// fs_vfog_apply.sc draws the result; the shared maths is Engine/shaders/include/vfog.sh. Vulkan, Direct3D 11/12 and
-/// Metal draw it; OpenGL and the web keep the distance fog.
+/// fs_vfog_apply.sc draws the result; the shared maths is Engine/shaders/include/vfog.sh, and the local lights' are in
+/// vfog_local.sh. Vulkan, Direct3D 11/12 and Metal draw it; OpenGL and the web keep the distance fog.
 ///
 /// The phase function, ambient term and shadow lookup follow Bevy's volumetric_fog (bevy_pbr, MIT; the notice is in
 /// Engine/shaders/licenses/Bevy-LICENSE-MIT.txt); the cell grid and its sums are the published froxel method (Wronski
@@ -108,6 +109,11 @@ extension RenderView
 		bgfx.set_uniform(RenderResources.uShadowMtx, &mShadowMtx, RenderResources.CascadeCount);
 		bgfx.set_uniform(RenderResources.uCascadeSplits, &mCascadeSplits, 1);
 		bgfx.set_uniform(RenderResources.uShadowParams, &mShadowParams, 1);
+		// The view's lights and the clusters their lists were sorted into (the point and spot lights' scattering).
+		bgfx.set_uniform(RenderResources.uLightCount, &mLightCount, 1);
+		bgfx.set_uniform(RenderResources.uClusterViewProj, &mClusterViewProj, 1);
+		bgfx.set_uniform(RenderResources.uClusterForward, &mClusterForward, 1);
+		bgfx.set_uniform(RenderResources.uClusterParams, &mClusterParams, 1);
 	}
 
 	/// Fills and sums the froxel grid (two compute views), after the shadow cascades are drawn and before the scene.
@@ -130,6 +136,9 @@ extension RenderView
 		// The cascades as plain depths (the compute shader compares itself): the atlas is a comparison sampler for the
 		// lit pass, but a normal sample still reads the stored depth.
 		bgfx.set_texture(1, RenderResources.sShadowMap, RenderResources.ShadowMap, uint32.MaxValue);
+		// The view's point and spot lights and their shadow tiles, read the same way (vfog_local.sh).
+		bgfx.set_texture(2, RenderResources.sLightData, mLights.Texture, uint32.MaxValue);
+		bgfx.set_texture(3, RenderResources.sLocalShadowMap, RenderResources.LocalShadowTexture, uint32.MaxValue);
 		bgfx.dispatch(injectView, RenderResources.VFogInjectProgram, (uint32)((mFogCellsX + 3) / 4), (uint32)((mFogCellsY + 3) / 4), (uint32)((mFogSlices + 3) / 4), 0xff);
 
 		SetVolumetricFogUniforms(camera, env);

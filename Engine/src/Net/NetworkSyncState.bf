@@ -157,7 +157,7 @@ extension NetworkSync
 	{
 		public int32 type;
 		public Color color;
-		public float intensity, range, innerSpotAngle, spotAngle, shadowStrength;
+		public float intensity, range, innerSpotAngle, spotAngle, shadowStrength, volumetric;
 		public bool inverseSquare, castShadows, bakedOnly, enabled, onlyAtNight;
 
 		public this(Light light)
@@ -171,6 +171,7 @@ extension NetworkSync
 			innerSpotAngle = light.innerSpotAngle;
 			spotAngle = light.spotAngle;
 			shadowStrength = light.shadowStrength;
+			volumetric = light.volumetric;
 			inverseSquare = light.inverseSquare;
 			castShadows = light.castShadows;
 			bakedOnly = light.bakedOnly;
@@ -178,7 +179,7 @@ extension NetworkSync
 		}
 
 		public bool Valid => type >= 0 && type <= 2 && color.r.IsFinite && color.g.IsFinite && color.b.IsFinite && color.a.IsFinite && intensity.IsFinite && range.IsFinite
-			&& innerSpotAngle.IsFinite && spotAngle.IsFinite && shadowStrength.IsFinite;
+			&& innerSpotAngle.IsFinite && spotAngle.IsFinite && shadowStrength.IsFinite && volumetric.IsFinite;
 
 		public void Apply(Light light)
 		{
@@ -189,6 +190,7 @@ extension NetworkSync
 			light.innerSpotAngle = innerSpotAngle;
 			light.spotAngle = spotAngle;
 			light.shadowStrength = shadowStrength;
+			light.volumetric = volumetric;
 			light.inverseSquare = inverseSquare;
 			light.castShadows = castShadows;
 			light.bakedOnly = bakedOnly;

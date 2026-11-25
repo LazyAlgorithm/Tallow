@@ -185,7 +185,7 @@ vec3 shadeLight(int index, vec3 wpos, vec3 n, vec3 v, vec3 albedo, float metalli
 			atten *= smoothstep(dirSpot.w, params.x, dot(-l, dirSpot.xyz));
 		if (atten <= 0.0)
 			return vec3_splat(0.0);
-		vec4 shadow = lightTexel(base + 4); // x strength (0: none), y first tile, z tiles (1 spot, 6 point)
+		vec4 shadow = lightTexel(base + 4); // x strength (0: none), y first tile, z tiles (1 spot, 6 point), w volumetric scattering
 		if (shadow.x > 0.0)
 			atten *= localShadow(shadow, wpos, n, toLight, dist, receiverError);
 	}

@@ -8,8 +8,11 @@ namespace Tallow;
 /// --vfog-test [folder]: draws volumetric fog (tallowengine.com/docs/day-night) and writes screenshots into the folder
 /// (default: a scratch folder): the same scene with it off, with it on, and off again. A wall with a gap has the sun
 /// behind it, so with the fog on a shaft of light shows through the gap while the fog behind the wall stays dark.
-/// Checks the shaft is brighter than the fog in the wall's shadow, that the off shots match, and logs the pass's GPU
-/// time. Needs a window and a backend with compute shaders (Vulkan, Direct3D 11/12 or Metal); elsewhere it skips.
+/// A spot light then fills a cone in the fog, with a box in front of it cutting a shadow out of the cone (three shots:
+/// the spot off, on with the box, and on without it). Finally the pass's GPU time is logged with 0, 16 and 128 point
+/// lights. Checks the shaft is brighter than the fog in the wall's shadow, that the off shots match, that the cone and
+/// its shadow show, and logs the pass's GPU time. Needs a window and a backend with compute shaders (Vulkan, Direct3D
+/// 11/12 or Metal); elsewhere it skips.
 class VolumetricFogTestApp : Application
 {
 	const int32 ShotWidth = 640;
@@ -22,12 +25,24 @@ class VolumetricFogTestApp : Application
 	{
 		public StringView name;
 		public bool volumetric;
+		public bool sun;
+		public bool spot;
+		public float spotVolumetric;
+		public bool blocker;
+		public int32 lights;
+		public bool checkSun;
+		public bool checkSpot;
+		public bool checkCost;
 	}
 
 	Scene mScene ~ delete _;
 	RenderView mView ~ delete _;
 	Camera mCamera;
 	GameObject mCameraObject;
+	Light mSunLight;
+	Light mSpotLight;
+	MeshRenderer mBlockerRenderer;
+	List<Light> mPerfLights = new .() ~ delete _;
 	String mDir = new .() ~ delete _;
 	List<Phase> mPhases = new .() ~ delete _;
 	int mPhase = -1;
@@ -38,6 +53,9 @@ class VolumetricFogTestApp : Application
 	float mGapOff, mShadowOff, mSkyOff;
 	float mGapOn, mShadowOn, mSkyOn;
 	int mChangedOff;
+	// The spot's cone (between it and the box) and its shadow (behind the box) at each spot phase.
+	float mConeOff, mShadowBlocked, mShadowOpen;
+	float mConeOn;
 	bool mSkip;
 
 	protected override bool LoadsPlayerQuality => false;
@@ -70,9 +88,17 @@ class VolumetricFogTestApp : Application
 		}
 		// The GPU pass times only show while the profiler is recording.
 		Profiler.Enabled = true;
-		mPhases.Add(.() { name = "off" });
-		mPhases.Add(.() { name = "on", volumetric = true });
-		mPhases.Add(.() { name = "off-again" });
+		mPhases.Add(.() { name = "off", sun = true });
+		mPhases.Add(.() { name = "on", volumetric = true, sun = true, checkSun = true });
+		mPhases.Add(.() { name = "off-again", sun = true });
+		// The spot light in the fog: off, on with the box in front of it, and on without it (to show the shadow).
+		mPhases.Add(.() { name = "spot-off", volumetric = true, spot = true });
+		mPhases.Add(.() { name = "spot-on", volumetric = true, spot = true, spotVolumetric = 1, blocker = true, checkSpot = true });
+		mPhases.Add(.() { name = "spot-nobox", volumetric = true, spot = true, spotVolumetric = 1, checkSpot = true });
+		// The cost of the pass with point lights in the fog.
+		mPhases.Add(.() { name = "lights0", volumetric = true, checkCost = true });
+		mPhases.Add(.() { name = "lights16", volumetric = true, lights = 16, checkCost = true });
+		mPhases.Add(.() { name = "lights128", volumetric = true, lights = 128, checkCost = true });
 
 		mScene = new Scene();
 		let cameraObject = mScene.CreateGameObject("Camera");
@@ -110,9 +136,49 @@ class VolumetricFogTestApp : Application
 		// lets a shaft through.
 		let sunObject = mScene.CreateGameObject("Sun");
 		let sun = sunObject.AddComponent<Light>();
+		mSunLight = sun;
 		sun.intensity = 2.0f;
 		sun.castShadows = true;
 		sunObject.Transform.Rotation = Quaternion.LookRotation(Vector3(0, -0.2f, -1).Normalized, .Up);
+		// A spot light crossing the fog high above the wall, aimed left past a box: the cone shows against the dark
+		// backdrop, and the box cuts a shadow out of it to its left.
+		let spotObject = mScene.CreateGameObject("Spot");
+		let spot = spotObject.AddComponent<Light>();
+		mSpotLight = spot;
+		spot.type = .Spot;
+		spot.color = .(1.0f, 0.95f, 0.85f);
+		spot.intensity = 30;
+		spot.range = 40;
+		spot.spotAngle = 60;
+		spot.innerSpotAngle = 40;
+		spot.castShadows = true;
+		spotObject.Transform.Position = .(8, 10, 25);
+		spotObject.Transform.Rotation = Quaternion.LookRotation(Vector3(-6, -0.6f, 0).Normalized, .Up);
+		let blocker = mScene.CreateGameObject("Blocker");
+		let blockerRenderer = blocker.AddComponent<MeshRenderer>();
+		blockerRenderer.mesh.Set("builtin:cube");
+		blockerRenderer.color = .FromBytes(40, 40, 46);
+		mBlockerRenderer = blockerRenderer;
+		blocker.Transform.Position = .(2, 9.4f, 25);
+		blocker.Transform.LocalScale = .(2, 2, 2);
+		// The point lights the pass's cost is measured with, in the fog in front of the camera.
+		for (int k = 0; k < 4; k++)
+		{
+			for (int j = 0; j < 4; j++)
+			{
+				for (int i = 0; i < 8; i++)
+				{
+					let lightObject = mScene.CreateGameObject("Fill");
+					let light = lightObject.AddComponent<Light>();
+					light.type = .Point;
+					light.intensity = 1.5f;
+					light.range = 8;
+					light.castShadows = false;
+					lightObject.Transform.Position = .(-8 + i * (16.0f / 7), 1 + j * 2, 12 + k * 8);
+					mPerfLights.Add(light);
+				}
+			}
+		}
 
 		let env = mScene.Environment;
 		env.skyMode = .Physical;
@@ -186,7 +252,14 @@ class VolumetricFogTestApp : Application
 				Finish();
 				return;
 			}
-			mScene.Environment.volumetricFog = mPhases[mPhase].volumetric;
+			let phase = mPhases[mPhase];
+			mScene.Environment.volumetricFog = phase.volumetric;
+			mSunLight.enabled = phase.sun;
+			mSpotLight.enabled = phase.spot;
+			mSpotLight.volumetric = phase.spotVolumetric;
+			mBlockerRenderer.enabled = phase.blocker;
+			for (int i < mPerfLights.Count)
+				mPerfLights[i].enabled = i < phase.lights;
 			mFrame = 0;
 			DeleteAndNullify!(mShot);
 		}
@@ -201,13 +274,13 @@ class VolumetricFogTestApp : Application
 		if (mShot.Step(mView, ShotWidth, ShotHeight, path))
 		{
 			let phase = mPhases[mPhase];
-			// The gap and the fog behind the wall: where the shaft is and where the wall shadows it; and the sky, which
-			// the fog scatters light into.
-			let gap = RegionMean(mShot.Pixels, 0.478f, 0.522f, 0.28f, 0.45f);
-			let shadow = RegionMean(mShot.Pixels, 0.25f, 0.35f, 0.28f, 0.45f);
-			let sky = RegionMean(mShot.Pixels, 0.40f, 0.60f, 0.02f, 0.12f);
-			if (phase.volumetric)
+			if (phase.checkSun)
 			{
+				// The gap and the fog behind the wall: where the shaft is and where the wall shadows it; and the sky, which
+				// the fog scatters light into.
+				let gap = RegionMean(mShot.Pixels, 0.478f, 0.522f, 0.28f, 0.45f);
+				let shadow = RegionMean(mShot.Pixels, 0.25f, 0.35f, 0.28f, 0.45f);
+				let sky = RegionMean(mShot.Pixels, 0.40f, 0.60f, 0.02f, 0.12f);
 				Check(mView.VolumetricFogDrawn, "on: the froxel passes and their apply ran");
 				// The profiler has read the frames just drawn (all with the fog on).
 				Console.WriteLine(scope $"vfog-test: GPU time volumetric fog {ProfilerModules.VolumetricFogMs:F3} ms");
@@ -216,8 +289,11 @@ class VolumetricFogTestApp : Application
 				mShadowOn = shadow;
 				mSkyOn = sky;
 			}
-			else
+			else if (!phase.volumetric)
 			{
+				let gap = RegionMean(mShot.Pixels, 0.478f, 0.522f, 0.28f, 0.45f);
+				let shadow = RegionMean(mShot.Pixels, 0.25f, 0.35f, 0.28f, 0.45f);
+				let sky = RegionMean(mShot.Pixels, 0.40f, 0.60f, 0.02f, 0.12f);
 				Check(!mView.VolumetricFogDrawn, scope $"{phase.name}: no volumetric fog drawn");
 				if (mOffPixels == null)
 				{
@@ -229,6 +305,33 @@ class VolumetricFogTestApp : Application
 				}
 				else
 					mChangedOff = ChangedPixels(mOffPixels, mShot.Pixels);
+			}
+			else if (phase.spot)
+			{
+				// The cone between the spot and the box, and the shadow the box casts to its left, both against the dark
+				// backdrop above the wall.
+				let cone = RegionMean(mShot.Pixels, 0.59f, 0.66f, 0.16f, 0.20f);
+				let shadow = RegionMean(mShot.Pixels, 0.46f, 0.51f, 0.16f, 0.20f);
+				Check(mView.VolumetricFogDrawn, scope $"{phase.name}: the froxel passes and their apply ran");
+				if (!phase.checkSpot)
+					mConeOff = cone;
+				else if (phase.blocker)
+				{
+					mConeOn = cone;
+					mShadowBlocked = shadow;
+					Check(mView.ShadowTiles > 0, "spot: the light casts a shadow");
+					Console.WriteLine(scope $"vfog-test: spot cone {cone:F3} shadow (box) {shadow:F3}");
+				}
+				else
+				{
+					mShadowOpen = shadow;
+					Console.WriteLine(scope $"vfog-test: spot shadow (no box) {shadow:F3}");
+				}
+			}
+			if (phase.checkCost)
+			{
+				Console.WriteLine(scope $"vfog-test: GPU time volumetric fog {ProfilerModules.VolumetricFogMs:F3} ms with {phase.lights} point lights ({mView.LightCount} lights in the view)");
+				Check(ProfilerModules.VolumetricFogMs > 0, scope $"cost: the fog pass's GPU time is recorded with {phase.lights} lights");
 			}
 			mFrame = -1;
 		}
@@ -244,6 +347,12 @@ class VolumetricFogTestApp : Application
 			Check(mSkyOn > mSkyOff + 0.10f, "on: the fog scatters light (the picture changes)");
 			Console.WriteLine(scope $"vfog-test: off vs off-again changed pixels {mChangedOff} of {ShotWidth * ShotHeight}");
 			Check(mChangedOff < ShotWidth * ShotHeight / 100, "off: the picture is the same as before (no fog)");
+		}
+		if (!mSkip && mConeOn > 0)
+		{
+			Console.WriteLine(scope $"vfog-test: spot cone off {mConeOff:F3} on {mConeOn:F3}; shadow with box {mShadowBlocked:F3} without {mShadowOpen:F3}");
+			Check(mConeOn > mConeOff + 0.02f, "spot: the light brightens the fog in its cone");
+			Check(mShadowOpen > mShadowBlocked + 0.01f, "spot: the box cuts a shadow out of the cone");
 		}
 		Console.WriteLine(Result == 0 ? "vfog-test: PASS" : "vfog-test: FAILED");
 		Close();

@@ -90,6 +90,10 @@ struct LightData
 	/// On only at night (street lights, windows): with Day / Night on, the light fades in as the sun sets (from 2
 	/// degrees above the horizon to 4 below) and out again at dawn. With Day / Night off it is always on.
 	public bool onlyAtNight = false;
+	/// How much the light scatters in the volumetric fog (1 as it should; 0 keeps it out of the fog, higher gives a
+	/// stronger glow or cone). Only point and spot lights with Volumetric Fog on are lit in it.
+	[Range(0, 4)]
+	public float volumetric = 1.0f;
 	// What NetworkSync last saw of these settings (0: not looked at yet).
 	uint64 mSharedHash = 0;
 

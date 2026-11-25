@@ -1,6 +1,7 @@
 // Volumetric fog, step 1 of 3 (include/vfog.sh): for every cell of the grid, the fog's density there and the light it
-// scatters towards the camera: the sun's (shadowed by the cascades, so shadows cut light shafts out of the fog) and the
-// ambient sky's. Writes rgb = scattered light x density, a = extinction (per metre).
+// scatters towards the camera: the sun's (shadowed by the cascades, so shadows cut light shafts out of the fog), the
+// ambient sky's, and the point and spot lights' (include/vfog_local.sh, by cluster with their shadow tiles).
+// Writes rgb = scattered light x density, a = extinction (per metre).
 #include "bgfx_compute.sh"
 #include "post.sh"
 #include "vfog.sh"
@@ -8,6 +9,11 @@
 IMAGE3D_WO(i_scatter, rgba16f, 0);
 // The sun's shadow cascades, read as plain depths (compute shaders cannot use comparison samplers everywhere).
 SAMPLER2D(s_shadowMap, 1);
+// The view's lights by cluster and the point and spot lights' shadow tiles (LightClusters.bf), as plain textures too.
+SAMPLER2D(s_lightData, 2);
+SAMPLER2D(s_localShadowMap, 3);
+
+#include "vfog_local.sh"
 
 uniform vec4 u_sunDir;       // xyz towards the sun, w shadow strength
 uniform vec4 u_sunColor;     // rgb times intensity
@@ -62,6 +68,7 @@ void main()
 	float density = vfogDensity(wpos);
 	vec3 sun = u_sunColor.rgb * (vfogPhase(u_vfogMedium.w, dot(view, u_sunDir.xyz)) * u_vfogLight.w * vfogSunShadow(wpos, depth));
 	vec3 ambient = u_ambientSky.rgb * u_vfogGrid.w;
-	vec3 scattered = (sun + ambient) * u_vfogLight.rgb * density;
+	vec3 local = vfogLocalLights(wpos, view, u_vfogMedium.w);
+	vec3 scattered = (sun + ambient + local) * u_vfogLight.rgb * density;
 	imageStore(i_scatter, id, vec4(scattered, density));
 }
