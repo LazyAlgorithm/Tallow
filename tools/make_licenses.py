@@ -24,6 +24,7 @@ libraries = [
     ('Rapier3D', 'Physics (prebuilt C bindings)', tp / 'rapier/LICENSE'),
     ('Flecs', 'Entity component system', tp / 'flecs/LICENSE'),
     ('Recast Navigation', 'Polygon navigation baking and Detour path queries', tp / 'recastnavigation/License.txt'),
+    ('meshoptimizer', 'Cluster LOD (meshoptimizer and its clusterlod example)', tp / 'bgfx.cmake/bgfx/3rdparty/meshoptimizer/LICENSE.md'),
     ('JoltC', 'C interface to Jolt Physics', tp / 'joltc/LICENSE'),
     ('ENet', 'Network transport', tp / 'enet/LICENSE'),
     ('miniaudio', 'Audio', tp / 'miniaudio/LICENSE'),

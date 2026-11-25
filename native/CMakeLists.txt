@@ -121,6 +121,13 @@ target_compile_features(tallow_navigation PRIVATE cxx_std_17)
 target_include_directories(tallow_navigation PRIVATE ${TP}/recastnavigation/Recast/Include ${TP}/recastnavigation/Detour/Include ${TP}/joltc/include)
 target_link_libraries(tallow_navigation PRIVATE Jolt)
 
+# Cluster LOD (ClusterMesh): clusterlod.h on top of meshoptimizer 1.2, the copy bgfx bundles (bgfx.cmake only builds it
+# for its own tools, so these objects are the only meshoptimizer in the archive).
+file(GLOB TALLOW_MESHOPT_SOURCES CONFIGURE_DEPENDS ${TP}/bgfx.cmake/bgfx/3rdparty/meshoptimizer/src/*.cpp)
+add_library(tallow_clusterlod OBJECT tallow_clusterlod.cpp ${TALLOW_MESHOPT_SOURCES})
+target_compile_features(tallow_clusterlod PRIVATE cxx_std_17)
+target_include_directories(tallow_clusterlod PRIVATE ${TP}/bgfx.cmake/bgfx/3rdparty/meshoptimizer/src ${TP}/meshoptimizer-clusterlod)
+
 add_library(tallow_collision_support OBJECT tallow_collision_profile.cpp tallow_overlap_contacts.cpp)
 target_compile_features(tallow_collision_support PRIVATE cxx_std_17)
 target_link_libraries(tallow_collision_support PRIVATE Jolt)
@@ -277,6 +284,7 @@ add_library(tallow_native STATIC
 	tallow_physics.cpp
 	${TALLOW_RAPIER_SOURCE}
 	$<TARGET_OBJECTS:tallow_navigation>
+	$<TARGET_OBJECTS:tallow_clusterlod>
 	$<TARGET_OBJECTS:tallow_collision_support>
 	$<TARGET_OBJECTS:tallow_softbody>
 	$<TARGET_OBJECTS:tallow_flecs>

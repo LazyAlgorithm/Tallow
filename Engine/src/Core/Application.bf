@@ -15,6 +15,8 @@ namespace Tallow;
 ///                                                      long it took (automated tests, replays, benchmarks)
 ///   --crash-test                                       crash on purpose at frame 100, to check a build's crash
 ///                                                      report and its private symbols
+///   --clod-test <mesh>                                 build a mesh's cluster LOD hierarchy with no window, check it
+///                                                      and exit 0 or 1 (builtin:sphere_smooth, sphere:512x300, a model)
 [CSharpExpose]
 class Application
 {
@@ -199,6 +201,9 @@ class Application
 		for (let arg in args)
 			Args.Add(new String(arg));
 		ParseCommonArgs();
+		let clodTest = scope String();
+		if (GetArg("--clod-test", clodTest))
+			return ClusterMeshTest.Run(clodTest);
 		// A server with no window has no ears either.
 		Audio.Disabled = Headless;
 
