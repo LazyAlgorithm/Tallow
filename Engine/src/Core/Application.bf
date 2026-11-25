@@ -615,6 +615,7 @@ class Application
 		AntiCheat.Release();
 		OnShutdown();
 		AssetLoader.Shutdown();
+		Profiler.Shutdown();
 		StreamingCore.Stop();
 		Jobs.Shutdown();
 		VoiceChat.Shutdown();
