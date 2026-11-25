@@ -16,8 +16,9 @@ namespace Tallow.Editor;
 /// node.
 class ShaderGraphPreview
 {
-	/// RenderView.ViewCount views from here: after the reflection captures, before ImGui's (255).
-	const uint16 ViewBase = Reflections.FaceViewBase + 6;
+	/// RenderView.ViewCount views from here: the editor previews' block (AssetPreviews and the UI editor's views),
+	/// which draw at most one preview a frame (AssetPreviews pauses while a graph is open).
+	const uint16 ViewBase = 10 + RenderView.ViewCount * 2;
 	/// The picture's size of one cell, in pixels.
 	public const int32 CellSize = 128;
 	const int32 MaxCells = 100;
@@ -58,6 +59,10 @@ class ShaderGraphPreview
 
 	/// What went wrong the last time the graph was compiled, or empty.
 	public String problem = new .() ~ delete _;
+
+	/// The frame this preview last drew into its views, so the asset previews (which share them) can wait a frame.
+	/// Zero until the first draw.
+	public static int64 DrawnFrame;
 
 	public ~this()
 	{
@@ -324,6 +329,7 @@ class ShaderGraphPreview
 
 	void Draw()
 	{
+		DrawnFrame = Time.FrameCount;
 		if (mCompute != null)
 			Compute.RunPreview(mCompute, mComputeGrid, mComputed.Texture, mColumns);
 		else

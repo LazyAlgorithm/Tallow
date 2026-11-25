@@ -49,6 +49,10 @@ static class ProfilerModules
 	static ProfilerCounter sGpuMainMs = .("GPU Time: Main Draw (camera views)", .Rendering, "ms");
 	static ProfilerCounter sGpuShadowMs = .("GPU Time: Shadows", .Rendering, "ms");
 	static ProfilerCounter sGpuVtMs = .("GPU Time: VT Feedback", .Rendering, "ms");
+	/// Volumetric fog's inject, integrate and apply passes, the latest frame, in ms (0 when off).
+	static ProfilerCounter sGpuVFogMs = .("GPU Time: Volumetric fog", .Rendering, "ms");
+	/// The latest frame's volumetric fog GPU time in ms (read by tests and --gpu-bench).
+	public static double VolumetricFogMs { get; private set; }
 	// Virtual textures (VirtualTextures.bf).
 	static ProfilerCounter sVtTiles = .("VT Tiles Resident", .Assets);
 	static ProfilerCounter sVtUploads = .("VT Tile Uploads", .Assets, "/s");
@@ -310,7 +314,7 @@ static class ProfilerModules
 		if (stats.viewStats != null && stats.gpuTimerFreq > 0)
 		{
 			int32 passes = 0;
-			double cull = 0, occluder = 0, hzb = 0, main = 0, shadow = 0, vt = 0;
+			double cull = 0, occluder = 0, hzb = 0, main = 0, shadow = 0, vt = 0, vfog = 0;
 			let name = scope String();
 			for (int i < stats.numViews)
 			{
@@ -340,6 +344,8 @@ static class ProfilerModules
 					hzb += ms;
 				else if (v == VirtualTextures.FeedbackView)
 					vt += ms;
+				else if (name.StartsWith("Volumetric fog"))
+					vfog += ms;
 				else if (v >= 10 && (name.StartsWith("Shadow") || name.StartsWith("Point and spot")))
 					shadow += ms;
 				else if (v >= 10)
@@ -351,12 +357,14 @@ static class ProfilerModules
 			sGpuMainMs.Set(main);
 			sGpuShadowMs.Set(shadow);
 			sGpuVtMs.Set(vt);
+			sGpuVFogMs.Set(vfog);
 			CullMs = cull;
 			OccluderMs = occluder;
 			HzbMs = hzb;
 			MainMs = main;
 			ShadowMs = shadow;
 			VtMs = vt;
+			VolumetricFogMs = vfog;
 			sPasses.Set(passes);
 		}
 		return gpu;

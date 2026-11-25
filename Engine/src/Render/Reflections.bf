@@ -231,10 +231,10 @@ class ReflectionProbeState
 static class Reflections
 {
 	/// The bgfx views capturing uses: a RenderView's worth for drawing a probe's face, then six for the faces of the
-	/// cube being filled. Drawn after the game's and the editor's views.
-	public const uint16 CaptureViewBase = 10 + RenderView.ViewCount * 8;
-	// The capture view draws the scene only (ids up to 10 from its base): the faces' views fit in its block.
-	public const uint16 FaceViewBase = CaptureViewBase + 11;
+	/// cube being filled. Drawn after the game's, the editor's and the model views.
+	public const uint16 CaptureViewBase = RenderView.ModelViewBase + RenderView.ViewCount * 4;
+	// The capture view draws the scene only (ids up to 13 from its base): the faces' views fit after it.
+	public const uint16 FaceViewBase = CaptureViewBase + 14;
 	/// The cubes' smallest level: rougher than this is not worth a level of its own.
 	const int32 SmallestLevel = 4;
 	const int32 SkySize = 64;

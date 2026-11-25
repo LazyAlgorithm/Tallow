@@ -189,6 +189,28 @@ class SceneEnvironment
 	/// (sun disc, stars, moon) is drawn first and the skybox added over it, so a skybox of clouds on black works.
 	public float skyboxBlend;
 
+	/// Volumetric fog (tallowengine.com/docs/day-night): fog lit by the sun, with light shafts where shadows cut it, worked
+	/// out in a grid of cells over the view (Vulkan, Direct3D and Metal; OpenGL keeps the distance fog). It replaces the
+	/// distance fog (fogDensity) while on.
+	public bool volumetricFog;
+	/// Volumetric fog: how thick the fog is at and below Fog Height, per metre (0.02: about 50 m to fade out).
+	public float vfDensity = 0.02f;
+	/// Volumetric fog: the height (metres) the fog starts to thin out above.
+	public float vfHeight;
+	/// Volumetric fog: how fast the fog thins above Fog Height, per metre (0: the same everywhere).
+	public float vfFalloff = 0.08f;
+	/// Volumetric fog: how much light goes on forward through the fog (-0.9 to 0.9): higher makes a bright glow round
+	/// the sun when looking towards it, 0 scatters every way the same.
+	public float vfAnisotropy = 0.6f;
+	/// Volumetric fog: the fog's colour (what share of each colour of light it scatters back).
+	public Color vfAlbedo = .(1, 1, 1);
+	/// Volumetric fog: how much sunlight the fog scatters (1 as it should; more for stronger light shafts).
+	public float vfSunScattering = 1;
+	/// Volumetric fog: how much of the ambient (sky) light the fog scatters.
+	public float vfAmbient = 0.5f;
+	/// Volumetric fog: how far the grid reaches (metres). Beyond it the fog goes on as plain height fog.
+	public float vfDistance = 128;
+
 	/// The radius of the depth of field's largest blur as a share of the screen's height, at Depth Of Field 1.
 	public const float DepthOfFieldReach = 0.015f;
 
@@ -281,6 +303,15 @@ class SceneEnvironment
 		skyboxTint = other.skyboxTint;
 		nightSkybox.Set(other.nightSkybox);
 		skyboxBlend = other.skyboxBlend;
+		volumetricFog = other.volumetricFog;
+		vfDensity = other.vfDensity;
+		vfHeight = other.vfHeight;
+		vfFalloff = other.vfFalloff;
+		vfAnisotropy = other.vfAnisotropy;
+		vfAlbedo = other.vfAlbedo;
+		vfSunScattering = other.vfSunScattering;
+		vfAmbient = other.vfAmbient;
+		vfDistance = other.vfDistance;
 	}
 }
 

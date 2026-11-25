@@ -25,9 +25,9 @@ public enum ViewShading
 /// field and motion blur, from a depth pass: tallowengine.com/docs/post-processing), bloom, then a tonemapping resolve with colour
 /// grading. Decals (tallowengine.com/docs/decals) are laid over the solid scene, using the same depth pass, before see-through
 /// things. Point, spot and extra directional lights are sorted into clusters (LightClusters, tallowengine.com/docs/lighting), so a
-/// view can have hundreds; the nearest that cast shadows get tiles of one shadow atlas. Each RenderView uses 19
-/// consecutive bgfx view ids: sun shadows 0 to 3, point and spot shadows 4, then the scene, depth, decals,
-/// transparency, viewmodel, screen effects, bloom and tonemap in views 5 to 18.
+/// view can have hundreds; the nearest that cast shadows get tiles of one shadow atlas. Each RenderView uses 28
+/// consecutive bgfx view ids: sun shadows 0 to 3, point and spot shadows 4, volumetric fog's compute passes 5 and 6, then
+/// the scene, depth, decals, the fog's apply, transparency, viewmodel, screen effects, bloom and tonemap.
 class RenderView
 {
 	struct RenderItem
@@ -58,30 +58,35 @@ class RenderView
 	}
 
 	/// How many bgfx view ids one RenderView uses, from ViewBase. Give each RenderView a ViewBase this far apart.
-	public const int ViewCount = 25;
+	public const int ViewCount = 28;
 	// Each pass's view id, from ViewBase (the four shadow cascades are ShadowView to ShadowView + 3). bgfx draws
 	// views in the order of their ids.
 	const int ShadowView = 0;
 	const int LocalShadowView = 4;
-	const int SceneView = 5;
-	const int DepthView = 6;
-	const int DecalView = 7;
-	const int WaterCopyView = 8;
-	const int WaterView = 9;
-	const int TransparentView = 10;
-	const int UnderwaterCopyView = 11;
-	const int UnderwaterView = 12;
-	const int ViewmodelView = 13;
+	// Volumetric fog: the froxel cells are filled and summed in compute views before the scene, and the result laid
+	// over it after the decals (RenderViewVolumetric.bf).
+	const int VFogInjectView = 5;
+	const int VFogIntegrateView = 6;
+	const int SceneView = 7;
+	const int DepthView = 8;
+	const int DecalView = 9;
+	const int VFogApplyView = 10;
+	const int WaterCopyView = 11;
+	const int WaterView = 12;
+	const int TransparentView = 13;
+	const int UnderwaterCopyView = 14;
+	const int UnderwaterView = 15;
+	const int ViewmodelView = 16;
 	// Screen-space global illumination: the gather (with its temporal blend), then the apply (with its blur).
-	const int GiView = 14;
-	const int GiApplyView = 15;
-	const int AoView = 16;
-	const int AoApplyView = 17;
-	const int DofBlurView = 18;
-	const int DofCombineView = 19;
-	const int MotionView = 20;
-	const int BloomView = 21;
-	const int TonemapView = 24;
+	const int GiView = 17;
+	const int GiApplyView = 18;
+	const int AoView = 19;
+	const int AoApplyView = 20;
+	const int DofBlurView = 21;
+	const int DofCombineView = 22;
+	const int MotionView = 23;
+	const int BloomView = 24;
+	const int TonemapView = 27;
 
 	/// What the scene target is cleared to (RGBA): opaque black, under the sky.
 	const uint32 SceneClearColor = 0x000000ff;
@@ -248,6 +253,14 @@ class RenderView
 	int32 mGiFrame;
 	bool mGiWasOn;
 	Vector4 mPostRight, mPostUp, mPostForward, mPostEye;
+	// Volumetric fog (RenderViewVolumetric.bf): the froxel grid's two 3D textures, made when a scene turns it on, and
+	// whether this view draws it this frame.
+	bgfx.TextureHandle mFogScatter = .() { idx = uint16.MaxValue };
+	bgfx.TextureHandle mFogIntegrated = .() { idx = uint16.MaxValue };
+	int32 mFogCellsX, mFogCellsY, mFogSlices;
+	bool mVolumetricFogActive;
+	/// Whether the last Render drew volumetric fog (the froxel passes and their apply).
+	public bool VolumetricFogDrawn { get; private set; }
 
 	List<RenderItem> mItems = new .() ~ delete _;
 	List<RenderItem> mShadowItems = new .() ~ delete _;
@@ -331,6 +344,7 @@ class RenderView
 		ReleaseEffectTargets();
 		ReleaseWaterTargets();
 		ReleasePostTargets();
+		ReleaseVolumetricTargets();
 	}
 
 	public void Resize(int32 width, int32 height)
@@ -439,6 +453,8 @@ class RenderView
 		if (!mDayNightShadows)
 			mSunDir.w = 0;
 		SunShadowsDrawn = castShadows;
+		mVolumetricFogActive = UsesVolumetricFog(camera, env);
+		VolumetricFogDrawn = mVolumetricFogActive;
 		SetFrameConstants(camera, env);
 		// The physical sky's tables follow the camera (before the reflections, which draw the sky too).
 		if (!Capture)
@@ -491,12 +507,18 @@ class RenderView
 			DrawLocalShadows();
 		Profiler.End();
 		FrameShadowTiles += (int32)mLights.Tiles.Count;
+		// The froxel grid reads the cascades just drawn, so it is filled before the scene (RenderViewVolumetric.bf).
+		if (mVolumetricFogActive)
+			DispatchVolumetricFog(camera, env);
 		using (sOpaqueMarker.Sample())
 			DrawScene(scene, camera, frustum, env);
 		mDepthDrawn = false;
 		mDepthAlbedo = UsesScreenSpaceGi(camera, env);
 		using (sDecalMarker.Sample())
 			DrawDecals(scene, camera, frustum);
+		// Over the solid scene and sky, before the water and see-through things (V3c fogs those too).
+		if (mVolumetricFogActive)
+			ApplyVolumetricFog(camera, env);
 		using (sWaterMarker.Sample())
 			DrawWater(scene, camera, frustum);
 		using (sTransparentMarker.Sample())
@@ -621,8 +643,10 @@ class RenderView
 		mAmbientSky = Linear(env.ambientSky, env.ambientIntensity);
 		mAmbientGround = Linear(env.ambientGround, env.ambientIntensity);
 		let fog = Linear(env.fogColor);
-		// No fog through an orthographic camera: how far away it stands means nothing to what it shows.
-		mFogColor = .(fog.x, fog.y, fog.z, camera.orthographic ? 0 : env.fogDensity);
+		// No fog through an orthographic camera: how far away it stands means nothing to what it shows. Volumetric fog
+		// replaces the distance fog while it is on (itself only).
+		let fogDensity = mVolumetricFogActive ? 0 : (camera.orthographic ? 0 : env.fogDensity);
+		mFogColor = .(fog.x, fog.y, fog.z, fogDensity);
 	}
 
 	void ClearItems()

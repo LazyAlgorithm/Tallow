@@ -36,6 +36,11 @@ static class RenderResources
 	public static bgfx.ProgramHandle DepthVelProgram, DepthAlbedoVelProgram, SkyVelProgram, SkyVelAlbedoProgram, TaaProgram, VelocityViewProgram;
 	public static bgfx.UniformHandle uVelCur, uVelPrev, uVelParams, uTaaParams, uTaaParams2, sVelocity, sHistory;
 	public static bgfx.UniformHandle sSsgi, sSsgiHistory, sSsgiLit, sAlbedoBuffer, uSsgiParams, uSsgiParams2;
+	// Volumetric fog (tallowengine.com/docs/day-night; RenderViewVolumetric.bf): the froxel inject and integrate compute
+	// shaders and the fullscreen apply.
+	public static bgfx.ProgramHandle VFogInjectProgram, VFogIntegrateProgram, VFogApplyProgram;
+	public static bgfx.UniformHandle uVFogMedium, uVFogLight, uVFogGrid, uVFogSize, sVFog;
+	public static bool VFogReady;
 	public static bgfx.ProgramHandle LineProgram;
 	// Decals (tallowengine.com/docs/decals).
 	public static bgfx.ProgramHandle DecalProgram;
@@ -213,6 +218,15 @@ static class RenderResources
 		uSkyHorizon = bgfx.create_uniform("u_skyHorizon", .Vec4, 1);
 		uSkyGround = bgfx.create_uniform("u_skyGround", .Vec4, 1);
 		uPostParams = bgfx.create_uniform("u_postParams", .Vec4, 1);
+		VFogInjectProgram = LoadCompute("cs_vfog_inject");
+		VFogIntegrateProgram = LoadCompute("cs_vfog_integrate");
+		VFogApplyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_vfog_apply");
+		uVFogMedium = bgfx.create_uniform("u_vfogMedium", .Vec4, 1);
+		uVFogLight = bgfx.create_uniform("u_vfogLight", .Vec4, 1);
+		uVFogGrid = bgfx.create_uniform("u_vfogGrid", .Vec4, 1);
+		uVFogSize = bgfx.create_uniform("u_vfogSize", .Vec4, 1);
+		sVFog = bgfx.create_uniform("s_vfog", .Sampler, 1);
+		VFogReady = VFogInjectProgram.Valid && VFogIntegrateProgram.Valid && VFogApplyProgram.Valid;
 
 		// Depth render target sampled with hardware comparison (PCF).
 		let shadowFlags = Gfx.TextureRenderTarget | Gfx.SamplerCompareLequal | Gfx.SamplerClamp;
@@ -255,6 +269,19 @@ static class RenderResources
 
 	/// The atlas the lit shaders read point and spot shadows from (the sun's stands in before there is one).
 	public static bgfx.TextureHandle LocalShadowTexture => LocalShadowMap.idx != uint16.MaxValue ? LocalShadowMap : ShadowMap;
+
+	/// Loads a compute program (.tcompute .bin) for a compute view, or an invalid handle if this backend did not build
+	/// it.
+	static bgfx.ProgramHandle LoadCompute(StringView name)
+	{
+		let path = scope String()..AppendF("{}/shaders/{}/{}.bin", Gfx.EngineAssetPath, Gfx.ShaderFolder, name);
+		if (!AssetPack.Exists(path))
+			return .() { idx = uint16.MaxValue };
+		let shader = Gfx.LoadShaderFile(path);
+		if (!shader.Valid)
+			return .() { idx = uint16.MaxValue };
+		return bgfx.create_compute_program(shader, true);
+	}
 
 	public static void Destroy()
 	{
@@ -310,6 +337,18 @@ static class RenderResources
 		bgfx.destroy_program(DofCombineProgram);
 		bgfx.destroy_program(MotionBlurProgram);
 		bgfx.destroy_program(LineProgram);
+		if (VFogInjectProgram.Valid)
+			bgfx.destroy_program(VFogInjectProgram);
+		if (VFogIntegrateProgram.Valid)
+			bgfx.destroy_program(VFogIntegrateProgram);
+		if (VFogApplyProgram.Valid)
+			bgfx.destroy_program(VFogApplyProgram);
+		bgfx.destroy_uniform(uVFogMedium);
+		bgfx.destroy_uniform(uVFogLight);
+		bgfx.destroy_uniform(uVFogGrid);
+		bgfx.destroy_uniform(uVFogSize);
+		bgfx.destroy_uniform(sVFog);
+		VFogReady = false;
 		bgfx.destroy_program(DecalProgram);
 		bgfx.destroy_program(WaterProgram);
 		bgfx.destroy_program(MirrorProgram);

@@ -12,10 +12,13 @@ namespace Tallow;
 extension RenderView
 {
 	/// Where the game's view and the editor's Scene and Game views draw their mirrored scene: view ids no other view
-	/// uses (after the asset preview's copy view), each block the eleven a capture view needs.
-	const uint16 PlanarBlock = 11;
+	/// uses (after the asset preview's copy view), each block the fourteen a capture view needs (its shadow, scene,
+	/// depth, decal, water and transparency passes; it draws no volumetric fog).
+	const uint16 PlanarBlock = 14;
 	const uint16 PlanarBase0 = 10 + ViewCount * 3 + 1;
 	const uint16 PlanarBase1 = PlanarBase0 + PlanarBlock;
+	/// Where the editor's model views start (after the two mirrored-scene blocks): four blocks of a RenderView's ids.
+	public const uint16 ModelViewBase = PlanarBase1 + PlanarBlock;
 	/// The first view id of this view's mirrored scene, or 0 when it has none.
 	public uint16 PlanarViewBase;
 	/// Whether this view is another's mirrored scene: it draws everything, including what reflection probes leave out.

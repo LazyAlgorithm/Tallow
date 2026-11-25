@@ -30,7 +30,7 @@ Tallow, and every game built with it, includes the libraries below. Their licenc
   FidelityFX FSR 2     Upscaling (FSR temporal upscaler and Vulkan backend, AMD)
   FidelityFX FSR 1     Upscaling (FSR 1 EASU and RCAS shaders, AMD)
   KEMAR HRTF data      Headphone 3D audio
-  Bevy                 Physical sky (atmosphere look-up table shaders, ported)
+  Bevy                 Physical sky (atmosphere look-up table shaders) and volumetric fog (phase, ambient and shadow lookups), ported
   tinyexr              OpenEXR skybox loading (the copy inside bimg)
   miniz                Compression used by tinyexr
 
@@ -1303,7 +1303,8 @@ on use, provided the authors are cited:
 Bevy
 ------------------------------------------------------------------------------
 
-The physical sky's atmosphere shaders are ported from Bevy (bevy_pbr atmosphere).
+The physical sky's atmosphere shaders are ported from Bevy (bevy_pbr atmosphere), and the volumetric fog's phase
+function, ambient term and shadow lookup from Bevy's volumetric_fog.
 
 MIT License
 

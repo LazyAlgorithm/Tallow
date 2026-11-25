@@ -407,6 +407,13 @@ class Application
 			test.Run(args);
 			return test.Result;
 		}
+		// The volumetric fog check draws a light shaft through a gap (V3a).
+		if (HasArg("--vfog-test") && !(this is VolumetricFogTestApp))
+		{
+			let test = scope VolumetricFogTestApp();
+			test.Run(args);
+			return test.Result;
+		}
 		if (HasArg("--gpu-bench") && !(this is GpuBenchApp))
 		{
 			let bench = scope GpuBenchApp();

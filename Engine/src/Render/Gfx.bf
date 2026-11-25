@@ -54,10 +54,15 @@ static class Gfx
 	public const uint64 StateBlendAlpha = 0x0000000006565000;
 	/// Source plus destination (BGFX_STATE_BLEND_ADD).
 	public const uint64 StateBlendAdd = 0x0000000002222000;
+	/// One times the source plus the destination times the source's alpha: for light already multiplied by its own
+	/// opacity (volumetric fog's scattered light and transmittance).
+	public const uint64 StateBlendOneSrcAlpha = 0x0000000005252000;
 
 	public const uint32 ResetVsync = 0x00000080;
 	// Texture and sampler flags (BGFX_TEXTURE_* and BGFX_SAMPLER_*).
 	public const uint64 TextureRenderTarget = 0x0000001000000000;
+	/// A texture a compute shader writes into (volumetric fog's froxel volumes).
+	public const uint64 TextureComputeWrite = 0x0000100000000000;
 	public const uint64 TextureRenderTargetMsaa2 = 0x0000002000000000;
 	public const uint64 TextureRenderTargetMsaa4 = 0x0000003000000000;
 	public const uint64 TextureRenderTargetMsaa8 = 0x0000004000000000;

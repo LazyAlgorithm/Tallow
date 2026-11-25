@@ -209,6 +209,9 @@ static class AssetPreviews
 	{
 		if (!Gfx.Initialized || sQueue.Count == 0)
 			return;
+		// The Shader Graph tab's preview draws into the same views; this frame's belongs to it.
+		if (ShaderGraphPreview.DrawnFrame == Time.FrameCount)
+			return;
 		if (sView == null)
 		{
 			sView = new RenderView(ViewBase);

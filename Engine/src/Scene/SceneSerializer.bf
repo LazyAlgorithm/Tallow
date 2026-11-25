@@ -112,6 +112,16 @@ static class SceneSerializer
 		if (!env.nightSkybox.IsEmpty)
 			text.AppendF("env nightSkybox {}\n", Quote(env.nightSkybox, .. scope .()));
 		Number(text, "skyboxBlend", env.skyboxBlend, defaults.skyboxBlend);
+		Number(text, "volumetricFog", env.volumetricFog ? 1 : 0, 0);
+		Number(text, "vfDensity", env.vfDensity, defaults.vfDensity);
+		Number(text, "vfHeight", env.vfHeight, defaults.vfHeight);
+		Number(text, "vfFalloff", env.vfFalloff, defaults.vfFalloff);
+		Number(text, "vfAnisotropy", env.vfAnisotropy, defaults.vfAnisotropy);
+		if (env.vfAlbedo.r != 1 || env.vfAlbedo.g != 1 || env.vfAlbedo.b != 1 || env.vfAlbedo.a != 1)
+			WriteColor(text, "vfAlbedo", env.vfAlbedo);
+		Number(text, "vfSunScattering", env.vfSunScattering, defaults.vfSunScattering);
+		Number(text, "vfAmbient", env.vfAmbient, defaults.vfAmbient);
+		Number(text, "vfDistance", env.vfDistance, defaults.vfDistance);
 	}
 
 	/// Writes an environment number only when it differs from a new scene's.
@@ -811,6 +821,15 @@ static class SceneSerializer
 		case "skyboxTint": env.skyboxTint = color;
 		case "nightSkybox": env.nightSkybox.Set(tokens[2]);
 		case "skyboxBlend": env.skyboxBlend = Math.Clamp(value, 0, 1);
+		case "volumetricFog": env.volumetricFog = value != 0;
+		case "vfDensity": env.vfDensity = Math.Max(value, 0);
+		case "vfHeight": env.vfHeight = value;
+		case "vfFalloff": env.vfFalloff = Math.Max(value, 0);
+		case "vfAnisotropy": env.vfAnisotropy = Math.Clamp(value, -0.9f, 0.9f);
+		case "vfAlbedo": env.vfAlbedo = color;
+		case "vfSunScattering": env.vfSunScattering = Math.Max(value, 0);
+		case "vfAmbient": env.vfAmbient = Math.Max(value, 0);
+		case "vfDistance": env.vfDistance = Math.Clamp(value, 8, 4096);
 		}
 	}
 
