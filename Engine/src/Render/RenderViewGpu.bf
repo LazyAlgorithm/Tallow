@@ -18,6 +18,11 @@ extension RenderView
 	}
 
 	GpuDrivenView mGpu ~ delete _;
+	GpuOcclusion mGpuOcc ~ delete _;
+	/// Whether this view's GPU-driven items are tested against what hides them (GpuDrivenView.bf), and whether the
+	/// scene's second pass was culled this frame.
+	bool mGpuOccludes;
+	bool mGpuTwoPhase;
 	List<GpuItem> mGpuScene = new .() ~ delete _;
 	List<GpuItem> mGpuShadow = new .() ~ delete _;
 	/// One item of each bin, which supplies its surface: material, reflection probe and light grid.
@@ -26,6 +31,18 @@ extension RenderView
 	/// Shadow casters drawn this way in the sun's cascades that the point and spot lights' tiles still draw the usual way.
 	List<RenderItem> mLocalShadowItems = new .() ~ delete _;
 	bool mGpuActive;
+
+	/// Which of the views with room for an occlusion test this one is (GpuDriven.FirstDrawView); -1: none, the view has
+	/// none of its own.
+	int GpuOcclusionSlot => ViewBase == 10 ? 0 : (ViewBase == 10 + ViewCount ? 1 : -1);
+
+	/// Whether this view's GPU-driven drawing leaves out what is hidden (the camera's occlusion culling is on, it has
+	/// perspective, the view is a plain one and has a slot).
+	bool GpuOcclusionWanted(CameraData camera)
+	{
+		return GpuDriven.Enabled && GpuDriven.Occlusion && GpuOcclusionSlot >= 0 && camera.occlusionCulling && !camera.orthographic
+			&& shading == .Rendered && !Capture && !PlanarPass;
+	}
 
 	/// Whether this view may draw GPU-driven: the setting is on, the view is a plain one (not a reflection capture or
 	/// a planar reflection, which render more than once in a frame, nor an editor shading mode) and has not done so
@@ -82,6 +99,7 @@ extension RenderView
 		mGpuBins.Clear();
 		mGpuBinIndex.Clear();
 		mLocalShadowItems.Clear();
+		mGpuTwoPhase = false;
 		if (!GpuAllowed())
 			return;
 		// Clusters that finished building go into the pool (and some more are started, by the lookups below).
@@ -105,7 +123,7 @@ extension RenderView
 		}
 		mItems.Count = kept;
 
-		if (castShadows)
+		if (castShadows || mHasLocalShadows)
 		{
 			kept = 0;
 			let casters = mShadowItems.Ptr;
@@ -130,10 +148,16 @@ extension RenderView
 			mGpu = new .();
 		let words = mGpu.Reserve((int32)mGpuScene.Count, (int32)mGpuShadow.Count);
 		for (int i < mGpuScene.Count)
+		{
 			WriteGpuInstance(words + i * GpuDriven.InstanceWords, ref mGpuScene[i]);
+			mGpu.SceneNodes += (mGpuScene[i].entry.clusterCount + 63) / 64;
+		}
 		let shadowWords = words + mGpuScene.Count * GpuDriven.InstanceWords;
 		for (int i < mGpuShadow.Count)
+		{
 			WriteGpuInstance(shadowWords + i * GpuDriven.InstanceWords, ref mGpuShadow[i]);
+			mGpu.ShadowNodes += (mGpuShadow[i].entry.clusterCount + 63) / 64;
+		}
 		mGpu.Upload();
 		mGpu.Frame = Time.FrameCount;
 		mGpuActive = true;
@@ -150,7 +174,7 @@ extension RenderView
 		InstanceData data = default;
 		FillInstance(&data, item);
 		Internal.MemCpy(words, &data, sizeof(InstanceData));
-		let previous = mTemporalOn ? PreviousWorld(item.renderer, item.world) : item.world;
+		let previous = (mTemporalOn || mGpuOccludes) ? PreviousWorld(item.renderer, item.world) : item.world;
 		float* prev = (float*)(words + 20);
 		prev[0] = previous.m[0]; prev[1] = previous.m[4]; prev[2] = previous.m[8]; prev[3] = previous.m[12];
 		prev[4] = previous.m[1]; prev[5] = previous.m[5]; prev[6] = previous.m[9]; prev[7] = previous.m[13];
@@ -167,13 +191,28 @@ extension RenderView
 		let material = item.material;
 		let twoSided = !item.renderer.backFaceCulling || (material != null && material.doubleSided);
 		let noCone = twoSided || largest > smallest * 1.02f;
+		// Where the sphere was last frame, which the occlusion test of the first phase asks about.
+		Vector3 before = item.center;
+		var moved = false;
+		for (int i < 15)
+		{
+			if (previous.m[i] != world.m[i])
+				moved = true;
+		}
+		if (moved)
+			before = previous.TransformPoint(world.Inverse.TransformPoint(item.center));
+		float* beforeCenter = (float*)(words + 40);
+		beforeCenter[0] = before.x; beforeCenter[1] = before.y; beforeCenter[2] = before.z; beforeCenter[3] = 0;
 		words[36] = gpu.entry.clusterBase;
 		words[37] = gpu.entry.clusterCount;
 		words[38] = (uint32)gpu.bin | (noCone ? 0x10000u : 0u);
 		*(float*)(words + 39) = largest;
 	}
 
-	/// The scene's pass of clusters to draw: the instances in view, from the camera.
+	/// The scene's passes of clusters to draw: the instances in view, from the camera. With occlusion (GpuDrivenView.bf has the
+	/// whole story) the first phase's pass is culled now, its clusters are drawn as occluders into a target of the occlusion
+	/// test's own, a picture of distances is made of it, and the second phase's pass is culled against that; the second
+	/// pass's occluders are drawn too and the finished picture is kept for the next frame's first phase.
 	void GpuCullScene(CameraData camera)
 	{
 		if (!mGpuActive || mGpu.SceneCount == 0)
@@ -187,8 +226,92 @@ extension RenderView
 		p.near = Math.Max(camera.near, 0.001f);
 		p.threshold = GpuDriven.PixelError;
 		p.cone = GpuDriven.ConeCulling;
+		mGpuTwoPhase = false;
+		if (GpuOcclusionWanted(camera))
+		{
+			if (mGpuOcc == null)
+				mGpuOcc = new .();
+			if (mGpuOcc.Ensure(mWidth, mHeight))
+			{
+				GpuCullOccluded(camera, p);
+				mGpu.PollStats();
+				return;
+			}
+		}
 		mGpu.Cull(GpuDrivenView.ScenePass, 0, mGpu.SceneCount, (int32)mGpuBins.Count, p);
+		mGpu.FinishCulling(GpuDriven.CullView);
 		mGpu.PollStats();
+	}
+
+	void GpuCullOccluded(CameraData camera, GpuCullParams first)
+	{
+		let slot = (uint16)GpuOcclusionSlot;
+		let bins = (int32)mGpuBins.Count;
+		let history = mGpuOcc.CanUseHistory(camera);
+		var p = first;
+		if (history)
+		{
+			p.occlusion = 1;
+			p.occluder = mGpuOcc.History(camera);
+		}
+		mGpu.Cull(GpuDrivenView.ScenePass, 0, mGpu.SceneCount, bins, p);
+		GpuDrawOccluders((uint16)(GpuDriven.FirstDrawView + slot), camera, GpuDrivenView.ScenePass, true);
+		if (history)
+		{
+			// The picture of the first phase's occluders, then the second phase against it.
+			mGpuOcc.Build(GpuDriven.HzbView, 1);
+			p.occlusion = 2;
+			p.occluder = mGpuOcc.Current(camera);
+			mGpu.CullSecond(bins, p);
+			mGpuTwoPhase = true;
+			GpuDrawOccluders((uint16)(GpuDriven.SecondDrawView + slot), camera, GpuDrivenView.SecondPass, false);
+			mGpuOcc.Build(GpuDriven.FinalHzbView, 0);
+			mGpu.FinishCulling(GpuDriven.HzbView);
+		}
+		else
+		{
+			mGpuOcc.Build(GpuDriven.HzbView, 0);
+			mGpu.FinishCulling(GpuDriven.HzbView);
+		}
+		mGpuOcc.SaveCamera(camera);
+	}
+
+	/// Draws a pass's clusters as occluders: the distance in front of the camera, into the occlusion test's target.
+	void GpuDrawOccluders(uint16 view, CameraData camera, int pass, bool clear)
+	{
+		if (!mGpu.HasPass(pass))
+			return;
+		var viewMatrix = camera.view;
+		var projMatrix = camera.projection;
+		bgfx.set_palette_color_rgba32f(DepthPalette, 60000.0f, 0, 0, 1);
+		StringView name = clear ? "GPU occluders" : "GPU occluders, second phase";
+		bgfx.set_view_name(view, name.Ptr, (int32)name.Length);
+		bgfx.set_view_frame_buffer(view, mGpuOcc.FrameBuffer);
+		bgfx.set_view_rect(view, 0, 0, (uint16)mWidth, (uint16)mHeight, 0, 1);
+		if (clear)
+			bgfx.set_view_clear_mrt(view, Gfx.ClearColor | Gfx.ClearDepth, 1.0f, 0, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette);
+		else
+			bgfx.set_view_clear(view, 0, 0, 1.0f, 0);
+		bgfx.set_view_transform(view, &viewMatrix, &projMatrix);
+		bgfx.touch(view);
+		var viewProj = projMatrix * viewMatrix;
+		var depthParams = Vector4(0, 0, 0, 0);
+		for (int bin < mGpuBins.Count)
+		{
+			let first = mGpuBins[bin];
+			bgfx.set_uniform(RenderResources.uDepthViewProj, &viewProj, 1);
+			bgfx.set_uniform(RenderResources.uDepthParams, &depthParams, 1);
+			bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | GpuDepthCull(first), 0);
+			mGpu.SubmitBin(view, GpuDriven.DepthProgram, pass, bin);
+		}
+	}
+
+	/// How the faces of a bin's surface are culled in a depth draw.
+	uint64 GpuDepthCull(RenderItem first)
+	{
+		if ((first.material != null && first.material.doubleSided) || !first.renderer.backFaceCulling)
+			return 0;
+		return FacingCull(Mirrored(first.world) ? Gfx.StateCullCw : Gfx.StateCullCcw);
 	}
 
 	/// A sun cascade's pass: the casters inside its box (as the usual path picks them), at a coarser error.
@@ -213,7 +336,25 @@ extension RenderView
 		mGpu.Cull(1 + cascade, mGpu.SceneCount, mGpu.ShadowCount, 1, p);
 	}
 
-	/// Draws the scene's bins, each with its own surface.
+	/// The pass of a point or spot light's shadow tile: the casters in the tile's frustum, seen from the light at a coarse
+	/// error. False when there is no pass for the tile (the usual path draws it).
+	bool GpuCullTile(int index, ShadowTile tile)
+	{
+		if (!mGpuActive || mGpu.ShadowCount == 0 || index >= GpuDrivenView.MaxTilePasses || !GpuDriven.LocalShadows)
+			return false;
+		GpuCullParams p = default;
+		p.planes = tile.frustum.planes;
+		p.eye = tile.light.Transform.Position;
+		p.ortho = false;
+		p.pixelScale = tile.pixelScale;
+		p.near = 0.02f;
+		p.threshold = GpuDriven.PixelError * GpuDriven.ShadowErrorScale;
+		p.cone = false;
+		mGpu.Cull(GpuDrivenView.TilePass + index, mGpu.SceneCount, mGpu.ShadowCount, 1, p);
+		return true;
+	}
+
+	/// Draws the scene's bins, each with its own surface (the first phase's clusters, then the second's).
 	void GpuDrawScene(uint16 view)
 	{
 		if (!mGpuActive || !mGpu.HasPass(GpuDrivenView.ScenePass))
@@ -228,9 +369,22 @@ extension RenderView
 			var surface = ResolveSurface(first.renderer, first.material, first.world);
 			surface.cull = FacingCull(surface.cull);
 			SetSurfaceUniforms(first.renderer, ref surface);
-			bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | surface.cull | Gfx.StateMsaa, 0);
+			let state = Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | surface.cull | Gfx.StateMsaa;
+			bgfx.set_state(state, 0);
 			mGpu.SubmitBin(view, GpuDriven.LitProgram, GpuDrivenView.ScenePass, bin);
 			DrawCalls++;
+			if (mGpuTwoPhase)
+			{
+				// The surface's uniforms and textures go with each draw, so they are set again for the second.
+				SetFrameUniforms();
+				Reflections.Bind(first.probe, mReflectionIntensity, mCubeAmbient);
+				if (first.lightGrid > 0)
+					LightProbes.Bind(mProbeGrid, first.lightGrid);
+				SetSurfaceUniforms(first.renderer, ref surface);
+				bgfx.set_state(state, 0);
+				mGpu.SubmitBin(view, GpuDriven.LitProgram, GpuDrivenView.SecondPass, bin);
+				DrawCalls++;
+			}
 		}
 		Instances += mGpu.SceneCount;
 	}
@@ -243,27 +397,27 @@ extension RenderView
 		for (int bin < mGpuBins.Count)
 		{
 			let first = mGpuBins[bin];
-			var matrix = viewProj;
-			var depthParams = Vector4(0, 0, 0, 0);
-			if (mDepthAlbedo)
-			{
-				var uvTransform = Vector4(1, 1, 0, 0);
-				if (first.material != null)
-					uvTransform = .(first.material.tiling.x, first.material.tiling.y, first.material.offset.x, first.material.offset.y);
-				bgfx.set_uniform(RenderResources.uUvTransform, &uvTransform, 1);
-				bgfx.set_texture(0, RenderResources.sAlbedo, AlbedoTexture(first), uint32.MaxValue);
-			}
-			if (mTemporalOn)
-				SetVelocityUniforms(false, false);
-			bgfx.set_uniform(RenderResources.uDepthViewProj, &matrix, 1);
-			bgfx.set_uniform(RenderResources.uDepthParams, &depthParams, 1);
-			uint64 cull = FacingCull(Mirrored(first.world) ? Gfx.StateCullCw : Gfx.StateCullCcw);
-			if ((first.material != null && first.material.doubleSided) || !first.renderer.backFaceCulling)
-				cull = 0;
-			bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | cull, 0);
 			let program = mTemporalOn ? (mDepthAlbedo ? GpuDriven.DepthAlbedoVelProgram : GpuDriven.DepthVelProgram) : (mDepthAlbedo ? GpuDriven.DepthAlbedoProgram : GpuDriven.DepthProgram);
-			mGpu.SubmitBin(view, program, GpuDrivenView.ScenePass, bin);
-			DrawCalls++;
+			for (int phase < (mGpuTwoPhase ? 2 : 1))
+			{
+				var matrix = viewProj;
+				var depthParams = Vector4(0, 0, 0, 0);
+				if (mDepthAlbedo)
+				{
+					var uvTransform = Vector4(1, 1, 0, 0);
+					if (first.material != null)
+						uvTransform = .(first.material.tiling.x, first.material.tiling.y, first.material.offset.x, first.material.offset.y);
+					bgfx.set_uniform(RenderResources.uUvTransform, &uvTransform, 1);
+					bgfx.set_texture(0, RenderResources.sAlbedo, AlbedoTexture(first), uint32.MaxValue);
+				}
+				if (mTemporalOn)
+					SetVelocityUniforms(false, false);
+				bgfx.set_uniform(RenderResources.uDepthViewProj, &matrix, 1);
+				bgfx.set_uniform(RenderResources.uDepthParams, &depthParams, 1);
+				bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | GpuDepthCull(first), 0);
+				mGpu.SubmitBin(view, program, phase == 0 ? GpuDrivenView.ScenePass : GpuDrivenView.SecondPass, bin);
+				DrawCalls++;
+			}
 		}
 	}
 
@@ -275,6 +429,19 @@ extension RenderView
 		bgfx.set_uniform(RenderResources.uShadowViewProj, &mShadowPassViewProj, 1);
 		bgfx.set_state(Gfx.StateWriteZ | Gfx.StateDepthLess, 0);
 		mGpu.SubmitBin(view, GpuDriven.ShadowProgram, 1 + cascade, 0);
+		DrawCalls++;
+	}
+
+	/// Draws a shadow tile's casters (the pass GpuCullTile made); the caller has set the tile's matrix and scissor.
+	void GpuDrawTile(uint16 view, int index)
+	{
+		if (!mGpu.HasPass(GpuDrivenView.TilePass + index))
+			return;
+		bgfx.set_uniform(RenderResources.uShadowViewProj, &mShadowPassViewProj, 1);
+		if (mShadowScissor[2] > 0)
+			bgfx.set_scissor((uint16)mShadowScissor[0], (uint16)mShadowScissor[1], (uint16)mShadowScissor[2], (uint16)mShadowScissor[3]);
+		bgfx.set_state(Gfx.StateWriteZ | Gfx.StateDepthLess, 0);
+		mGpu.SubmitBin(view, GpuDriven.ShadowProgram, GpuDrivenView.TilePass + index, 0);
 		DrawCalls++;
 	}
 }

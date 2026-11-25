@@ -16,6 +16,8 @@ struct ShadowTile
 	public Frustum frustum;
 	/// Where the tile is in the atlas, in pixels from the top left.
 	public int32 x, y, size;
+	/// Pixels one unit of error spans at distance 1 from the light, in the tile.
+	public float pixelScale;
 }
 
 /// The point, spot and extra directional lights of one view, sorted into clusters (tallowengine.com/docs/lighting). The view is
@@ -240,6 +242,8 @@ class LightClusters
 		tile.y = row * size;
 		tile.size = size;
 		tile.frustum = Frustum(viewProj, Gfx.HomogeneousDepth);
+		// The first row of the view's matrix times the projection's: the projection's scale, since the view only turns.
+		tile.pixelScale = 0.5f * size * Math.Sqrt(viewProj.m[0] * viewProj.m[0] + viewProj.m[4] * viewProj.m[4] + viewProj.m[8] * viewProj.m[8]);
 		// Drawing: the light's clip space squeezed into the tile's part of the atlas (top row at the top).
 		Matrix4 squeeze = default;
 		squeeze.m[0] = 1 / n;

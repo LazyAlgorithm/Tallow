@@ -439,6 +439,7 @@ class RenderView
 		for (let tile in mLights.Tiles)
 			shadowRange = Math.Max(shadowRange, (tile.light.Transform.Position - camera.position).Length + tile.light.range);
 		mOcclusionOn = camera.occlusionCulling && !camera.orthographic;
+		mGpuOccludes = GpuOcclusionWanted(camera);
 		sCullMarker.Begin();
 		if (mOcclusionOn)
 		{
@@ -760,7 +761,7 @@ class RenderView
 		item.radius = bounds.Extents.Length;
 		let transparent = IsTransparent(renderer, item.material);
 		let viewmodel = DrawsAsViewmodel(camera, renderer.GameObject);
-		let drawn = !shadowOnly && (viewmodel || (frustum.Intersects(bounds) && (!mOcclusionOn || mOcclusion.IsVisible(bounds))));
+		let drawn = !shadowOnly && (viewmodel || (frustum.Intersects(bounds) && (!mOcclusionOn || (mGpuOccludes && mesh.GpuEntry != null && renderer.windSway <= 0) || mOcclusion.IsVisible(bounds))));
 		let shadowAllowed = !viewmodel || camera.viewmodelCastsShadows;
 		let shadow = !transparent && castShadows && renderer.castShadows && shadowAllowed && (item.center - camera.position).Length - item.radius < shadowRange;
 		if (!drawn && !shadow)
@@ -858,7 +859,7 @@ class RenderView
 				let transparent = IsTransparent(renderer, item.material);
 				// The viewmodel: drawn in a pass of its own after the world (no culling: it is a few things at the eye).
 				let viewmodel = DrawsAsViewmodel(camera, renderer.GameObject);
-				let drawn = !shadowOnly && (viewmodel || (frustum.Intersects(bounds) && (!mOcclusionOn || mOcclusion.IsVisible(bounds))));
+				let drawn = !shadowOnly && (viewmodel || (frustum.Intersects(bounds) && (!mOcclusionOn || (mGpuOccludes && mesh.GpuEntry != null && renderer.windSway <= 0) || mOcclusion.IsVisible(bounds))));
 				let shadowAllowed = !viewmodel || camera.viewmodelCastsShadows;
 				let shadow = !transparent && castShadows && renderer.castShadows && shadowAllowed && (item.center - camera.position).Length - item.radius < shadowRange;
 				// Out of view and casting no shadow here: nothing more to work out.

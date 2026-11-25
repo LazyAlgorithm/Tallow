@@ -2,14 +2,18 @@
 //   mode 0: clears the counters.
 //   mode 1: turns the number of work nodes into the size of the cluster culling's dispatch.
 //   mode 2: gives each bin its place in the list of clusters to draw, and writes each bin's draw command.
+//   mode 3: the second occlusion phase's dispatch sizes, from how many instances and clusters the first phase deferred.
 #include "bgfx_compute.sh"
 #include "clod.sh"
 
 BUFFER_RW(b_control, uint, 0);
 BUFFER_RW(b_indirect, uvec4, 1);
 BUFFER_RW(b_visible, uint, 2);
+BUFFER_RW(b_defer, uint, 3);       // this pass's own
+BUFFER_RO(b_deferFirst, uint, 4);  // the first phase's, for mode 3
 
 uniform vec4 u_clodMode;      // x: the step, y: how many bins, z: room for clusters to draw, w: room for work nodes
+uniform vec4 u_clodOcc;       // y: room for deferred instances, z: room for deferred clusters
 
 NUM_THREADS(1, 1, 1)
 void main()
@@ -22,6 +26,16 @@ void main()
 		{
 			b_control[i] = 0u;
 		}
+		b_defer[CLOD_DEFER_INSTANCES] = 0u;
+		b_defer[CLOD_DEFER_CLUSTERS] = 0u;
+		b_defer[CLOD_DEFER_CLUSTERS_LOST] = 0u;
+	}
+	else if (mode == 3u)
+	{
+		uint instances = min(b_deferFirst[CLOD_DEFER_INSTANCES], uint(u_clodOcc.y));
+		uint clusters = min(b_deferFirst[CLOD_DEFER_CLUSTERS], uint(u_clodOcc.z));
+		dispatchIndirect(b_indirect, CLOD_INDIRECT_INSTANCES, (instances + 63u) / 64u, 1u, 1u);
+		dispatchIndirect(b_indirect, CLOD_INDIRECT_RETEST, (clusters + 63u) / 64u, 1u, 1u);
 	}
 	else if (mode == 1u)
 	{

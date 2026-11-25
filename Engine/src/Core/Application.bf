@@ -19,6 +19,9 @@ namespace Tallow;
 ///                                                      and exit 0 or 1 (builtin:sphere_smooth, sphere:512x300, a model)
 ///   --gpu-driven on|off                                draw big meshes from clusters picked on the graphics card (or
 ///                                                      not), whatever the quality setting says
+///   --gpu-occlusion on|off                             leave out what is hidden behind other things in the GPU-driven
+///                                                      path (on by default, with the camera's occlusion culling)
+///   --gpu-no-local-shadows                             draw point and spot light shadows the usual way
 ///   --gpu-driven-min-triangles N                       the fewest triangles a mesh needs to be drawn that way (2000)
 ///   --gpu-driven-test [mesh]                           draw a crowd of a big mesh both ways, compare the pictures and
 ///                                                      the timings, and exit 0 or 1 (sphere:1000x700, a model)
@@ -193,6 +196,16 @@ class Application
 			else
 				Log.Warning(scope $"--gpu-driven takes on or off, not '{gpuDriven}'");
 		}
+		let gpuOcclusion = scope String();
+		if (GetArg("--gpu-occlusion", gpuOcclusion))
+		{
+			if (gpuOcclusion == "on" || gpuOcclusion == "off")
+				GpuDriven.Occlusion = gpuOcclusion == "on";
+			else
+				Log.Warning(scope $"--gpu-occlusion takes on or off, not '{gpuOcclusion}'");
+		}
+		if (HasArg("--gpu-no-local-shadows"))
+			GpuDriven.LocalShadows = false;
 		// Meshes with fewer triangles than this are drawn the usual way (default 2000): lower it to try small meshes.
 		let minTriangles = scope String();
 		if (GetArg("--gpu-driven-min-triangles", minTriangles) && int32.Parse(minTriangles) case .Ok(let triangles))

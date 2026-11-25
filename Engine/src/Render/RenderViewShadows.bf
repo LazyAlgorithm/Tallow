@@ -47,6 +47,7 @@ extension RenderView
 		bgfx.set_view_transform(view, &identity, &identity);
 		bgfx.touch(view);
 		let items = mShadowItems.Ptr;
+		var tileIndex = 0;
 		for (let tile in mLights.Tiles)
 		{
 			mShadowPassViewProj = tile.drawViewProj;
@@ -57,14 +58,21 @@ extension RenderView
 				if (tile.frustum.IntersectsSphere(items[i].center, items[i].radius))
 					mShadowVisible.Add(&items[i]);
 			}
-			// What the sun's cascades draw from clusters is still drawn whole here.
-			let local = mLocalShadowItems.Ptr;
-			for (int i < mLocalShadowItems.Count)
+			// What is drawn from clusters has its own culling for the tile; the tiles past the room for that draw it whole.
+			let onGpu = GpuCullTile(tileIndex, tile);
+			if (!onGpu)
 			{
-				if (tile.frustum.IntersectsSphere(local[i].center, local[i].radius))
-					mShadowVisible.Add(&local[i]);
+				let local = mLocalShadowItems.Ptr;
+				for (int i < mLocalShadowItems.Count)
+				{
+					if (tile.frustum.IntersectsSphere(local[i].center, local[i].radius))
+						mShadowVisible.Add(&local[i]);
+				}
 			}
 			SubmitShadowCasters(view);
+			if (onGpu)
+				GpuDrawTile(view, tileIndex);
+			tileIndex++;
 		}
 		mShadowScissor = default;
 	}

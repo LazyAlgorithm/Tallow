@@ -21,6 +21,7 @@ static class ProfilerModules
 	static ProfilerCounter sGpuInstances = .("GPU-Driven Instances", .Rendering);
 	static ProfilerCounter sGpuClusters = .("GPU-Driven Clusters Drawn", .Rendering);
 	static ProfilerCounter sGpuTriangles = .("GPU-Driven Triangles", .Rendering);
+	static ProfilerCounter sGpuDeferred = .("GPU-Driven Clusters Put Off By Occlusion", .Rendering);
 	static ProfilerCounter sGpuLost = .("GPU-Driven Clusters Over Budget", .Rendering);
 	static ProfilerCounter sInstancesDropped = .("Instances Dropped (no instance memory)", .Rendering);
 	static ProfilerCounter sGpuDraws = .("GPU Draws (all passes)", .Rendering);
@@ -144,6 +145,7 @@ static class ProfilerModules
 		GpuDriven.FrameBins = GpuDriven.FrameInstances = 0;
 		sGpuClusters.Set((int32)GpuDriven.Clusters);
 		sGpuTriangles.Set((int32)GpuDriven.Triangles);
+		sGpuDeferred.Set((int32)GpuDriven.DeferredClusters);
 		sGpuLost.Set((int32)(GpuDriven.ClustersLost + GpuDriven.NodesLost));
 		sInstancesDropped.Set((int32)RenderView.InstancesDropped);
 

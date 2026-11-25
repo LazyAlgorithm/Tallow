@@ -14,6 +14,11 @@ namespace Tallow;
 ///   --gpu-driven-test [mesh] [--quality ultra]  (the quality's antialiasing and screen effects take part, TAA included)
 ///   --gpu-driven-instances N                    how many copies (1024)
 ///   --gpu-driven-save prefix                    keep the pictures as prefix-old.png, prefix-new.png, prefix-empty.png
+///
+/// After that comparison, three more checks run on the GPU-driven path: an occlusion scene (a wall of a big mesh in front
+/// of the crowd; clusters and the card's time with occlusion on and off, and a camera path, with a cut in it, drawn both ways
+/// and compared frame by frame: whatever occlusion leaves out must not show), and a point light's shadow tiles drawn from
+/// clusters against the usual way.
 class GpuDrivenTestApp : Application
 {
 	enum Stage
@@ -26,6 +31,17 @@ class GpuDrivenTestApp : Application
 		NewTime,
 		NewShot,
 		EmptyShot,
+		OccSetup,
+		OccWarm,
+		OccOn,
+		OccOffWarm,
+		OccOff,
+		PathOn,
+		PathOff,
+		PathRead,
+		TileSetup,
+		TileOnShot,
+		TileOffShot,
 		Done
 	}
 
@@ -62,7 +78,22 @@ class GpuDrivenTestApp : Application
 		public int32 draws, computes;
 		public int64 instances, triangles;
 	}
-	Timing mOldTiming, mNewTiming;
+	Timing mOldTiming, mNewTiming, mOccOnTiming, mOccOffTiming;
+	/// What the culling counted in the occlusion scene, with occlusion on and off.
+	int64 mOccOnClusters, mOccOnTriangles, mOccOnFirst, mOccOnSecond, mOccOnDeferred, mOccOnDeferredInstances;
+	int64 mOccOffClusters, mOccOffTriangles;
+	const int PathFrames = 28;
+	bgfx.TextureHandle[PathFrames * 2] mRing;
+	List<uint8[]> mRingPixels = new .() ~ DeleteContainerAndItems!(_);
+	uint32 mRingReady;
+	bool mRingAsked;
+	int32[PathFrames] mPathDifferent;
+	int32[PathFrames] mPathCovered;
+	uint8[] mTileOn ~ delete _;
+	uint8[] mTileOff ~ delete _;
+	GameObject mWall;
+	GameObject mCameraObject;
+	GameObject mPointLight;
 	Stopwatch mFrameWatch = new .() ~ delete _;
 	double mCpuSum, mRenderSum, mGpuSum;
 	int mGpuSamples;
@@ -114,6 +145,7 @@ class GpuDrivenTestApp : Application
 		mScene = new Scene();
 		mScene.Environment.fogDensity = 0;
 		let cameraObject = mScene.CreateGameObject("Camera");
+		mCameraObject = cameraObject;
 		mCamera = cameraObject.AddComponent<Camera>();
 		mCamera.fieldOfView = 50;
 		mCamera.farClip = 400;
@@ -188,11 +220,13 @@ class GpuDrivenTestApp : Application
 	protected override void OnRender()
 	{
 		let camera = mCamera;
+		PosePath();
 		mView.Resize(Size, Size);
 		mFrameWatch.Restart();
 		mView.Render(mScene, camera.GetCameraData(1.0f));
 		mFrameWatch.Stop();
 		let renderMs = mFrameWatch.Elapsed.TotalMilliseconds;
+		CapturePath();
 		mStageFrames++;
 
 		switch (mStage)
@@ -252,10 +286,219 @@ class GpuDrivenTestApp : Application
 			}
 		case .EmptyShot:
 			if (Shoot(ref mEmpty))
+				Next(.OccSetup);
+		case .OccSetup:
+			SetUpOcclusion();
+			Next(.OccWarm);
+		case .OccWarm:
+			if (mStageFrames >= WarmFrames + 10)
+				Next(.OccOn);
+		case .OccOn:
+			Sample(renderMs);
+			if (mStageFrames >= TimedFrames)
+			{
+				mOccOnTiming = Average();
+				mOccOnClusters = GpuDriven.Clusters;
+				mOccOnTriangles = GpuDriven.Triangles;
+				mOccOnFirst = GpuDriven.ClustersFirst;
+				mOccOnSecond = GpuDriven.ClustersSecond;
+				mOccOnDeferred = GpuDriven.DeferredClusters;
+				mOccOnDeferredInstances = GpuDriven.DeferredInstances;
+				GpuDriven.Occlusion = false;
+				Next(.OccOffWarm);
+			}
+		case .OccOffWarm:
+			if (mStageFrames >= WarmFrames + 10)
+				Next(.OccOff);
+		case .OccOff:
+			Sample(renderMs);
+			if (mStageFrames >= TimedFrames)
+			{
+				mOccOffTiming = Average();
+				mOccOffClusters = GpuDriven.Clusters;
+				mOccOffTriangles = GpuDriven.Triangles;
+				GpuDriven.Occlusion = true;
+				Next(.PathOn);
+			}
+		case .PathOn:
+			if (mStageFrames >= PathWarm + PathFrames)
+			{
+				GpuDriven.Occlusion = false;
+				Next(.PathOff);
+			}
+		case .PathOff:
+			if (mStageFrames >= PathWarm + PathFrames)
+				Next(.PathRead);
+		case .PathRead:
+			if (ReadPath())
+				Next(.TileSetup);
+		case .TileSetup:
+			SetUpTiles();
+			Next(.TileOnShot);
+		case .TileOnShot:
+			if (mStageFrames == 1)
+			{
+				GpuDriven.LocalShadows = true;
+				GpuDriven.Occlusion = true;
+			}
+			if (mStageFrames > WarmFrames && Shoot(ref mTileOn))
+				Next(.TileOffShot);
+		case .TileOffShot:
+			if (mStageFrames == 1)
+				GpuDriven.LocalShadows = false;
+			if (mStageFrames > WarmFrames && Shoot(ref mTileOff))
 				Next(.Done);
 		case .Done:
 			Finish();
 		}
+	}
+
+	// ---- the occlusion scene, the camera path and the shadow tiles
+
+	/// Frames the path stays at its first pose before it starts (so that the culling has a picture of last frame to start from).
+	const int PathWarm = 6;
+	Mesh mWallMesh;
+
+	/// Where the camera is at step `k` of the path: across the crowd behind the wall, with a cut half way (the camera jumps
+	/// further than the culling trusts last frame's picture).
+	void PathPose(int k)
+	{
+		let t = (float)k / (PathFrames - 1);
+		var x = -12.0f + 24.0f * t;
+		var z = -18.0f;
+		let y = 6.5f + 1.5f * Math.Sin(t * 6.2831853f);
+		if (k >= PathFrames / 2)
+		{
+			x += 30.0f;
+			z -= 6.0f;
+		}
+		mCameraObject.Transform.Position = .(x, y, z);
+		mCameraObject.Transform.Rotation = Quaternion.Euler(9, Math.Sin(t * 6.2831853f) * 8.0f, 0);
+	}
+
+	/// Puts the camera where this stage wants it, before the frame is drawn.
+	void PosePath()
+	{
+		switch (mStage)
+		{
+		case .OccSetup, .OccWarm, .OccOn, .OccOffWarm, .OccOff, .TileSetup, .TileOnShot, .TileOffShot:
+			PathPose(0);
+		case .PathOn, .PathOff:
+			PathPose(Math.Max(mStageFrames - PathWarm, 0));
+		default:
+		}
+	}
+
+	/// After the frame is drawn: keeps its picture when it is a step of the path.
+	void CapturePath()
+	{
+		if (mStage != .PathOn && mStage != .PathOff)
+			return;
+		let k = mStageFrames - PathWarm;
+		if (k < 0 || k >= PathFrames)
+			return;
+		let index = (mStage == .PathOn ? 0 : PathFrames) + k;
+		if (!mRing[index].Valid)
+			mRing[index] = bgfx.create_texture_2d(Size, Size, false, 1, .RGBA8, (uint64)bgfx.TextureFlags.BlitDst | (uint64)bgfx.TextureFlags.ReadBack, null, 0);
+		bgfx.TextureRegion region = default;
+		region.handle = mRing[index];
+		region.width = Size;
+		region.height = Size;
+		region.depth = 1;
+		bgfx.TextureRegion from = default;
+		from.handle.idx = mView.OutputTexture;
+		from.width = Size;
+		from.height = Size;
+		from.depth = 1;
+		bgfx.blit(120, &region, &from);
+	}
+
+	void SetUpOcclusion()
+	{
+		for (let ball in mCrowd)
+			ball.SetActive(true);
+		// A wall of a big mesh (the GPU-driven path draws it, so it hides the rows behind it).
+		mWallMesh = Assets.AdoptMesh("gpu-driven-test-wall", Primitives.CreateSphere(120, 70));
+		mWall = mScene.CreateGameObject("Wall");
+		if (HasArg("--no-wall"))
+			mWall.SetActive(false);
+		mWall.Transform.Position = .(0, 2.0f, -3.0f);
+		mWall.Transform.LocalScale = .(60, 6.0f, 1.5f);
+		let renderer = mWall.AddComponent<MeshRenderer>();
+		renderer.mesh.Set("gpu-driven-test-wall");
+		renderer.color = .(0.6f, 0.58f, 0.55f);
+		mCamera.occlusionCulling = true;
+		GpuDriven.Override = 1;
+		GpuDriven.Occlusion = true;
+	}
+
+	void SetUpTiles()
+	{
+		mPointLight = mScene.CreateGameObject("Lamp");
+		mPointLight.Transform.Position = .(0, 5.0f, 9.0f);
+		let light = mPointLight.AddComponent<Light>();
+		light.type = .Point;
+		light.range = 45;
+		light.intensity = 40;
+		light.color = .(1.0f, 0.8f, 0.6f);
+		light.castShadows = true;
+		GpuDriven.Override = 1;
+	}
+
+	/// Asks for every picture of the path, then compares each step drawn with occlusion to the same step drawn without.
+	bool ReadPath()
+	{
+		if (!mRingAsked)
+		{
+			for (int i < PathFrames * 2)
+			{
+				if (!mRing[i].Valid)
+				{
+					Console.WriteLine("gpu-driven-test: FAIL: a step of the path was not captured");
+					Result = 1;
+					mRingAsked = true;
+					return true;
+				}
+				mRingPixels.Add(new uint8[Size * Size * 4]);
+				bgfx.TextureRegion region = default;
+				region.handle = mRing[i];
+				region.width = Size;
+				region.height = Size;
+				region.depth = 1;
+				mRingReady = Math.Max(mRingReady, bgfx.read_texture(&region, mRingPixels[i].CArray()));
+			}
+			mRingAsked = true;
+			return false;
+		}
+		if (mRingPixels.Count == 0)
+			return true;
+		if (mStageFrames < 6 || bgfx.get_stats().gpuFrameNum < mRingReady)
+			return false;
+		for (int k < PathFrames)
+		{
+			var different = 0;
+			var covered = 0;
+			let on = mRingPixels[k];
+			let off = mRingPixels[PathFrames + k];
+			for (int p < Size * Size)
+			{
+				if (Differs(on, off, p * 4, 10))
+					different++;
+				if (off[p * 4] != off[0] || off[p * 4 + 1] != off[1] || off[p * 4 + 2] != off[2])
+					covered++;
+			}
+			mPathDifferent[k] = (int32)different;
+			mPathCovered[k] = (int32)covered;
+		}
+		if (!mSavePrefix.IsEmpty)
+		{
+			for (let k in int[?](0, 9, 13, 14, PathFrames - 1))
+			{
+				Save(mRingPixels[k], scope $"{mSavePrefix}-path{k}-occluded.png");
+				Save(mRingPixels[PathFrames + k], scope $"{mSavePrefix}-path{k}-plain.png");
+			}
+		}
+		return true;
 	}
 
 	void Next(Stage stage)
@@ -347,7 +590,7 @@ class GpuDrivenTestApp : Application
 	{
 		Close();
 		mStage = .Done;
-		if (mOld == null || mNew == null || mEmpty == null)
+		if (mOld == null || mNew == null || mEmpty == null || mTileOn == null || mTileOff == null)
 		{
 			Result = 1;
 			return;
@@ -422,6 +665,55 @@ class GpuDrivenTestApp : Application
 		let slack = mMeshArg.StartsWith("sphere:") ? 1.0 : 3.0;
 		Check(meanDifference < 12.0 * slack, scope $"the pictures differ by {meanDifference:0.00} / 255 on average");
 		Check(bigDifferences * 10 <= both * slack, scope $"{bigDifferences} pixels differ a lot");
+
+		// The occlusion scene.
+		Console.WriteLine(scope $"gpu-driven-test: occlusion scene (a wall in front of the crowd), per frame           occlusion on     off");
+		Console.WriteLine(scope $"  clusters drawn in the scene                {mOccOnClusters,10}     {mOccOffClusters,10}   (first phase {mOccOnFirst}, second {mOccOnSecond}; put off by the first: {mOccOnDeferred} clusters of {mOccOnDeferredInstances} instances)");
+		Console.WriteLine(scope $"  triangles drawn in the scene               {mOccOnTriangles,10}     {mOccOffTriangles,10}");
+		Console.WriteLine(scope $"  GPU (ms)                                   {mOccOnTiming.gpuMs,10:0.00}     {mOccOffTiming.gpuMs,10:0.00}");
+		Console.WriteLine(scope $"  CPU, view.Render call (ms)                 {mOccOnTiming.renderMs,10:0.00}     {mOccOffTiming.renderMs,10:0.00}");
+		Console.WriteLine(scope $"  compute dispatches / draw calls            {mOccOnTiming.computes,5}/{mOccOnTiming.draws,-5}     {mOccOffTiming.computes,5}/{mOccOffTiming.draws,-5}");
+		Check(mOccOffClusters > 0 && mOccOnClusters * 10 < mOccOffClusters * 9, "occlusion left out fewer than a tenth of the clusters");
+		Check(mOccOnTiming.computes > mOccOffTiming.computes, "no extra compute dispatches with occlusion on: it was not used");
+		var worst = 0;
+		var total = 0;
+		var worstAt = 0;
+		for (int k < PathFrames)
+		{
+			total += mPathDifferent[k];
+			if (mPathDifferent[k] > worst)
+			{
+				worst = mPathDifferent[k];
+				worstAt = k;
+			}
+		}
+		Console.WriteLine(scope $"gpu-driven-test: camera path of {PathFrames} frames (a cut at {PathFrames / 2}), drawn with occlusion and without, compared pixel by pixel: {total} pixels differ in all, at most {worst} in a frame (frame {worstAt}), covered pixels in the middle frame {mPathCovered[PathFrames / 2]}");
+		var line = scope String("  differing pixels per frame:");
+		for (int k < PathFrames)
+			line.AppendF(" {}", mPathDifferent[k]);
+		Console.WriteLine(line);
+		Check(worst * 2000 <= Size * Size, scope $"popping: {worst} pixels differ in one frame between the occluded and the plain picture");
+
+		// The shadow tiles of a point light.
+		if (!mSavePrefix.IsEmpty)
+		{
+			Save(mTileOn, scope $"{mSavePrefix}-tiles-gpu.png");
+			Save(mTileOff, scope $"{mSavePrefix}-tiles-usual.png");
+		}
+		var tileBig = 0;
+		var tileSum = 0.0;
+		for (int p < Size * Size)
+		{
+			var sum = 0;
+			for (int c < 3)
+				sum += Math.Abs((int)mTileOn[p * 4 + c] - (int)mTileOff[p * 4 + c]);
+			tileSum += sum / 3.0;
+			if (sum / 3 > 40)
+				tileBig++;
+		}
+		Console.WriteLine(scope $"gpu-driven-test: point light shadow tiles from clusters against the usual way: mean difference {tileSum / (Size * Size):0.00} / 255, {tileBig} pixels over 40");
+		Check(tileBig * 50 <= Size * Size, scope $"the point light's shadows differ in {tileBig} pixels");
+		Check(tileSum / (Size * Size) < 6.0, "the point light's pictures differ on average");
 		Console.WriteLine(failures == 0 ? "gpu-driven-test: PASS" : "gpu-driven-test: FAILED");
 		Result = failures == 0 ? 0 : 1;
 	}
