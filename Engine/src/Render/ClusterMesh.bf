@@ -116,6 +116,8 @@ class ClusterMesh
 	public uint32 SourceVertexCount, SourceTriangleCount;
 	/// A hash of the mesh and the settings it was built with (what a cache is keyed on).
 	public uint64 ContentHash;
+	/// Whether BuildCached read it from its .tclod file.
+	public bool FromCache;
 
 	/// How many LOD levels there are.
 	public int LevelCount => Levels == null ? 0 : Levels.Count;
@@ -186,7 +188,10 @@ class ClusterMesh
 		if (!cachePath.IsEmpty)
 		{
 			if (Load(cachePath, hash) case .Ok(let loaded))
+			{
+				loaded.FromCache = true;
 				return loaded;
+			}
 		}
 		let built = Build(mesh, config);
 		if (built != null && !cachePath.IsEmpty)

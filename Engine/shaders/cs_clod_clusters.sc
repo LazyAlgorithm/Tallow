@@ -18,11 +18,13 @@ BUFFER_RW(b_visible, uint, 4);
 BUFFER_RW(b_defer, uint, 5);
 #define CLOD_HZB_REGISTER 6
 #include "clod_hzb.sh"
+// Virtual geometry feedback (see include/clod.sh): a bitmap of the groups drawn and one of the groups wanted but missing.
+BUFFER_RW(b_feedback, uint, 7);
 
 uniform vec4 u_clodPlanes[6]; // the planes round what is in view, facing in
 uniform vec4 u_clodCam;       // xyz: the eye, w: 1 when the view has no perspective
 uniform vec4 u_clodLod;       // x: pixels per unit of error at distance 1, y: the nearest distance, z: the error that is small enough (pixels), w: 1 to cull clusters turned away
-uniform vec4 u_clodCounts;    // x: the step (0 count, 1 write), y: 1 to take the clusters from the deferred list, z: room for work nodes
+uniform vec4 u_clodCounts;    // x: the step (0 count, 1 write), y: 1 to take the clusters from the deferred list, z: room for work nodes, w: words in one feedback bitmap
 uniform vec4 u_clodOcc;       // x: 0 no occlusion, 1 first phase, 2 second phase; y: room for deferred instances, z: room for deferred clusters
 
 float lf(uint index)
@@ -103,6 +105,12 @@ void main()
 	}
 	else
 	{
+		// Its group's geometry is not in the pool (virtual geometry): a coarser cluster stands in for it.
+		if (b_pool[b_pool[cluster + 14u] + CLOD_GROUP_RESIDENT] == 0u)
+		{
+			return;
+		}
+
 		// In view.
 		for (int p = 0; p < 6; p++)
 		{
@@ -138,7 +146,18 @@ void main()
 			}
 			if (projected(selfError * scale, rc, rr) > u_clodLod.z)
 			{
-				return;
+				// Too coarse for the screen: a finer cluster takes its place, unless the finer group has no geometry in the
+				// pool yet, in which case this one is drawn and the finer group is asked for.
+				if (refined == 0xFFFFFFFFu || b_pool[refined + CLOD_GROUP_RESIDENT] != 0u)
+				{
+					return;
+				}
+				if (u_clodCounts.x > 0.5)
+				{
+					uint wanted = b_pool[refined + CLOD_GROUP_ID];
+					uint old;
+					atomicFetchAndOr(b_feedback[uint(u_clodCounts.w) + (wanted >> 5u)], 1u << (wanted & 31u), old);
+				}
 			}
 		}
 
@@ -211,6 +230,8 @@ void main()
 			b_visible[entry + 1u] = cluster;
 			uint old;
 			atomicFetchAndAdd(b_control[CLOD_CTRL_TRIANGLES], b_pool[cluster + 3u], old);
+			uint used = b_pool[b_pool[cluster + 14u] + CLOD_GROUP_ID];
+			atomicFetchAndOr(b_feedback[used >> 5u], 1u << (used & 31u), old);
 		}
 	}
 }

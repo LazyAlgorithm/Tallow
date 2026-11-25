@@ -258,9 +258,10 @@ class GpuDrivenView
 		bgfx.set_compute_dynamic_vertex_buffer(4, pass.visible, .ReadWrite, 0, uint32.MaxValue);
 		bgfx.set_compute_dynamic_vertex_buffer(5, first.deferred, .ReadWrite, 0, uint32.MaxValue);
 		bgfx.set_compute_dynamic_vertex_buffer(6, HzbOf(p), .Read, 0, uint32.MaxValue);
+		bgfx.set_compute_dynamic_vertex_buffer(7, GpuDriven.Feedback, .ReadWrite, 0, uint32.MaxValue);
 		Vector4 camera = .(p.eye, p.ortho ? 1 : 0);
 		Vector4 lod = .(p.pixelScale, p.near, p.threshold, p.cone ? 1 : 0);
-		Vector4 counts = .(step, retest ? 1 : 0, pass.nodeCapacity, 0);
+		Vector4 counts = .(step, retest ? 1 : 0, pass.nodeCapacity, (float)GpuDriven.FeedbackBitmapWords);
 		Vector4[6] planes = p.planes;
 		bgfx.set_uniform(GpuDriven.uPlanes, &planes, 6);
 		bgfx.set_uniform(GpuDriven.uCam, &camera, 1);

@@ -215,6 +215,7 @@ class GpuDrivenTestApp : Application
 			mVsyncOff = true;
 		}
 		mScene.Update();
+		StreamingCore.Update((int)Time.FrameCount);
 	}
 
 	protected override void OnRender()

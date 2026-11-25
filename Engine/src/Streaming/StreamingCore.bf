@@ -86,6 +86,7 @@ static class StreamingCore
 	static uint64 sWindowNs;
 
 	public static int Frame => sFrame;
+	public static bool Started => sStarted;
 	public static StreamPool Pool(StreamKind kind) => sPools[(int)kind];
 
 	/// Requests waiting for an IO thread, plus those being read.

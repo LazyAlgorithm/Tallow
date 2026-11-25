@@ -36,7 +36,7 @@ static class GpuDriven
 	/// 32-bit words in an instance's record, a cluster's and a group's (see include/clod.sh).
 	public const int InstanceWords = 44;
 	public const int ClusterWords = 16;
-	public const int GroupWords = 4;
+	public const int GroupWords = 8;
 	public const int VertexWords = 11;
 	/// Triangles in a draw's index range: what a cluster has at most, times three corners.
 	public const int ClusterIndices = 384;
@@ -58,6 +58,9 @@ static class GpuDriven
 	/// Whether what is hidden behind other things is left out (the camera's occlusion culling setting must be on too);
 	/// `--gpu-occlusion on|off`.
 	public static bool Occlusion = true;
+	/// Whether big meshes' geometry streams in pages (virtual geometry); off: every page is loaded when the mesh is
+	/// (`--no-geometry-streaming`).
+	public static bool StreamGeometry = true;
 	/// Whether the point and spot lights' shadow tiles are drawn from clusters picked for each tile (off: the usual way).
 	public static bool LocalShadows = true;
 
@@ -207,14 +210,172 @@ static class GpuDriven
 
 	// ---- the meshes' clusters
 
-	/// A mesh's place in the pool.
-	public class MeshEntry
+	/// A mesh's place in the pool: its table of clusters and groups (resident for good), and its pages of vertices and triangles
+	/// (ClusterPages), which are in the pool while they are resident.
+	public class MeshEntry : IStreamConsumer
 	{
 		/// The first cluster's position in the pool (in words) and how many clusters the mesh has.
 		public uint32 clusterBase, clusterCount;
 		public int32 triangles;
-		/// Where the mesh's whole stretch of the pool starts and how long it is (in words), for giving it back.
+		/// Where the mesh's table of clusters and groups starts and how long it is (in words), for giving it back.
 		public int32 poolStart, poolWords;
+		/// The first group's position in the pool and the first of its feedback numbers (a group's number is firstId + its index).
+		public uint32 groupBase, firstId;
+		public int32 groupCount;
+		public ClusterPages pages ~ delete _;
+		/// Null when every page is loaded whole.
+		public StreamResource resource;
+		/// Pages below this are loaded whole and never evicted (the root page, or all of them for a small mesh).
+		public int32 firstStreamed;
+		/// For each page: where its data is in the pool (-1: not there), how long it is, and whether its groups are drawable
+		/// (data there and every parent page's groups drawable too).
+		public int32[] pageStart ~ delete _;
+		public int32[] pageWords ~ delete _;
+		public bool[] pageLive ~ delete _;
+		public int[] pageTouched ~ delete _;
+		public int32 residentPages;
+
+		public bool IsResident(int page) => pageStart[page] >= 0;
+
+		/// The page's data arrived (the core's, on the main thread): puts it in the pool and makes what can be drawn drawable.
+		public bool Upload(StreamResource resource, int page, Span<uint8> data)
+		{
+			return UploadPage(page, data);
+		}
+
+		public bool UploadPage(int page, Span<uint8> data)
+		{
+			if (pageStart[page] >= 0)
+				return true;
+			if (!ClusterPages.ReadHeader(data, let groupCountInPage, let clusterCountInPage, let vertexCount, let refCount, let triangleBytes))
+				return false;
+			let head = (uint32*)data.Ptr;
+			let vertexWords = (int)vertexCount * VertexWords;
+			let refWords = (int)refCount;
+			let triWords = ((int)triangleBytes + 3) / 4;
+			let total = Pad4(vertexWords) + Pad4(refWords) + Pad4(triWords);
+			let start = GpuDriven.Allocate(total);
+			if (start < 0)
+				return false;
+			let words = sWords.Ptr + start;
+			let descriptors = head + ClusterPages.HeaderWords;
+			let groupList = descriptors + clusterCountInPage * 4;
+			let vertexSource = groupList + (groupCountInPage + 3) / 4 * 4;
+			let refSource = vertexSource + Pad4(vertexWords);
+			let triSource = (uint8*)(refSource + Pad4(refWords));
+			let vertexBase = (uint32)start;
+			let refsBase = (uint32)(start + Pad4(vertexWords));
+			let trianglesBase = (uint32)(start + Pad4(vertexWords) + Pad4(refWords));
+			Internal.MemCpy(words, vertexSource, vertexWords * 4);
+			for (int i < refWords)
+				words[Pad4(vertexWords) + i] = vertexBase + refSource[i] * VertexWords;
+			words[Pad4(vertexWords) + Pad4(refWords) + triWords - 1] = 0;
+			Internal.MemCpy(words + Pad4(vertexWords) + Pad4(refWords), triSource, (int)triangleBytes);
+			var low = int.MaxValue;
+			var high = 0;
+			for (int c < (int)clusterCountInPage)
+			{
+				let index = (int)descriptors[c * 4];
+				let record = sWords.Ptr + clusterBase + index * ClusterWords;
+				record[0] = refsBase + descriptors[c * 4 + 1];
+				record[2] = trianglesBase * 4 + descriptors[c * 4 + 2];
+				low = Math.Min(low, (int)clusterBase + index * ClusterWords);
+				high = Math.Max(high, (int)clusterBase + (index + 1) * ClusterWords);
+			}
+			pageStart[page] = (int32)start;
+			pageWords[page] = (int32)total;
+			residentPages++;
+			GpuDriven.MarkDirty(start, start + total);
+			if (high > low)
+				GpuDriven.MarkDirty(low, high);
+			Publish();
+			return true;
+		}
+
+		/// Makes the groups of every page drawable whose data and parents' data are in the pool. Parent pages come first
+		/// in page order, so one pass does it.
+		public void Publish()
+		{
+			for (int page < pages.PageCount)
+			{
+				if (pageLive[page] || pageStart[page] < 0)
+					continue;
+				var ready = true;
+				for (let parent in pages.ParentPages[page])
+				{
+					if (!pageLive[parent])
+					{
+						ready = false;
+						break;
+					}
+				}
+				if (!ready)
+					continue;
+				pageLive[page] = true;
+				SetGroups(page, 1);
+			}
+		}
+
+		void SetGroups(int page, uint32 value)
+		{
+			var low = int.MaxValue;
+			var high = 0;
+			for (let group in pages.GroupsOfPage[page])
+			{
+				let at = (int)groupBase + group * GroupWords;
+				sWords[at + 4] = value;
+				low = Math.Min(low, at);
+				high = Math.Max(high, at + GroupWords);
+			}
+			if (high > low)
+				GpuDriven.MarkDirty(low, high);
+		}
+
+		/// Takes a page out of the pool, and with it every page that needs it (finer pages the coarser clusters stand in for).
+		public void EvictPage(int page, StreamPool pool)
+		{
+			if (page < firstStreamed || pageStart[page] < 0)
+				return;
+			for (let child in pages.ChildPages[page])
+			{
+				if (pageStart[child] >= 0)
+				{
+					pool.Remove(resource.Id, child, StreamingCore.Frame);
+					EvictPage(child, pool);
+				}
+			}
+			if (pageLive[page])
+			{
+				pageLive[page] = false;
+				SetGroups(page, 0);
+			}
+			GpuDriven.Free(pageStart[page], pageWords[page]);
+			pageStart[page] = -1;
+			residentPages--;
+		}
+
+		/// Gives everything back (the mesh is gone).
+		public void Release()
+		{
+			if (resource != null)
+			{
+				GpuDriven.sByResource.Remove(resource.Id);
+				if (StreamingCore.Started)
+					StreamingCore.Unregister(resource, pages.PageCount);
+				GpuDriven.sStreamed--;
+				delete resource.File;
+				DeleteAndNullify!(resource);
+			}
+			for (int page < pages.PageCount)
+			{
+				if (pageStart[page] >= 0)
+					GpuDriven.Free(pageStart[page], pageWords[page]);
+				pageStart[page] = -1;
+			}
+			GpuDriven.Free(poolStart, poolWords);
+			GpuDriven.ReleaseIds(firstId, groupCount);
+			poolWords = 0;
+		}
 	}
 
 	class BuildJob
@@ -223,6 +384,11 @@ static class GpuDriven
 		public Mesh copy ~ delete _;
 		public String cachePath = new .() ~ delete _;
 		public ClusterMesh result ~ delete _;
+		/// The pages: their layout, the data of the pages that load whole, and the file the rest are read from.
+		public ClusterPages pages;
+		public List<(int page, List<uint8> data)> loaded = new .() ~ { for (let l in _) delete l.data; delete _; };
+		public String pageFile = new .() ~ delete _;
+		public bool whole;
 	}
 
 	static Monitor sLock = new .() ~ delete _;
@@ -248,6 +414,7 @@ static class GpuDriven
 		if (mesh.Indices.Count / 3 < MinTriangles || mesh.Vertices.Count == 0 || mesh.VertexSource != null || mesh.IsDynamic)
 			return null;
 		let job = new BuildJob();
+		job.whole = !StreamGeometry || !StreamingCore.Started;
 		job.copy = new Mesh();
 		job.copy.Vertices.AddRange(mesh.Vertices);
 		job.copy.Indices.AddRange(mesh.Indices);
@@ -290,9 +457,43 @@ static class GpuDriven
 			mesh.GpuJob = 0;
 		}
 		if (mesh.GpuEntry != null)
-			Free(mesh.GpuEntry.poolStart, mesh.GpuEntry.poolWords);
+			mesh.GpuEntry.Release();
 		DeleteAndNullify!(mesh.GpuEntry);
 		mesh.GpuFailed = false;
+	}
+
+	/// Cuts a built hierarchy into pages: a small mesh keeps every page in memory to load whole, a big one writes its pages
+	/// to a file (beside the .tclod, or in the temporary folder) and keeps the root page.
+	static void CookPages(BuildJob job)
+	{
+		let clusters = job.result;
+		job.pages = ClusterPages.Layout(clusters);
+		let pages = job.pages;
+		if (pages.PageCount <= ClusterPages.WholeMeshPages || job.whole)
+		{
+			for (int page < pages.PageCount)
+				job.loaded.Add((page, pages.Build(clusters, job.copy, page)));
+			return;
+		}
+		if (!job.cachePath.IsEmpty)
+			job.pageFile.Set(job.cachePath..Append('p'));
+		else
+			job.pageFile.AppendF("{}tallow-clod/{:x}.tclodp", Path.GetTempPath(.. scope .()), clusters.ContentHash);
+		var cook = !clusters.FromCache || !File.Exists(job.pageFile);
+		if (!cook)
+		{
+			let existing = scope PageFile();
+			cook = existing.Open(job.pageFile) case .Err || existing.PageCount != pages.PageCount;
+		}
+		if (cook && pages.Cook(clusters, job.copy, job.pageFile) case .Err)
+		{
+			// No file to stream from: load whole.
+			job.pageFile.Clear();
+			for (int page < pages.PageCount)
+				job.loaded.Add((page, pages.Build(clusters, job.copy, page)));
+			return;
+		}
+		job.loaded.Add((0, pages.Build(clusters, job.copy, 0)));
 	}
 
 	static void BuildMain()
@@ -318,6 +519,8 @@ static class GpuDriven
 			}
 			let start = Internal.GetTickCountMicro();
 			job.result = ClusterMesh.BuildCached(job.copy, job.cachePath);
+			if (job.result != null)
+				CookPages(job);
 			delete job.copy;
 			job.copy = null;
 			using (sLock.Enter())
@@ -385,7 +588,7 @@ static class GpuDriven
 					mesh.GpuFailed = true;
 					continue;
 				}
-				let entry = AddToPool(mesh, job.result);
+				let entry = AddToPool(mesh, job);
 				if (entry == null)
 				{
 					mesh.GpuFailed = true;
@@ -395,22 +598,22 @@ static class GpuDriven
 				MeshesBuilt++;
 			}
 		}
+		PollFeedback();
 		if (sDirty.Count > 0 || sWords.Count > sPoolCapacity)
 			Send();
 	}
 
-	/// The words a mesh takes in the pool: its vertices, the cluster's vertex numbers, triangle bytes, clusters and groups,
-	/// each part padded to whole vec4s.
-	static int WordsFor(Mesh mesh, ClusterMesh clusters)
+	/// The words a mesh's table takes in the pool: its clusters and groups, each part padded to whole vec4s. (Its vertices and
+	/// triangles are in pages.)
+	static int WordsFor(ClusterMesh clusters)
 	{
-		return Pad4(mesh.Vertices.Count * VertexWords) + Pad4(clusters.Vertices.Count) + Pad4((clusters.TriangleBytes.Count + 3) / 4)
-			+ clusters.Clusters.Count * ClusterWords + clusters.Groups.Count * GroupWords;
+		return Pad4(clusters.Clusters.Count * ClusterWords) + Pad4(clusters.Groups.Count * GroupWords);
 	}
 
 	static int Pad4(int words) => (words + 3) / 4 * 4;
 
 	/// Finds `words` words of room: a stretch given back long enough ago, or the end of the pool. -1: no room.
-	static int Allocate(int words)
+	internal static int Allocate(int words)
 	{
 		let now = Time.FrameCount;
 		var best = -1;
@@ -442,7 +645,7 @@ static class GpuDriven
 	}
 
 	/// Gives a stretch back, joining it to the free ones next to it. A stretch at the end of the pool shortens the pool.
-	static void Free(int start, int words)
+	internal static void Free(int start, int words)
 	{
 		if (words <= 0)
 			return;
@@ -466,48 +669,43 @@ static class GpuDriven
 		sFree.Add(stretch);
 	}
 
-	/// Puts a mesh's vertices and clusters in the pool, with every offset in them turned into a position in the pool.
-	/// Null when there is no room.
-	static MeshEntry AddToPool(Mesh mesh, ClusterMesh clusters)
+	/// Puts a mesh's table of clusters and groups in the pool, with every offset in it turned into a position in the pool, and
+	/// its root pages (all of them for a small mesh); the other pages are asked for as the culling wants them. Null when there
+	/// is no room.
+	static MeshEntry AddToPool(Mesh mesh, BuildJob job)
 	{
-		let total = WordsFor(mesh, clusters);
+		let clusters = job.result;
+		let total = WordsFor(clusters);
 		let start = Allocate(total);
 		if (start < 0)
 			return null;
 		let words = sWords.Ptr + start;
-		var at = 0;
-		let vertexBase = (uint32)(start + at);
-		Internal.MemCpy(words + at, mesh.Vertices.Ptr, mesh.Vertices.Count * VertexWords * 4);
-		at += Pad4(mesh.Vertices.Count * VertexWords);
-		let refsBase = (uint32)(start + at);
-		for (let v in clusters.Vertices)
-			words[at++] = vertexBase + v * VertexWords;
-		at = Pad4(at);
-		let trianglesBase = (uint32)(start + at);
-		let triangleWords = (clusters.TriangleBytes.Count + 3) / 4;
-		words[at + triangleWords - 1] = 0;
-		Internal.MemCpy(words + at, clusters.TriangleBytes.CArray(), clusters.TriangleBytes.Count);
-		at += triangleWords;
-		at = Pad4(at);
-		let clusterBase = (uint32)(start + at);
+		let clusterBase = (uint32)start;
 		let groupBase = clusterBase + (uint32)(clusters.Clusters.Count * ClusterWords);
+		let firstId = AllocateIds(clusters.Groups.Count);
+		var at = 0;
 		for (var cluster in clusters.Clusters)
 		{
-			cluster.vertexOffset += refsBase;
-			cluster.triangleOffset += trianglesBase * 4;
+			cluster.vertexOffset = 0;
+			cluster.triangleOffset = 0;
 			cluster.groupIndex = (int32)(groupBase + (uint32)cluster.groupIndex * GroupWords);
 			cluster.refinedGroup = cluster.refinedGroup < 0 ? -1 : (int32)(groupBase + (uint32)cluster.refinedGroup * GroupWords);
 			Internal.MemCpy(words + at, &cluster, ClusterWords * 4);
 			at += ClusterWords;
 		}
+		var groupIndex = 0;
 		for (var group in clusters.Groups)
 		{
 			words[at++] = *(uint32*)&group.center.x;
 			words[at++] = *(uint32*)&group.center.y;
 			words[at++] = *(uint32*)&group.center.z;
 			words[at++] = *(uint32*)&group.radius;
+			words[at++] = 0;
+			words[at++] = firstId + (uint32)groupIndex;
+			words[at++] = 0;
+			words[at++] = 0;
+			groupIndex++;
 		}
-		Runtime.Assert(at == total);
 		MarkDirty(start, start + total);
 		let entry = new MeshEntry();
 		entry.clusterBase = clusterBase;
@@ -515,10 +713,244 @@ static class GpuDriven
 		entry.triangles = (int32)clusters.SourceTriangleCount;
 		entry.poolStart = (int32)start;
 		entry.poolWords = (int32)total;
+		entry.groupBase = groupBase;
+		entry.groupCount = (int32)clusters.Groups.Count;
+		entry.firstId = firstId;
+		entry.pages = job.pages;
+		job.pages = null;
+		let pageCount = entry.pages.PageCount;
+		entry.pageStart = new int32[pageCount];
+		entry.pageWords = new int32[pageCount];
+		entry.pageLive = new bool[pageCount];
+		entry.pageTouched = new int[pageCount];
+		for (int i < pageCount)
+			entry.pageStart[i] = -1;
+		for (let i < entry.groupCount)
+			sGroupOwner[(int)firstId + i] = entry;
+		entry.firstStreamed = (int32)pageCount;
+		if (!job.pageFile.IsEmpty)
+		{
+			let file = new PageFile();
+			if (file.Open(job.pageFile) case .Ok)
+			{
+				entry.firstStreamed = 1;
+				entry.resource = new StreamResource();
+				entry.resource.Id = (uint64)sNextResource++;
+				entry.resource.Kind = .GeoPage;
+				entry.resource.File = file;
+				entry.resource.Consumer = entry;
+				StreamingCore.Register(entry.resource);
+				sByResource[entry.resource.Id] = entry;
+				sStreamed++;
+				if (StreamingCore.Pool(.GeoPage).OnEvict == null)
+					StreamingCore.Pool(.GeoPage).OnEvict = new => OnEvicted;
+			}
+			else
+				delete file;
+		}
+		for (let loaded in job.loaded)
+		{
+			if (!entry.UploadPage(loaded.page, .(loaded.data.Ptr, loaded.data.Count)))
+				Log.Warning("GPU-driven drawing: a page of a mesh did not fit in the pool");
+		}
 		return entry;
 	}
 
-	static void MarkDirty(int firstWord, int endWord)
+	// ---- virtual geometry: group numbers, feedback and the streamed pages
+
+	static Dictionary<uint64, MeshEntry> sByResource = new .() ~ delete _;
+	static List<MeshEntry> sGroupOwner = new .() ~ delete _;
+	static List<(uint32 first, int count)> sFreeIds = new .() ~ delete _;
+	static int64 sNextResource = 1;
+	/// How many meshes stream their pages.
+	static int sStreamed;
+	public static int StreamedMeshes => sStreamed;
+	/// Geometry pages' counters: asked for by the culling in the last feedback, and the groups it wanted that were missing.
+	public static int64 PagesRequested, GroupsMissing, FeedbackReads;
+
+	static uint32 AllocateIds(int count)
+	{
+		for (int i < sFreeIds.Count)
+		{
+			let free = sFreeIds[i];
+			if (free.count >= count)
+			{
+				if (free.count == count)
+					sFreeIds.RemoveAt(i);
+				else
+					sFreeIds[i] = (free.first + (uint32)count, free.count - count);
+				return free.first;
+			}
+		}
+		let first = (uint32)sGroupOwner.Count;
+		for (int i < count)
+			sGroupOwner.Add(null);
+		return first;
+	}
+
+	static void ReleaseIds(uint32 first, int count)
+	{
+		for (int i < count)
+			sGroupOwner[(int)first + i] = null;
+		sFreeIds.Add((first, count));
+	}
+
+	static void OnEvicted(uint64 resource, int page)
+	{
+		if (sByResource.TryGetValue(resource, let entry))
+			entry.EvictPage(page, StreamingCore.Pool(.GeoPage));
+	}
+
+	static bgfx.DynamicVertexBufferHandle sFeedback = .() { idx = uint16.MaxValue };
+	/// Words in each of the feedback's two bitmaps (a multiple of four).
+	static int sFeedbackWords = 64;
+	static uint32[] sFeedbackData ~ delete _;
+	/// 0: nothing asked; 1: the read was asked for (frame in sFeedbackFrame).
+	static int sFeedbackState;
+	static int64 sFeedbackFrame;
+	static int64 sFeedbackLast = -1000;
+	/// How often the feedback is read back, in frames.
+	public static int32 FeedbackInterval = 3;
+
+	/// The feedback buffer the culling writes: a bitmap of the groups drawn, then a bitmap of the groups wanted but missing.
+	/// Always valid once drawing is available (the culling binds it).
+	public static bgfx.DynamicVertexBufferHandle Feedback { get { EnsureFeedback(); return sFeedback; } }
+	public static int FeedbackBitmapWords => sFeedbackWords;
+
+	static void EnsureFeedback()
+	{
+		let needWords = Pad4(((sGroupOwner.Count + 31) / 32));
+		if (sFeedback.Valid && needWords <= sFeedbackWords)
+			return;
+		if (sFeedbackState != 0)
+			return;
+		if (sFeedback.Valid)
+			bgfx.destroy_dynamic_vertex_buffer(sFeedback);
+		while (sFeedbackWords < needWords)
+			sFeedbackWords *= 2;
+		sFeedback = bgfx.create_dynamic_vertex_buffer((uint32)(sFeedbackWords * 2 / 4), &WordLayout, (uint16)bgfx.BufferFlags.ComputeReadWrite);
+		ClearFeedback();
+		delete sFeedbackData;
+		sFeedbackData = new uint32[sFeedbackWords * 2];
+	}
+
+	static void ClearFeedback()
+	{
+		let zeros = new uint32[sFeedbackWords * 2];
+		defer delete zeros;
+		bgfx.update_dynamic_vertex_buffer(sFeedback, 0, bgfx.copy(zeros.CArray(), (uint32)(zeros.Count * 4)));
+	}
+
+	/// Every few frames reads back what the culling drew and wanted (a few frames late: the read never waits for this
+	/// frame), keeps the pages in use warm and asks for the pages that are missing, parents first.
+	static void PollFeedback()
+	{
+		if (!sAvailable)
+			return;
+		EnsureFeedback();
+		if (sStreamed == 0 || !sFeedback.Valid || sFeedbackData == null)
+			return;
+		let frame = Time.FrameCount;
+		if (sFeedbackState == 0)
+		{
+			if (frame - sFeedbackLast < FeedbackInterval)
+				return;
+			bgfx.BufferRegion region = default;
+			bgfx.BufferHandle handle = .() { idx = sFeedback.idx, type = 1 };
+			bgfx.buffer_region_init_buffer(&region, handle, 0, (uint32)(sFeedbackWords * 2 * 4));
+			bgfx.read_buffer(&region, sFeedbackData.CArray());
+			sFeedbackState = 1;
+			sFeedbackFrame = frame;
+		}
+		else if (frame - sFeedbackFrame >= 3)
+		{
+			sFeedbackState = 0;
+			sFeedbackLast = frame;
+			FeedbackReads++;
+			UseFeedback((int)frame);
+			ClearFeedback();
+		}
+	}
+
+	static void UseFeedback(int frame)
+	{
+		let pool = StreamingCore.Pool(.GeoPage);
+		if (pool == null)
+			return;
+		let limit = Math.Min(sFeedbackWords, (sGroupOwner.Count + 31) / 32);
+		GroupsMissing = 0;
+		for (int w < limit)
+		{
+			let used = sFeedbackData[w];
+			if (used != 0)
+			{
+				for (int bit < 32)
+				{
+					if ((used & (1u << bit)) != 0)
+					{
+						let id = w * 32 + bit;
+						if (id < sGroupOwner.Count && sGroupOwner[id] != null)
+							TouchGroup(sGroupOwner[id], id, frame, pool);
+					}
+				}
+			}
+			let wanted = sFeedbackData[sFeedbackWords + w];
+			if (wanted != 0)
+			{
+				for (int bit < 32)
+				{
+					if ((wanted & (1u << bit)) != 0)
+					{
+						let id = w * 32 + bit;
+						if (id < sGroupOwner.Count && sGroupOwner[id] != null)
+						{
+							GroupsMissing++;
+							RequestGroup(sGroupOwner[id], id, frame, pool);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	static void TouchGroup(MeshEntry entry, int id, int frame, StreamPool pool)
+	{
+		if (entry.resource == null)
+			return;
+		TouchPage(entry, entry.pages.PageOfGroup[id - (int)entry.firstId], frame, pool);
+	}
+
+	/// Marks a page used this frame, and the pages it needs (they must not be evicted while it is drawn).
+	static void TouchPage(MeshEntry entry, int page, int frame, StreamPool pool)
+	{
+		if (page < entry.firstStreamed || entry.pageTouched[page] == frame)
+			return;
+		entry.pageTouched[page] = frame;
+		pool.Touch(entry.resource.Id, page, frame);
+		for (let parent in entry.pages.ParentPages[page])
+			TouchPage(entry, parent, frame, pool);
+	}
+
+	static void RequestGroup(MeshEntry entry, int id, int frame, StreamPool pool)
+	{
+		if (entry.resource == null)
+			return;
+		let group = id - (int)entry.firstId;
+		RequestPage(entry, entry.pages.PageOfGroup[group], 100.0f, pool);
+	}
+
+	/// Asks for a page and, before it, the pages it needs (their priority is higher).
+	static void RequestPage(MeshEntry entry, int page, float priority, StreamPool pool)
+	{
+		if (page < entry.firstStreamed || entry.pageLive[page])
+			return;
+		if (!entry.IsResident(page) && StreamingCore.Request(entry.resource, page, priority))
+			PagesRequested++;
+		for (let parent in entry.pages.ParentPages[page])
+			RequestPage(entry, parent, priority + 50.0f, pool);
+	}
+
+	internal static void MarkDirty(int firstWord, int endWord)
 	{
 		var first = firstWord;
 		var end = endWord;

@@ -28,6 +28,7 @@ namespace Tallow;
 ///   --streaming-test                                   check the streaming core (page files, pools, IO threads, the
 ///                                                      feedback ring) with no window, and exit 0 or 1
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
+///   --no-geometry-streaming                            load every page of a big mesh whole instead of streaming them
 ///   --no-texture-streaming                             load big textures whole instead of streaming their mip levels
 ///   --streaming-log                                    print streaming requests and uploads
 ///   --gpu-driven-test [mesh]                           draw a crowd of a big mesh both ways, compare the pictures and
@@ -171,6 +172,8 @@ class Application
 		StreamingCore.Log = HasArg("--streaming-log");
 		if (HasArg("--no-texture-streaming"))
 			StreamedTextures.Enabled = false;
+		if (HasArg("--no-geometry-streaming"))
+			GpuDriven.StreamGeometry = false;
 		StreamingCore.Start(2, geo, tex, vt);
 	}
 
@@ -283,7 +286,13 @@ class Application
 			test.Run(args);
 			return test.Result;
 		}
-		if (HasArg("--streaming-test") && !(this is TextureStreamTestApp))
+		if (GetArg("--streaming-test", streamingTest) && streamingTest == "geometry" && !(this is GeometryStreamTestApp))
+		{
+			let test = scope GeometryStreamTestApp();
+			test.Run(args);
+			return test.Result;
+		}
+		if (HasArg("--streaming-test") && !(this is TextureStreamTestApp) && !(this is GeometryStreamTestApp))
 			return StreamingTest.Run();
 		// The GPU-driven drawing check runs the whole application (it needs a window), as its own.
 		if (HasArg("--gpu-driven-test") && !(this is GpuDrivenTestApp))
