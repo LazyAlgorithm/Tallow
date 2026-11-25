@@ -200,6 +200,9 @@ internal static class AssetPack
                 else if (assets.ContainsKey(candidate + ".glb"))
                     // A converted model (tallowengine.com/docs/model-import): named as the FBX, OBJ, ... and built as <file>.glb.
                     found.Add(candidate + ".glb");
+                else if (assets.ContainsKey(candidate + ".sky.ktx"))
+                    // A skybox the export cooked (SkyboxCook): named as its picture or folder, shipped as <skybox>.sky.ktx.
+                    found.Add(candidate + ".sky.ktx");
                 else if (candidate.EndsWith(".terrain", StringComparison.Ordinal))
                     // A terrain's sculpting folder: every tile's file in it.
                     found.UnionWith(assets.Keys.Where(path => path.StartsWith(candidate + "/", StringComparison.Ordinal)));

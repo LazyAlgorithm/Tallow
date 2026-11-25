@@ -423,6 +423,8 @@ static class Reflections
 		int64 hash = 17;
 		for (let color in Color[?](env.skyZenith, env.skyHorizon, env.skyGround))
 			Mix(ref hash, .(color.r, color.g, color.b));
+		// A custom skybox: which import is loaded and how it is turned, exposed and tinted.
+		hash = hash * 1099511628211 ^ Skybox.State(env);
 		if (env.dayNight)
 		{
 			// A turning sun: the clock puts the sun, the moon and the stars (and DayNight their colours), so the clock
@@ -539,8 +541,14 @@ static class Reflections
 					SetUpFaceView(view, "Reflection Sky", sSourceFaces[face], sJobSize);
 					Vector4 faceParams = .(face, Gfx.OriginBottomLeft ? 1 : 0, 0, 0);
 					bgfx.set_uniform(uEnvFace, &faceParams, 1);
-					PhysicalSky.SetUniforms(env, sunDir, sunColor);
-					SubmitFullscreen(view, PhysicalSky.Mode(env) == 0 ? sSkyProgram : sSkyPhysicalProgram);
+					// A custom skybox that loads is the sky's cube (and so the ambient light); otherwise the sky drawn.
+					var program = Skybox.BindReflection(env, sJobSize);
+					if (!program.Valid)
+					{
+						PhysicalSky.SetUniforms(env, sunDir, sunColor);
+						program = PhysicalSky.Mode(env) == 0 ? sSkyProgram : sSkyPhysicalProgram;
+					}
+					SubmitFullscreen(view, program);
 				}
 			}
 			else

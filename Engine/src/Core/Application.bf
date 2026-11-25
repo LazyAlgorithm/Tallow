@@ -28,6 +28,7 @@ namespace Tallow;
 ///   --gpu-driven-caps-off                              act as if compute shaders / indirect draws were missing (fallback test)
 ///   --gpu-driven-min-triangles N                       the fewest triangles a mesh needs to be drawn that way (2000)
 ///   --cook-streaming <staging> [--cook-kinds <file>]  the export's cooking step: .tmips/.tvt beside pictures, .tclod/.tclodp
+///   --cook-skyboxes <staging> --cook-list <file>  the export's skybox step: <skybox>.sky16.ktx beside each listed skybox
 ///                                                      under <staging>/.cache/clod, no window (Streaming/StreamingCook.bf)
 ///   --streaming-test                                   check the streaming core (page files, pools, IO threads, the
 ///                                                      feedback ring) with no window, and exit 0 or 1
@@ -345,6 +346,13 @@ class Application
 			let cookKinds = scope String();
 			GetArg("--cook-kinds", cookKinds);
 			return StreamingCook.Run(cookStaging, cookKinds);
+		}
+		let skyboxStaging = scope String();
+		if (GetArg("--cook-skyboxes", skyboxStaging))
+		{
+			let list = scope String();
+			GetArg("--cook-list", list);
+			return Skybox.Cook(skyboxStaging, list);
 		}
 		if (HasArg("--quality-test"))
 			return QualityTest.Run();

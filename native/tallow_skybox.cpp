@@ -394,3 +394,36 @@ TN_API bool tn_skybox_write_test_picture(const char* path, int32_t kind, int32_t
 	bimg::imageFree(image);
 	return ok;
 }
+
+// Each face's average linear colour (rgb, faces +X, -X, +Y, -Y, +Z, -Z: 18 floats) of a cube .ktx/.dds held in
+// memory (an import's RGBA16F cube, or an export's BC6H one), from a small mip level. False when it is not a cube.
+TN_API bool tn_skybox_face_averages(const void* data, uint32_t size, float* out)
+{
+	bimg::ImageContainer* image = bimg::imageParse(&sAllocator, data, size);
+	if (image == NULL)
+		return false;
+	bool ok = image->m_cubeMap;
+	// A level at least 4 texels wide (a whole compressed block) but small.
+	uint8_t lod = 0;
+	while (ok && lod + 1 < image->m_numMips && (image->m_width >> (lod + 1)) >= 4)
+		lod++;
+	for (uint16_t face = 0; ok && face < 6; face++)
+	{
+		bimg::ImageMip mip;
+		if (!bimg::imageGetRawData(*image, face, lod, image->m_data, image->m_size, mip))
+		{
+			ok = false;
+			break;
+		}
+		std::vector<float> rgba((size_t)mip.m_width * mip.m_height * 4);
+		bimg::imageDecodeToRgba32f(&sAllocator, rgba.data(), mip.m_data, mip.m_width, mip.m_height, 1, mip.m_width * 16, mip.m_format);
+		double sum[3] = { 0, 0, 0 };
+		for (size_t i = 0; i < (size_t)mip.m_width * mip.m_height; i++)
+			for (int c = 0; c < 3; c++)
+				sum[c] += isfinite(rgba[i * 4 + c]) ? bx::max(rgba[i * 4 + c], 0.0f) : 0.0f;
+		for (int c = 0; c < 3; c++)
+			out[face * 3 + c] = (float)(sum[c] / ((double)mip.m_width * mip.m_height));
+	}
+	bimg::imageFree(image);
+	return ok;
+}

@@ -446,7 +446,8 @@ class RenderView
 		Reflections.Update(scene, mSunDir, mSunColor, CapturesReflections && !Capture);
 		DynamicGI.Update(scene, env, camera.position, CapturesReflections && !Capture);
 		mReflectionIntensity = Math.Max(env.reflectionIntensity, 0);
-		mCubeAmbient = env.ambientFromSurroundings ? Math.Max(env.ambientIntensity, 0.0001f) : 0;
+		// A custom skybox lights the scene too: its ambient light comes from the sky's cube made from it.
+		mCubeAmbient = env.ambientFromSurroundings || Skybox.Active(env) ? Math.Max(env.ambientIntensity, 0.0001f) : 0;
 
 		ClearItems();
 		var shadowRange = env.shadowDistance * ShadowDistanceScale + ShadowRangeMargin;

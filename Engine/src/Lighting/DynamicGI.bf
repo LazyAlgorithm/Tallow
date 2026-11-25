@@ -925,7 +925,15 @@ static class DynamicGI
 		}
 		GiGeometry finished = null;
 		MaintainGeometry(scene, ref finished);
-		sWorker.Hand(camera, sNearLights, LightBaker.Linear(env.ambientSky, env.ambientIntensity), LightBaker.Linear(env.ambientGround, env.ambientIntensity), finished);
+		// The sky's light: a custom skybox's own (it lights the scene in place of the ambient colours), else the colours.
+		var sky = LightBaker.Linear(env.ambientSky, env.ambientIntensity);
+		var ground = LightBaker.Linear(env.ambientGround, env.ambientIntensity);
+		if (Skybox.AmbientColors(env, let skyboxUp, let skyboxDown))
+		{
+			sky = skyboxUp * env.ambientIntensity;
+			ground = skyboxDown * env.ambientIntensity;
+		}
+		sWorker.Hand(camera, sNearLights, sky, ground, finished);
 	}
 
 	// ---- the traced scene ----

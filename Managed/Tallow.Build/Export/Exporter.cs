@@ -420,6 +420,20 @@ internal static class Exporter
             }
             if (converted.Count > 0)
                 Console.WriteLine($"Models: {converted.Count} converted to glTF");
+            // Custom skyboxes as the cubes the game loads (tallowengine.com/docs/skybox): before the pictures are
+            // compressed, so a panorama that is only a skybox is not compressed as a picture too. The host's player cooks.
+            try
+            {
+                Target skyHost = ExportUtil.HostWindows ? Target.Windows : ExportUtil.HostMac ? Target.MacOS : Target.Linux;
+                string? skyboxes = SkyboxCook.Run(Player(engine, options.Config, skyHost), staging, engine,
+                    !web && !android && !ios && !options.NoTextureCompression && settings.Get("compressTextures", "1") != "0");
+                if (skyboxes != null)
+                    Console.WriteLine(skyboxes);
+            }
+            catch (ExportException exception)
+            {
+                Console.WriteLine("Note: the skyboxes were not cooked (" + exception.Message.Split('\n')[0] + "); the game imports them when it first draws them.");
+            }
             // Pictures compressed for the graphics card (tallowengine.com/docs/textures): a .ktx beside each. Not for
             // the web, whose browsers do not all read the same compressed formats.
             // Nor for Android, whose graphics chips do not read the desktop's BC formats.

@@ -25,6 +25,16 @@ static class GameMain
 				}
 				return StreamingCook.Run(args[i + 1], kinds);
 			}
+			if (args[i] == "--cook-skyboxes")
+			{
+				let list = scope String();
+				for (int k = 0; k < args.Count - 1; k++)
+				{
+					if (args[k] == "--cook-list")
+						list.Set(args[k + 1]);
+				}
+				return Skybox.Cook(args[i + 1], list);
+			}
 		}
 		let root = scope String();
 		FindGameFolder(args, root);
