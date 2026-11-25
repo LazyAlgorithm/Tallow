@@ -53,9 +53,25 @@ class TextureStreamTestApp : Application
 		}
 	}
 
+	/// --compare-shot file.png: screenshot of the settled view; --compare-whole: same run with texture streaming off (the whole-load
+	/// path), for comparing the two pictures (M6b).
+	String mShotPath = new .() ~ delete _;
+	bool mWhole;
+
+	CompareShot mShot = new .() ~ delete _;
+
+	bool TakeShot()
+	{
+		return mShotPath.IsEmpty || mShot.Step(mView, 960, 540, mShotPath);
+	}
+
 	protected override bool OnInit()
 	{
 		let text = scope String();
+		GetArg("--compare-shot", mShotPath);
+		mWhole = HasArg("--compare-whole");
+		if (mWhole)
+			StreamedTextures.Enabled = false;
 		if (GetArg("--texture-count", text) && int32.Parse(text) case .Ok(let n))
 			mCount = Math.Clamp(n, 4, 400);
 		if (GetArg("--texture-size", text..Clear()) && int32.Parse(text) case .Ok(let s))
@@ -163,7 +179,7 @@ class TextureStreamTestApp : Application
 			// Frames are fast and reading is not: wait until the pictures on screen have their levels (or give up).
 			if (mSettleStart == 0)
 				mSettleStart = Internal.GetTickCountMicro();
-			if (AllSettled() || Internal.GetTickCountMicro() - mSettleStart > 30000000)
+			if (mWhole || mShot.Started || AllSettled() || Internal.GetTickCountMicro() - mSettleStart > 30000000)
 				Finish();
 		}
 	}
@@ -186,6 +202,14 @@ class TextureStreamTestApp : Application
 
 	void Finish()
 	{
+		if (!TakeShot())
+			return;
+		if (mWhole)
+		{
+			Console.WriteLine("streaming-test textures: whole-load run done");
+			Close();
+			return;
+		}
 		let pool = StreamingCore.Pool(.TextureMip);
 		var visible = 0;
 		var atWanted = 0;

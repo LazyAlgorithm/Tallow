@@ -50,9 +50,30 @@ class VtStreamTestApp : Application
 		}
 	}
 
+	/// --compare-shot file.png: screenshot of the settled view; --compare-whole: same run with virtual textures off (the picture
+	/// is loaded whole), for comparing the two pictures (M6b).
+	String mShotPath = new .() ~ delete _;
+	bool mWhole;
+	bool mOldPath; // --compare-old (with --compare-whole): also draw the usual way, no clusters
+
+	CompareShot mShot = new .() ~ delete _;
+
+	bool TakeShot()
+	{
+		return mShotPath.IsEmpty || mShot.Step(mView, 960, 540, mShotPath);
+	}
+
 	protected override bool OnInit()
 	{
 		let text = scope String();
+		GetArg("--compare-shot", mShotPath);
+		mWhole = HasArg("--compare-whole");
+		if (mWhole)
+		{
+			VirtualTextures.Enabled = false;
+			StreamedTextures.Enabled = false;
+		}
+		mOldPath = mWhole && HasArg("--compare-old");
 		if (GetArg("--vt-size", text) && int32.Parse(text) case .Ok(let s))
 			mSize = Math.Clamp(s, 1024, 16384);
 		if (!GetArg("--streaming-test-dir", mDir))
@@ -65,7 +86,7 @@ class VtStreamTestApp : Application
 			StreamingCore.SetBudget(.VtTile, (int64)VirtualTextures.TileBytes * 40);
 		MakePicture();
 
-		GpuDriven.Override = 1;
+		GpuDriven.Override = mOldPath ? 0 : 1;
 		GpuDriven.StatsInterval = 5;
 		GpuDriven.FeedbackInterval = 2;
 		GpuDriven.MinTriangles = 2000;
@@ -132,7 +153,7 @@ class VtStreamTestApp : Application
 	protected override void OnRender()
 	{
 		// The clusters are built on a worker thread: draw (the old way) until they are in the pool, then start the flight.
-		if (mMesh.GpuEntry == null)
+		if (mMesh.GpuEntry == null && !mOldPath)
 		{
 			if (mWaitStart == 0)
 				mWaitStart = Internal.GetTickCountMicro();
@@ -166,13 +187,21 @@ class VtStreamTestApp : Application
 				mLastUploads = VirtualTextures.SlotUploads;
 				mQuietSince = mFrame;
 			}
-			if (mFrame - mQuietSince >= QuietFrames || Internal.GetTickCountMicro() - mSettleStart > 30000000)
+			if (mShot.Started || mFrame - mQuietSince >= QuietFrames || Internal.GetTickCountMicro() - mSettleStart > 30000000)
 				Finish();
 		}
 	}
 
 	void Finish()
 	{
+		if (!TakeShot())
+			return;
+		if (mWhole)
+		{
+			Console.WriteLine("streaming-test vt: whole-load run done");
+			Close();
+			return;
+		}
 		let pool = StreamingCore.Pool(.VtTile);
 		let vt = VirtualTextures.Find("vt.png");
 		Console.WriteLine(scope $"streaming-test vt: {VirtualTextures.Count} virtual textures, {VirtualTextures.FeedbackReads} feedback reads, last read wanted {VirtualTextures.TilesWanted} tiles (finest level wanted {VirtualTextures.FinestWanted}), {VirtualTextures.SlotUploads} tile uploads, {pool.EvictedPages} evicted, {VirtualTextures.SlotsUsed} of {VirtualTextures.Slots} slots used, failures {StreamingCore.Failures}");
