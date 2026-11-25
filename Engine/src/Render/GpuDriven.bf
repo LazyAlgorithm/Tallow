@@ -58,9 +58,13 @@ static class GpuDriven
 	/// Whether what is hidden behind other things is left out (the camera's occlusion culling setting must be on too);
 	/// `--gpu-occlusion on|off`.
 	public static bool Occlusion = true;
+	/// `--gpu-occlusion` was given: the quality preset must not overwrite it.
+	public static bool OcclusionFromArgs;
 	/// Whether big meshes' geometry streams in pages (virtual geometry); off: every page is loaded when the mesh is
 	/// (`--no-geometry-streaming`).
 	public static bool StreamGeometry = true;
+	/// `--no-geometry-streaming` was given: the quality preset must not overwrite it.
+	public static bool StreamGeometryFromArgs;
 	/// Whether the point and spot lights' shadow tiles are drawn from clusters picked for each tile (off: the usual way).
 	public static bool LocalShadows = true;
 

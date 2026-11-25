@@ -67,9 +67,29 @@ extension EditorApp
 			ImGui.EndDisabled();
 			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
 				ImGui.SetTooltip(GpuDriven.Available ? "Draws big meshes from clusters picked on the graphics card, with the level of detail chosen per cluster." : "Needs compute shaders and indirect draws (Vulkan or Metal).");
+			let gpuTip = GpuDriven.Available ? "" : "Needs compute shaders and indirect draws (Vulkan or Metal).";
+			ImGui.BeginDisabled(!GpuDriven.Available);
 			changed |= ImGui.SliderFloat("Pixel Error", ref v.pixelError, 0.5f, 4, "%.1f px");
-			if (ImGui.IsItemHovered())
-				ImGui.SetTooltip("How many pixels of error the clusters of GPU-driven meshes may have on screen: lower is sharper and costs more.");
+			ImGui.EndDisabled();
+			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip(GpuDriven.Available ? "How many pixels of error the clusters of GPU-driven meshes may have on screen: lower is sharper and costs more." : gpuTip);
+			ImGui.BeginDisabled(!GpuDriven.Available);
+			changed |= ImGui.Checkbox("GPU Occlusion Culling", ref v.gpuOcclusion);
+			ImGui.EndDisabled();
+			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip(GpuDriven.Available ? "Leaves out clusters hidden behind other things (also needs the camera's occlusion culling)." : gpuTip);
+			ImGui.BeginDisabled(!GpuDriven.Available);
+			changed |= ImGui.Checkbox("Stream Geometry", ref v.streamGeometry);
+			ImGui.EndDisabled();
+			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip(GpuDriven.Available ? "Loads big meshes' geometry in pages as it is needed instead of all at once." : gpuTip);
+			ImGui.BeginDisabled(!GpuDriven.Available);
+			changed |= ImGui.DragInt("Geometry Budget (MB)", ref v.geometryBudgetMB, 4, 16, 16384);
+			changed |= ImGui.DragInt("Texture Budget (MB)", ref v.textureBudgetMB, 4, 16, 16384);
+			changed |= ImGui.DragInt("Virtual Texture Budget (MB)", ref v.vtBudgetMB, 4, 16, 16384);
+			ImGui.EndDisabled();
+			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip(GpuDriven.Available ? "Memory the streamed geometry pages, texture mip levels and virtual-texture tiles may use." : gpuTip);
 			changed |= ImGui.Checkbox("Vsync", ref v.vsync);
 			var detail = (float)v.textureDetail;
 			StringView[4] detailNames = .("full", "half", "quarter", "eighth");

@@ -124,7 +124,7 @@ static class StreamingCore
 	{
 		if (sStarted)
 			return;
-		DefaultBudgetsMB(Quality.Level, let geo, let tex, let vt);
+		let geo = (int64)Quality.Current.geometryBudgetMB, tex = (int64)Quality.Current.textureBudgetMB, vt = (int64)Quality.Current.vtBudgetMB;
 		let budgets = int64[3](geoBytes > 0 ? geoBytes : geo * 1048576, texBytes > 0 ? texBytes : tex * 1048576, vtBytes > 0 ? vtBytes : vt * 1048576);
 		for (int k < Kinds)
 		{
@@ -176,6 +176,19 @@ static class StreamingCore
 		}
 		sReady.Clear();
 		sStarted = false;
+	}
+
+	/// A `--streaming-budget` was given: the quality presets must not overwrite it.
+	public static bool BudgetsFromArgs;
+
+	/// Sets the three pool budgets from the quality values (megabytes), unless the command line chose them.
+	public static void ApplyBudgetsMB(int64 geo, int64 tex, int64 vt)
+	{
+		if (!sStarted || BudgetsFromArgs)
+			return;
+		SetBudget(.GeoPage, geo << 20);
+		SetBudget(.TextureMip, tex << 20);
+		SetBudget(.VtTile, vt << 20);
 	}
 
 	public static void SetBudget(StreamKind kind, int64 bytes) => sPools[(int)kind].Budget = bytes;

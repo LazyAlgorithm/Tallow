@@ -27,6 +27,8 @@ namespace Tallow;
 ///   --gpu-driven-min-triangles N                       the fewest triangles a mesh needs to be drawn that way (2000)
 ///   --streaming-test                                   check the streaming core (page files, pools, IO threads, the
 ///                                                      feedback ring) with no window, and exit 0 or 1
+///   --quality-test                                     switch each quality preset with no window, print the applied
+///                                                      GPU-path and streaming values, check the quality file, exit 0 or 1
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
 ///   --no-geometry-streaming                            load every page of a big mesh whole instead of streaming them
 ///   --no-texture-streaming                             load big textures whole instead of streaming their mip levels
@@ -173,7 +175,11 @@ class Application
 		if (HasArg("--no-texture-streaming"))
 			StreamedTextures.Enabled = false;
 		if (HasArg("--no-geometry-streaming"))
+		{
 			GpuDriven.StreamGeometry = false;
+			GpuDriven.StreamGeometryFromArgs = true;
+		}
+		StreamingCore.BudgetsFromArgs = geo > 0 || tex > 0 || vt > 0;
 		StreamingCore.Start(2, geo, tex, vt);
 	}
 
@@ -239,7 +245,10 @@ class Application
 		if (GetArg("--gpu-occlusion", gpuOcclusion))
 		{
 			if (gpuOcclusion == "on" || gpuOcclusion == "off")
-				GpuDriven.Occlusion = gpuOcclusion == "on";
+				{
+					GpuDriven.Occlusion = gpuOcclusion == "on";
+					GpuDriven.OcclusionFromArgs = true;
+				}
 			else
 				Log.Warning(scope $"--gpu-occlusion takes on or off, not '{gpuOcclusion}'");
 		}
@@ -279,6 +288,8 @@ class Application
 		let clodTest = scope String();
 		if (GetArg("--clod-test", clodTest))
 			return ClusterMeshTest.Run(clodTest);
+		if (HasArg("--quality-test"))
+			return QualityTest.Run();
 		let streamingTest = scope String();
 		if (GetArg("--streaming-test", streamingTest) && streamingTest == "textures" && !(this is TextureStreamTestApp))
 		{
