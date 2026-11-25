@@ -4,7 +4,8 @@ namespace Tallow;
 
 /// Day / Night (tallowengine.com/docs/day-night): the scene's clock (SceneEnvironment.timeOfDay) turns the sun light,
 /// and the moon light if there is one, once a frame. The sums are a simple sky model: the sun's hour angle from the
-/// time, its declination from the day of the year and the axis tilt, then east/up/north at the latitude.
+/// time, its declination from the day of the year and the axis tilt, then east/up/north at the latitude. The lights'
+/// colours come from the air they shine through (Atmosphere); with Auto Colours on, so do the ambient and fog colours.
 static class DayNight
 {
 	/// Length of the moon's cycle in days.
@@ -143,11 +144,61 @@ static class DayNight
 		let env = scene.Environment;
 		if (!env.dayNight)
 			return;
+		let sunDirection = SunDirection(env);
+		let sunElevation = Elevation(sunDirection);
 		let sun = FindSun(scene);
 		if (sun)
-			Aim(sun, SunDirection(env));
+		{
+			Aim(sun, sunDirection);
+			SunLight(env, sunElevation, var color, var intensity);
+			SetColor(sun, color, intensity);
+		}
 		let moon = FindMoon(scene);
+		let moonLight = MoonLight(env, var moonColor);
 		if (moon)
+		{
 			Aim(moon, MoonDirection(env));
+			SetColor(moon, moonColor, moonLight);
+		}
+		if (env.autoColors)
+		{
+			let ambient = Atmosphere.AmbientColors(sunElevation, env.sunIntensity, moonLight);
+			env.ambientSky = ambient.sky.Gamma;
+			env.ambientGround = ambient.ground.Gamma;
+			env.fogColor = ambient.fog.Gamma;
+		}
+	}
+
+	static float Elevation(Vector3 toward) => Math.Asin(Math.Clamp(toward.y, -1, 1)) * Mathf.Rad2Deg;
+
+	/// The sun light's colour (gamma, brightest channel 1) and intensity at `elevation` degrees: Sun Intensity times
+	/// what gets through the air (white at noon, orange then red near the horizon, 0 after sunset).
+	public static void SunLight(SceneEnvironment env, float elevation, out Color color, out float intensity)
+	{
+		let t = Atmosphere.SunTransmittance(elevation);
+		let peak = t.Max;
+		intensity = (float)(env.sunIntensity * peak);
+		color = peak > 1e-9 ? (t * (1 / peak)).Gamma : Color(1, 1, 1);
+	}
+
+	/// The moon light's intensity (Moon Intensity times the lit part of the moon and what gets through the air; 0
+	/// below the horizon) and its colour (gamma), a dim cool white.
+	public static float MoonLight(SceneEnvironment env, out Color color)
+	{
+		let t = Atmosphere.SunTransmittance(Elevation(MoonDirection(env)));
+		let light = Atmosphere.MoonColor * t;
+		let peak = light.Max;
+		color = peak > 1e-9 ? (light * (1 / peak)).Gamma : Atmosphere.MoonColor.Gamma;
+		return (float)(env.moonIntensity * MoonIllumination(env) * peak);
+	}
+
+	/// Sets a light's colour and intensity, leaving it alone when nothing visible changed (no needless network sends).
+	static void SetColor(Light light, Color color, float intensity)
+	{
+		let old = light.color;
+		if (Math.Abs(old.r - color.r) > 1e-4f || Math.Abs(old.g - color.g) > 1e-4f || Math.Abs(old.b - color.b) > 1e-4f)
+			light.color = .(color.r, color.g, color.b, old.a);
+		if (Math.Abs(light.intensity - intensity) > 1e-5f)
+			light.intensity = intensity;
 	}
 }

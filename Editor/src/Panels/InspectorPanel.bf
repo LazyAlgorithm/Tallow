@@ -209,8 +209,12 @@ extension EditorApp
 		{
 			BeginProperty("Ambient Sky");
 			changed |= ImGui.ColorEdit3("##as", ref env.ambientSky);
+			if (env.dayNight && env.autoColors && ImGui.IsItemHovered())
+				ImGui.SetTooltip("Set by Day / Night's Auto Colours (turn it off to pick by hand).");
 			BeginProperty("Ambient Ground");
 			changed |= ImGui.ColorEdit3("##ag", ref env.ambientGround);
+			if (env.dayNight && env.autoColors && ImGui.IsItemHovered())
+				ImGui.SetTooltip("Set by Day / Night's Auto Colours (turn it off to pick by hand).");
 			BeginProperty("Ambient Intensity");
 			changed |= ImGui.SliderFloat("##ai", ref env.ambientIntensity, 0, 2);
 			BeginProperty("Ambient From Surroundings");
@@ -241,6 +245,8 @@ extension EditorApp
 			changed |= ImGui.ColorEdit3("##sg", ref env.skyGround);
 			BeginProperty("Fog Color");
 			changed |= ImGui.ColorEdit3("##fc", ref env.fogColor);
+			if (env.dayNight && env.autoColors && ImGui.IsItemHovered())
+				ImGui.SetTooltip("Set by Day / Night's Auto Colours (turn it off to pick by hand).");
 			BeginProperty("Fog Density");
 			changed |= ImGui.DragFloat("##fd", ref env.fogDensity, 0.0002f, 0, 0.2f, "%.4f");
 			ImGui.EndTable();

@@ -65,6 +65,21 @@ extension EditorApp
 				if (ImGui.IsItemHovered())
 					ImGui.SetTooltip("Whether the moon casts the shadows at night.");
 			}
+			BeginProperty("Sun Intensity");
+			changed |= ImGui.DragFloat("##si", ref env.sunIntensity, 0.01f, 0, 20, "%.2f");
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("The sun light's brightness at noon. Its colour and intensity follow the air it shines through:\nwhite high up, orange then red near the horizon, dark after sunset.");
+			if (env.moonLight != 0)
+			{
+				BeginProperty("Moon Intensity");
+				changed |= ImGui.DragFloat("##mi", ref env.moonIntensity, 0.005f, 0, 2, "%.3f");
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip("The moon light's brightness at full moon, high up. Dimmer at other phases and near the horizon.");
+			}
+			BeginProperty("Auto Colours");
+			changed |= ImGui.Checkbox("##ac", ref env.autoColors);
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("Also set the ambient sky, ambient ground and fog colours from the sun's height\n(blue by day, warm at sunset, dark at night). Off keeps the hand-picked colours.");
 			BeginProperty("Sun Height");
 			let sun = DayNight.FindSun(mScene);
 			let height = scope String()..AppendF("{:F1} deg", DayNight.SunElevation(env));

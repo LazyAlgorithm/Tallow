@@ -23,6 +23,8 @@ static class SceneTemplates
 		// New scenes run a day / night clock (older scenes keep it off: the class default).
 		scene.Environment.dayNight = true;
 		scene.Environment.timeOfDay = 10;
+		scene.Environment.sunIntensity = Atmosphere.ReferenceSunIntensity;
+		scene.Environment.autoColors = true;
 	}
 
 	/// Sun, camera and a floor; with withPlayer (a new project's first scene), the first-person character too if

@@ -94,6 +94,9 @@ static class SceneSerializer
 		if (env.moonLight != 0)
 			text.AppendF("env moonLight {}\n", env.moonLight);
 		Number(text, "moonShadows", env.moonShadows ? 1 : 0, defaults.moonShadows ? 1 : 0);
+		Number(text, "sunIntensity", env.sunIntensity, defaults.sunIntensity);
+		Number(text, "moonIntensity", env.moonIntensity, defaults.moonIntensity);
+		Number(text, "autoColors", env.autoColors ? 1 : 0, 0);
 	}
 
 	/// Writes an environment number only when it differs from a new scene's.
@@ -778,6 +781,9 @@ static class SceneSerializer
 		case "sunLight": env.sunLight = ParseId(tokens[2]);
 		case "moonLight": env.moonLight = ParseId(tokens[2]);
 		case "moonShadows": env.moonShadows = value != 0;
+		case "sunIntensity": env.sunIntensity = Math.Max(value, 0);
+		case "moonIntensity": env.moonIntensity = Math.Max(value, 0);
+		case "autoColors": env.autoColors = value != 0;
 		}
 	}
 

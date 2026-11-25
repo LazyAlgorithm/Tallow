@@ -134,6 +134,14 @@ class SceneEnvironment
 	public uint32 moonLight;
 	/// Whether the moon light casts the sun's shadows at night.
 	public bool moonShadows = true;
+	/// The sun light's brightness at noon. Day / Night sets the sun light's colour and intensity from it and the air
+	/// the light comes through: white high up, orange then red near the horizon, dark after sunset.
+	public float sunIntensity = 1;
+	/// The moon light's brightness at full moon, high in the sky (it is dimmer at other phases and near the horizon).
+	public float moonIntensity = 0.06f;
+	/// Auto Colours: Day / Night also sets the ambient sky, ambient ground and fog colours from the sun's height (blue
+	/// by day, warm at sunset, dark at night). Off keeps the hand-picked colours.
+	public bool autoColors;
 
 	/// The radius of the depth of field's largest blur as a share of the screen's height, at Depth Of Field 1.
 	public const float DepthOfFieldReach = 0.015f;
@@ -212,6 +220,9 @@ class SceneEnvironment
 		sunLight = other.sunLight;
 		moonLight = other.moonLight;
 		moonShadows = other.moonShadows;
+		sunIntensity = other.sunIntensity;
+		moonIntensity = other.moonIntensity;
+		autoColors = other.autoColors;
 	}
 }
 
