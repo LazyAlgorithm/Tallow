@@ -80,6 +80,20 @@ static class SceneSerializer
 		Number(text, "streamLoadRadius", env.streamLoadRadius, defaults.streamLoadRadius);
 		Number(text, "streamStandInRadius", env.streamStandInRadius, defaults.streamStandInRadius);
 		Number(text, "floatingOrigin", env.floatingOrigin, defaults.floatingOrigin);
+		Number(text, "dayNight", env.dayNight ? 1 : 0, 0);
+		Number(text, "timeOfDay", env.timeOfDay, defaults.timeOfDay);
+		Number(text, "dayLengthMinutes", env.dayLengthMinutes, defaults.dayLengthMinutes);
+		Number(text, "dayNightPaused", env.dayNightPaused ? 1 : 0, 0);
+		Number(text, "latitude", env.latitude, defaults.latitude);
+		Number(text, "axisTilt", env.axisTilt, defaults.axisTilt);
+		Number(text, "northDirection", env.northDirection, defaults.northDirection);
+		Number(text, "dayOfYear", env.dayOfYear, defaults.dayOfYear);
+		// Object ids are written whole: a float would round ids above 2^24.
+		if (env.sunLight != 0)
+			text.AppendF("env sunLight {}\n", env.sunLight);
+		if (env.moonLight != 0)
+			text.AppendF("env moonLight {}\n", env.moonLight);
+		Number(text, "moonShadows", env.moonShadows ? 1 : 0, defaults.moonShadows ? 1 : 0);
 	}
 
 	/// Writes an environment number only when it differs from a new scene's.
@@ -753,12 +767,30 @@ static class SceneSerializer
 		case "streamLoadRadius": env.streamLoadRadius = value;
 		case "streamStandInRadius": env.streamStandInRadius = value;
 		case "floatingOrigin": env.floatingOrigin = value;
+		case "dayNight": env.dayNight = value != 0;
+		case "timeOfDay": env.timeOfDay = DayNight.WrapHours(value);
+		case "dayLengthMinutes": env.dayLengthMinutes = Math.Max(value, 0);
+		case "dayNightPaused": env.dayNightPaused = value != 0;
+		case "latitude": env.latitude = Math.Clamp(value, -90, 90);
+		case "axisTilt": env.axisTilt = Math.Clamp(value, 0, 90);
+		case "northDirection": env.northDirection = value;
+		case "dayOfYear": env.dayOfYear = Math.Clamp((int32)value, 1, 365);
+		case "sunLight": env.sunLight = ParseId(tokens[2]);
+		case "moonLight": env.moonLight = ParseId(tokens[2]);
+		case "moonShadows": env.moonShadows = value != 0;
 		}
 	}
 
 	public static float ParseFloat(StringView token)
 	{
 		if (float.Parse(token) case .Ok(let value))
+			return value;
+		return 0;
+	}
+
+	static uint32 ParseId(StringView token)
+	{
+		if (uint32.Parse(token) case .Ok(let value))
 			return value;
 		return 0;
 	}

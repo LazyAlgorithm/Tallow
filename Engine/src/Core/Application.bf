@@ -31,6 +31,8 @@ namespace Tallow;
 ///                                                      under <staging>/.cache/clod, no window (Streaming/StreamingCook.bf)
 ///   --streaming-test                                   check the streaming core (page files, pools, IO threads, the
 ///                                                      feedback ring) with no window, and exit 0 or 1
+///   --daynight-test                                    print the sun and moon through the day with no window and check
+///                                                      the sun's path, the scene's sun light and saving (exit 1 on a failure)
 ///   --quality-test                                     switch each quality preset with no window, print the applied
 ///                                                      GPU-path and streaming values, check the quality file, exit 0 or 1
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
@@ -341,6 +343,8 @@ class Application
 		}
 		if (HasArg("--quality-test"))
 			return QualityTest.Run();
+		if (HasArg("--daynight-test"))
+			return DayNightTest.Run();
 		let streamingTest = scope String();
 		if (GetArg("--streaming-test", streamingTest) && streamingTest == "textures" && !(this is TextureStreamTestApp))
 		{

@@ -20,6 +20,9 @@ static class SceneTemplates
 		light.intensity = 1.5f;
 		sun.Transform.Position = .(0, 6, 0);
 		sun.Transform.EulerAngles = .(50, -30, 0);
+		// New scenes run a day / night clock (older scenes keep it off: the class default).
+		scene.Environment.dayNight = true;
+		scene.Environment.timeOfDay = 10;
 	}
 
 	/// Sun, camera and a floor; with withPlayer (a new project's first scene), the first-person character too if

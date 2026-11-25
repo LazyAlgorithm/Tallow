@@ -536,6 +536,13 @@ class RenderView
 			if (!sun || (!sun.castShadows && light.castShadows))
 				sun = light;
 		}
+		// With Day / Night on, the sun is the light the clock turns (SceneEnvironment.sunLight can name one).
+		if (scene.Environment.dayNight)
+		{
+			let driven = DayNight.FindSun(scene);
+			if (driven && driven.IsActiveAndEnabled && driven.GameObject.InActiveWorld)
+				sun = driven;
+		}
 		let shadowed = DrawShadows && ShadowsEnabled ? MaxShadowedLights : 0;
 		mLights.Build(scene, camera, sun, shadowed, RenderResources.ShadowAtlasSize);
 		mHasLocalShadows = mLights.Tiles.Count > 0;

@@ -245,6 +245,7 @@ extension EditorApp
 			changed |= ImGui.DragFloat("##fd", ref env.fogDensity, 0.0002f, 0, 0.2f, "%.4f");
 			ImGui.EndTable();
 		}
+		changed |= DrawDayNightSettings(env);
 		changed |= DrawScreenEffectsSettings(env);
 		changed |= DrawStreamingSettings(env);
 		if (changed)

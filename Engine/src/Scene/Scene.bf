@@ -108,6 +108,33 @@ class SceneEnvironment
 	/// precision far out. 0: never. Not used in a network session.
 	public float floatingOrigin = 0;
 
+	// ---- Day / Night (tallowengine.com/docs/day-night). Off by default so older scenes keep their hand-placed sun;
+	// new scenes switch it on (SceneTemplates). ----
+
+	/// Day / Night: the sun (and moon) are turned by a clock instead of being placed by hand.
+	public bool dayNight;
+	/// The time of day in hours, 0 to 24 (12 is noon). Drag it in the editor to move the sun.
+	public float timeOfDay = 10;
+	/// How many real minutes a whole 24-hour day takes while playing. 0 stops the clock.
+	public float dayLengthMinutes = 24;
+	/// Stops the clock while playing (the sun stays where the time puts it). In Edit mode the clock never runs.
+	public bool dayNightPaused;
+	/// How far north (+) or south (-) of the equator the scene is, in degrees: how high the sun climbs.
+	public float latitude = 40;
+	/// The planet's axis tilt in degrees (Earth: 23.44): how much the sun's path changes over the year.
+	public float axisTilt = 23.44f;
+	/// Which way north is, in degrees round from +Z, clockwise seen from above.
+	public float northDirection = 0;
+	/// The day of the year, 1 to 365 (172: the June solstice, the longest day in the north).
+	public int32 dayOfYear = 172;
+	/// The object id of the Directional light that is the sun. 0: the first Directional light (the one that casts
+	/// shadows, if any).
+	public uint32 sunLight;
+	/// The object id of a Directional light turned as the moon, or 0 for none.
+	public uint32 moonLight;
+	/// Whether the moon light casts the sun's shadows at night.
+	public bool moonShadows = true;
+
 	/// The radius of the depth of field's largest blur as a share of the screen's height, at Depth Of Field 1.
 	public const float DepthOfFieldReach = 0.015f;
 
@@ -174,6 +201,17 @@ class SceneEnvironment
 		streamLoadRadius = other.streamLoadRadius;
 		streamStandInRadius = other.streamStandInRadius;
 		floatingOrigin = other.floatingOrigin;
+		dayNight = other.dayNight;
+		timeOfDay = other.timeOfDay;
+		dayLengthMinutes = other.dayLengthMinutes;
+		dayNightPaused = other.dayNightPaused;
+		latitude = other.latitude;
+		axisTilt = other.axisTilt;
+		northDirection = other.northDirection;
+		dayOfYear = other.dayOfYear;
+		sunLight = other.sunLight;
+		moonLight = other.moonLight;
+		moonShadows = other.moonShadows;
 	}
 }
 
@@ -1748,6 +1786,9 @@ class Scene
 					NavigationAgent.FindQueuedPaths();
 			});
 		World.AddStep(mFramePipeline, "Frame.LateUpdate", .PostUpdate, new => RunLateUpdates);
+		// The clock turns the sun and moon once scripts have run, before anything is drawn (in Edit mode too, without
+		// running the clock, so dragging the time moves the sun).
+		World.AddStep(mFramePipeline, "Frame.DayNight", .PostUpdate, new () => DayNight.Update(this, mPlaying ? Time.DeltaTime : 0));
 		// C# code after an await (and Wait / NextFrame) carries on here, once scripts have run for the frame.
 		World.AddStep(mFramePipeline, "Frame.CSharpAsync", .PostUpdate, new () =>
 			{
