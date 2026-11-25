@@ -220,6 +220,9 @@ static class GpuDriven
 		uint32[16] zeros = default;
 		sZeros = bgfx.create_dynamic_vertex_buffer(4, &WordLayout, (uint16)bgfx.BufferFlags.ComputeRead);
 		bgfx.update_dynamic_vertex_buffer(sZeros, 0, bgfx.copy(&zeros, 64));
+		bgfx.set_view_name(CullView, "GPU cull", 8);
+		bgfx.set_view_name(HzbView, "GPU HZB + phase 2 cull", 22);
+		bgfx.set_view_name(FinalHzbView, "GPU final HZB", 13);
 		bgfx.set_view_mode(CullView, .Sequential);
 		bgfx.set_view_mode(HzbView, .Sequential);
 		bgfx.set_view_mode(FinalHzbView, .Sequential);

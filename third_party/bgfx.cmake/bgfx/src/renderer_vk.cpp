@@ -10942,6 +10942,13 @@ VK_DESTROY
 						setViewType(viewName, "C");
 						BGFX_VK_PROFILER_BEGIN(view, kColorCompute);
 
+						// Tallow: a view that only dispatches compute (the GPU-driven culling) gets its own GPU timing too.
+						if (viewChanged)
+						{
+							profiler.end();
+							profiler.begin(view);
+						}
+
 						if (beginRenderPass)
 						{
 							vkCmdEndRenderPass(m_commandBuffer);

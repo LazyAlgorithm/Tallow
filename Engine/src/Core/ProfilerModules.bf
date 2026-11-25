@@ -39,6 +39,20 @@ static class ProfilerModules
 	static ProfilerCounter sStreamLatency = .("Streaming Latency", .Assets, "ms");
 	static ProfilerCounter sGpuTime = .("GPU Frame", .Rendering, "ms");
 	static ProfilerCounter sPasses = .("Render Passes", .Rendering);
+	// GPU time per pass of the GPU-driven path, summed from bgfx's view timings (views named in GpuDriven.Init); 0 when the path is off.
+	static ProfilerCounter sGpuCullMs = .("GPU Time: Instance + Cluster Cull (phase 1)", .Rendering, "ms");
+	static ProfilerCounter sGpuOccluderMs = .("GPU Time: Occluder Draws", .Rendering, "ms");
+	static ProfilerCounter sGpuHzbMs = .("GPU Time: HZB Build + Cluster Cull (phase 2)", .Rendering, "ms");
+	static ProfilerCounter sGpuMainMs = .("GPU Time: Main Draw (camera views)", .Rendering, "ms");
+	static ProfilerCounter sGpuShadowMs = .("GPU Time: Shadows", .Rendering, "ms");
+	static ProfilerCounter sGpuVtMs = .("GPU Time: VT Feedback", .Rendering, "ms");
+	// Virtual textures (VirtualTextures.bf).
+	static ProfilerCounter sVtTiles = .("VT Tiles Resident", .Assets);
+	static ProfilerCounter sVtUploads = .("VT Tile Uploads", .Assets, "/s");
+	static ProfilerCounter sVtWanted = .("VT Tiles Wanted", .Assets);
+	static ProfilerCounter sVtMisses = .("VT Tiles Missing", .Assets);
+	static int64 sVtUploadsAt;
+	static int64 sVtUploadsNs;
 	// Memory.
 	static ProfilerCounter sProcess = .("Process Memory", .Memory, "bytes");
 	static ProfilerCounter sTextureMemory = .("Texture Memory (GPU)", .Memory, "bytes");
@@ -168,6 +182,17 @@ static class ProfilerModules
 			sStreamLatency.Set(StreamingCore.AverageLatencyMs);
 		}
 		sInstancesDropped.Set((int32)RenderView.InstancesDropped);
+		sVtTiles.Set(VirtualTextures.SlotsUsed);
+		sVtWanted.Set(VirtualTextures.TilesWanted);
+		sVtMisses.Set(Math.Max(VirtualTextures.TilesWanted - VirtualTextures.SlotsUsed, 0));
+		let nowNs = (int64)((double)Time.RealTime * 1.0e9);
+		if (sVtUploadsNs == 0 || nowNs - sVtUploadsNs >= 500000000)
+		{
+			if (sVtUploadsNs != 0)
+				sVtUploads.Set((float)((double)(VirtualTextures.SlotUploads - sVtUploadsAt) * 1.0e9 / (double)(nowNs - sVtUploadsNs)));
+			sVtUploadsAt = VirtualTextures.SlotUploads;
+			sVtUploadsNs = nowNs;
+		}
 
 		sProcess.Set(ProcessMemory());
 		sEngineTextures.Set(Textures.Bytes);
@@ -276,6 +301,7 @@ static class ProfilerModules
 		if (stats.viewStats != null && stats.gpuTimerFreq > 0)
 		{
 			int32 passes = 0;
+			double cull = 0, occluder = 0, hzb = 0, main = 0, shadow = 0, vt = 0;
 			let name = scope String();
 			for (int i < stats.numViews)
 			{
@@ -293,9 +319,29 @@ static class ProfilerModules
 					id = Profiler.Pass(name);
 					sPassIds[new String(name)] = id;
 				}
+				let ms = (double)time * 1000.0 / stats.gpuTimerFreq;
 				Profiler.AddPass(id, (int64)((double)time * 1.0e9 / stats.gpuTimerFreq));
 				passes++;
+				let v = view.view;
+				if (v == GpuDriven.CullView)
+					cull += ms;
+				else if (v == GpuDriven.FirstDrawView || v == GpuDriven.FirstDrawView + 1 || v == GpuDriven.SecondDrawView || v == GpuDriven.SecondDrawView + 1)
+					occluder += ms;
+				else if (v == GpuDriven.HzbView || v == GpuDriven.FinalHzbView)
+					hzb += ms;
+				else if (v == VirtualTextures.FeedbackView)
+					vt += ms;
+				else if (v >= 10 && (name.StartsWith("Shadow") || name.StartsWith("Point and spot")))
+					shadow += ms;
+				else if (v >= 10)
+					main += ms;
 			}
+			sGpuCullMs.Set(cull);
+			sGpuOccluderMs.Set(occluder);
+			sGpuHzbMs.Set(hzb);
+			sGpuMainMs.Set(main);
+			sGpuShadowMs.Set(shadow);
+			sGpuVtMs.Set(vt);
 			sPasses.Set(passes);
 		}
 		return gpu;
