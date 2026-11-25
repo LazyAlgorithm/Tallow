@@ -4,5 +4,5 @@ are kept. Unmodified except for the generated shader permutations.
 
 shaders_vk/ holds the SPIR-V permutations generated with the SDK's own tools/sc/FidelityFX_SC.exe (glslang) from
 ffx-fsr2-api/shaders/*.glsl by tools/fsr2_shaders.sh (Linux runs it under Wine, in a minute). To keep the size down only
-the permutations the engine asks for are built: Lanczos LUT reprojection, motion vectors at render resolution and no jitter
+the permutations the engine asks for are built: Analytic (reference) Lanczos reprojection (the LUT variant blurs on NVIDIA, which does not select it; both are built), motion vectors at render resolution and no jitter
 cancellation are fixed; high dynamic range, inverted depth, sharpening and 16 bit maths stay selectable.

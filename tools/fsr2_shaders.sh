@@ -16,6 +16,6 @@ BASE="-reflection -deps=gcc -DFFX_GPU=1 -DFFX_FSR2_OPTION_UPSAMPLE_SAMPLERS_USE_
 for p in ffx_fsr2_tcr_autogen_pass ffx_fsr2_autogen_reactive_pass ffx_fsr2_accumulate_pass ffx_fsr2_compute_luminance_pyramid_pass ffx_fsr2_depth_clip_pass ffx_fsr2_lock_pass ffx_fsr2_reconstruct_previous_depth_pass ffx_fsr2_rcas_pass; do
 	H='{0,1}'; [ $p = ffx_fsr2_compute_luminance_pyramid_pass ] && H=0
 	# {1,1} / {0,0}: the key keeps its field (the engine's backend code sets it), both values build the same shader.
-	$RUN "$REL_SC" $BASE '-DFFX_FSR2_OPTION_REPROJECT_USE_LANCZOS_TYPE={1,1}' '-DFFX_FSR2_OPTION_HDR_COLOR_INPUT={0,1}' '-DFFX_FSR2_OPTION_LOW_RESOLUTION_MOTION_VECTORS={1,1}' '-DFFX_FSR2_OPTION_JITTERED_MOTION_VECTORS={0,0}' '-DFFX_FSR2_OPTION_INVERTED_DEPTH={0,1}' '-DFFX_FSR2_OPTION_APPLY_SHARPENING={0,1}' "-DFFX_HALF=$H" -name=$p -I. -output="$REL_OUT" $p.glsl > /dev/null
+	$RUN "$REL_SC" $BASE '-DFFX_FSR2_OPTION_REPROJECT_USE_LANCZOS_TYPE={0,1}' '-DFFX_FSR2_OPTION_HDR_COLOR_INPUT={0,1}' '-DFFX_FSR2_OPTION_LOW_RESOLUTION_MOTION_VECTORS={1,1}' '-DFFX_FSR2_OPTION_JITTERED_MOTION_VECTORS={0,0}' '-DFFX_FSR2_OPTION_INVERTED_DEPTH={0,1}' '-DFFX_FSR2_OPTION_APPLY_SHARPENING={0,1}' "-DFFX_HALF=$H" -name=$p -I. -output="$REL_OUT" $p.glsl > /dev/null
 done
 rm -f "$OUT"/*.h.d
