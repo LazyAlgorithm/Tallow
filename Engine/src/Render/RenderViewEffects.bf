@@ -16,6 +16,7 @@ extension RenderView
 			fb.idx = uint16.MaxValue;
 		}
 		ReleaseGiTargets();
+		ReleaseVelocityTargets();
 		Release(ref mDepthFb);
 		Release(ref mPostFb[0]);
 		Release(ref mPostFb[1]);
@@ -33,6 +34,7 @@ extension RenderView
 			fb.idx = uint16.MaxValue;
 		}
 		Release(ref mDepthAlbedoFb);
+		Release(ref mDepthAlbedoVelFb);
 		Release(ref mGiApplyFb[0]);
 		Release(ref mGiApplyFb[1]);
 		Release(ref mGiHistoryFb[0]);
@@ -59,7 +61,9 @@ extension RenderView
 		let depthFormat = bgfx.is_texture_valid(0, false, 1, .R32F, rt | clamp | point) ? bgfx.TextureFormat.R32F : bgfx.TextureFormat.R16F;
 		bgfx.TextureHandle[2] depthTextures;
 		depthTextures[0] = bgfx.create_texture_2d((uint16)mWidth, (uint16)mHeight, false, 1, depthFormat, rt | clamp | point, null, 0);
-		depthTextures[1] = bgfx.create_texture_2d((uint16)mWidth, (uint16)mHeight, false, 1, .D32F, rt | writeOnly, null, 0);
+		// A temporal upscaler reads the device depth, so then the depth buffer can be sampled (not write-only).
+		let sampleableDepth = TemporalUpscaleWired && AllowPostAa && Upscaling.IsTemporal(Upscaling.Effective);
+		depthTextures[1] = bgfx.create_texture_2d((uint16)mWidth, (uint16)mHeight, false, 1, .D32F, sampleableDepth ? (rt | clamp | point) : (rt | writeOnly), null, 0);
 		mDepthColor = depthTextures[0];
 		mDepthZ = depthTextures[1];
 		mDepthFb = bgfx.create_frame_buffer_from_handles(2, &depthTextures, true);
@@ -357,22 +361,25 @@ extension RenderView
 
 	/// The depth pass: how far in front of the camera each solid surface is, for the screen effects. The world's
 	/// solid objects first, then the viewmodel's over them, marked -1 so the effects leave it alone. Nothing drawn is
-	/// the sky, 60000 (SKY_DEPTH in post.sh).
+	/// the sky, 60000 (SKY_DEPTH in post.sh). With a temporal mode on (mTemporalOn), it also draws the motion vectors
+	/// (RenderViewTemporal.bf) with the camera's jitter in the projection.
 	void SubmitDepthPass(uint16 view, CameraData camera)
 	{
 		var viewMatrix = camera.view;
-		var projMatrix = camera.projection;
+		var projMatrix = mTemporalOn ? mProjJittered : camera.projection;
 		bgfx.set_palette_color_rgba32f(DepthPalette, 60000.0f, 0, 0, 1);
 		bgfx.set_palette_color_rgba32f(AlbedoPalette, 0, 0, 0, 0);
 		bgfx.set_view_name(view, "Depth", 5);
-		bgfx.set_view_frame_buffer(view, mDepthAlbedo ? mDepthAlbedoFb : mDepthFb);
+		bgfx.set_view_frame_buffer(view, mTemporalOn ? DepthVelocityFramebuffer() : (mDepthAlbedo ? mDepthAlbedoFb : mDepthFb));
 		bgfx.set_view_rect(view, 0, 0, (uint16)mWidth, (uint16)mHeight, 0, 1);
-		bgfx.set_view_clear_mrt(view, Gfx.ClearColor | Gfx.ClearDepth, 1.0f, 0, DepthPalette, AlbedoPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette);
+		bgfx.set_view_clear_mrt(view, Gfx.ClearColor | Gfx.ClearDepth, 1.0f, 0, DepthPalette, AlbedoPalette, AlbedoPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette, DepthPalette);
 		bgfx.set_view_transform(view, &viewMatrix, &projMatrix);
 		bgfx.set_view_mode(view, .Sequential);
 		bgfx.touch(view);
+		if (mTemporalOn)
+			SubmitSkyVelocity(view);
 		let worldViewProj = projMatrix * viewMatrix;
-		let viewmodelViewProj = camera.viewmodelProjection * viewMatrix;
+		let viewmodelViewProj = (mTemporalOn ? mViewmodelProjJittered : camera.viewmodelProjection) * viewMatrix;
 		for (int pass < 3)
 		{
 			let items = pass == 0 ? mItems : (pass == 1 ? mViewmodelItems : mFoliageItems);
@@ -393,21 +400,27 @@ extension RenderView
 
 	void SubmitDepthBatch(uint16 view, List<RenderItem> items, int start, int count, Matrix4 viewProj, bool viewmodel)
 	{
-		let stride = (uint16)sizeof(InstanceData);
+		// With the motion vectors each instance also carries last frame's matrix (VelocityInstance).
+		let stride = mTemporalOn ? (uint16)sizeof(VelocityInstance) : (uint16)sizeof(InstanceData);
 		let drawCount = Math.Min(count, (int)bgfx.get_avail_instance_data_buffer((uint32)count, stride));
 		if (drawCount <= 0)
 			return;
 		bgfx.InstanceDataBuffer buffer = default;
 		bgfx.alloc_instance_data_buffer(&buffer, (uint32)drawCount, stride);
-		let data = (InstanceData*)buffer.data;
-		for (int i < drawCount)
-		{
-			data[i].world = items[start + i].world;
-			data[i].color = .(1, 1, 1, 1);
-		}
 		let first = items[start];
-		if (mDepthAlbedo)
-			FillInstances(data, items, start, drawCount);
+		if (mTemporalOn)
+			FillVelocityInstances((VelocityInstance*)buffer.data, items, start, drawCount, mDepthAlbedo);
+		else
+		{
+			let data = (InstanceData*)buffer.data;
+			for (int i < drawCount)
+			{
+				data[i].world = items[start + i].world;
+				data[i].color = .(1, 1, 1, 1);
+			}
+			if (mDepthAlbedo)
+				FillInstances(data, items, start, drawCount);
+		}
 		let mesh = first.mesh;
 		if (mesh.IsDynamic)
 			bgfx.set_dynamic_vertex_buffer(0, mesh.DynamicBuffer, 0, (uint32)mesh.VertexCount);
@@ -431,6 +444,8 @@ extension RenderView
 			bgfx.set_texture(0, RenderResources.sAlbedo, AlbedoTexture(first), uint32.MaxValue);
 		}
 		SetWindUniforms(first.renderer.windSway);
+		if (mTemporalOn)
+			SetVelocityUniforms(viewmodel, UnreliableMotion(first));
 		bgfx.set_uniform(RenderResources.uDepthViewProj, &matrix, 1);
 		bgfx.set_uniform(RenderResources.uDepthParams, &depthParams, 1);
 		uint64 cull = FacingCull(Mirrored(first.world) ? Gfx.StateCullCw : Gfx.StateCullCcw);
@@ -441,7 +456,7 @@ extension RenderView
 		if (viewmodel)
 			depth = 0;
 		bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | depth | cull, 0);
-		bgfx.submit(view, mDepthAlbedo ? RenderResources.DepthAlbedoProgram : RenderResources.DepthProgram, 0, 0xff);
+		bgfx.submit(view, mTemporalOn ? (mDepthAlbedo ? RenderResources.DepthAlbedoVelProgram : RenderResources.DepthVelProgram) : (mDepthAlbedo ? RenderResources.DepthAlbedoProgram : RenderResources.DepthProgram), 0, 0xff);
 	}
 
 	/// The texture the lit pass multiplies an item's colour by (as ResolveSurface picks it), for the depth pass's colours.

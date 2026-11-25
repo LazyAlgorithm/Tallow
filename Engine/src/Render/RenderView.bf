@@ -46,6 +46,8 @@ class RenderView
 		public int32 probe;
 		/// The baked light probe grid it takes ambient light from (LightProbeSet.Pick; 0: the scene's grid).
 		public int32 lightGrid;
+		/// For an instance from InstancedSources: 1 + the index of its previous matrix in mInstancedPrevious (0: none).
+		public int32 prevSlot;
 	}
 
 	[CRepr]
@@ -331,7 +333,7 @@ class RenderView
 		if (MaxSceneHeight > 0 && !Capture)
 			scale = Math.Max(Math.Min(scale, (float)MaxSceneHeight / Math.Min(outWidth, outHeight)), 0.25f);
 		// Multisampling in the scene target; the filters (FXAA, SMAA) are passes after the tonemap.
-		let samples = Antialiasing.Samples(ViewAntialias());
+		let samples = ViewSamples();
 		if (outWidth == mOutWidth && outHeight == mOutHeight && scale == mBuiltScale && samples == mBuiltSamples && mSceneFb.Valid)
 			return;
 		ReleaseTargets();
@@ -383,6 +385,7 @@ class RenderView
 		if (!mSceneFb.Valid)
 			return;
 		RenderResources.EnsureCreated();
+		BeginTemporal(camera);
 		sRenderMarker.Begin();
 		defer
 		{
@@ -467,6 +470,9 @@ class RenderView
 		using (sWaterMarker.Sample())
 			DrawUnderwater(scene, camera);
 		DrawViewmodel(camera);
+		// The motion vectors come from the depth pass, which a temporal mode draws every frame.
+		if (mTemporalOn)
+			EnsureDepthPass(camera);
 		sEffectsMarker.Begin();
 		defer Profiler.End();
 		var picture = DrawScreenEffects(camera, env);
@@ -476,7 +482,7 @@ class RenderView
 			DrawBloom(env, picture);
 		// DLSS and FSR 3 would replace the scene's picture with one at the window's size here (UpscaleTemporal).
 		mTemporalUpscaled = false;
-		if (!Capture && shading == .Rendered && AllowPostAa && Upscaling.IsTemporal(Upscaling.Effective) && UpscaleTemporal(Upscaling.Effective, camera, picture, let upscaled))
+		if (mUpscaleTemporalOn && UpscaleTemporal(Upscaling.Effective, camera, picture, let upscaled))
 		{
 			picture = upscaled;
 			mTemporalUpscaled = true;
@@ -723,6 +729,7 @@ class RenderView
 		let shadowOnly = renderer.shadowOnly || (Capture && !PlanarPass && !renderer.inReflectionProbes);
 		RenderItem item;
 		item.tint = .White;
+		item.prevSlot = 0;
 		item.mesh = mesh;
 		item.renderer = renderer;
 		item.material = material;
@@ -819,6 +826,7 @@ class RenderView
 					continue;
 				RenderItem item;
 				item.tint = hasParts ? parts[partIndex].tint : .White;
+				item.prevSlot = 0;
 				item.mesh = sectionMesh;
 				item.renderer = renderer;
 				item.material = sectioned ? partMaterial.PaletteVariant(section) : partMaterial;
@@ -899,6 +907,7 @@ class RenderView
 			{
 				RenderItem item;
 				item.mesh = mesh;
+				item.prevSlot = 0;
 				item.renderer = proxy;
 				item.material = material;
 				Color tint;
@@ -925,17 +934,23 @@ class RenderView
 		public Mesh mesh;
 		public Material material;
 		public Span<Matrix4> matrices;
+		/// Optional: each instance's matrix last frame (same length and order as matrices), for the motion vectors of
+		/// temporal antialiasing and upscaling. Empty: the instances are treated as standing still (the camera's
+		/// motion alone). The source keeps them, as it must anything else that identifies an instance across frames.
+		public Span<Matrix4> previous;
 	}
 
 	/// Called while a scene's draws are gathered, for each view; add to the list to have instances drawn. Lists of
 	/// matrices must stay valid until the frame is submitted.
 	public static Event<delegate void(Scene scene, List<InstancedDraws> output)> InstancedSources ~ _.Dispose();
 	List<InstancedDraws> mInstancedDraws = new .() ~ delete _;
+	List<Matrix4> mInstancedPrevious = new .() ~ delete _;
 
 	/// Every instance from InstancedSources in view (or casting a shadow into it), drawn like foliage: in runs that are
 	/// already grouped by mesh and material, so they are not sorted.
 	void GatherInstanced(Scene scene, Frustum frustum, bool castShadows, CameraData camera, float shadowRange)
 	{
+		mInstancedPrevious.Clear();
 		if (!InstancedSources.HasListeners)
 			return;
 		mInstancedDraws.Clear();
@@ -948,8 +963,11 @@ class RenderView
 			let key = MakeKey(draws.proxy, mesh, draws.material);
 			let localBounds = mesh.Bounds;
 			let shadows = castShadows && draws.proxy.castShadows;
+			let hasPrevious = draws.previous.Length == draws.matrices.Length;
+			var instanceIndex = 0;
 			for (let world in draws.matrices)
 			{
+				let thisIndex = instanceIndex++;
 				let bounds = localBounds.Transformed(world);
 				let center = bounds.Center;
 				let radius = bounds.Extents.Length;
@@ -963,6 +981,12 @@ class RenderView
 				item.material = draws.material;
 				item.world = world;
 				item.tint = .White;
+				item.prevSlot = 0;
+				if (hasPrevious)
+				{
+					mInstancedPrevious.Add(draws.previous[thisIndex]);
+					item.prevSlot = (int32)mInstancedPrevious.Count;
+				}
 				item.center = center;
 				item.radius = radius;
 				item.probe = Reflections.Pick(item.center, item.radius);
@@ -1055,7 +1079,7 @@ class RenderView
 	{
 		let view = (uint16)(ViewBase + SceneView);
 		var viewMatrix = camera.view;
-		var projMatrix = camera.projection;
+		var projMatrix = SceneProjection(camera);
 		SetUpView(view, "Scene", mSceneFb, 0, 0, mWidth, mHeight, Gfx.ClearColor | Gfx.ClearDepth, SceneClearColor);
 		bgfx.set_view_transform(view, &viewMatrix, &projMatrix);
 		bgfx.touch(view);
@@ -1080,7 +1104,7 @@ class RenderView
 			return;
 		let view = (uint16)(ViewBase + TransparentView);
 		var viewMatrix = camera.view;
-		var projMatrix = camera.projection;
+		var projMatrix = SceneProjection(camera);
 		SetUpView(view, "Transparent", mSceneFb, 0, 0, mWidth, mHeight);
 		bgfx.set_view_transform(view, &viewMatrix, &projMatrix);
 		bgfx.set_view_mode(view, .Sequential);
@@ -1094,7 +1118,7 @@ class RenderView
 			return;
 		let view = (uint16)(ViewBase + ViewmodelView);
 		var viewMatrix = camera.view;
-		var projection = camera.viewmodelProjection;
+		var projection = ViewmodelProjection(camera);
 		// Depth only: the world stays in the picture, and nothing in it can hide the viewmodel.
 		SetUpView(view, "Viewmodel", mSceneFb, 0, 0, mWidth, mHeight, Gfx.ClearDepth);
 		bgfx.set_view_transform(view, &viewMatrix, &projection);

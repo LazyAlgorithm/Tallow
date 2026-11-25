@@ -30,6 +30,9 @@ static class RenderResources
 	public static bgfx.UniformHandle uPostRight, uPostUp, uPostForward, uPostEye, uGradeParams, uGradeFilter;
 	// Screen-space global illumination (RenderViewEffects.bf).
 	public static bgfx.ProgramHandle DepthAlbedoProgram, SsgiGatherProgram, SsgiApplyProgram;
+	// Temporal antialiasing and motion vectors (RenderViewTemporal.bf).
+	public static bgfx.ProgramHandle DepthVelProgram, DepthAlbedoVelProgram, SkyVelProgram, SkyVelAlbedoProgram, TaaProgram, VelocityViewProgram;
+	public static bgfx.UniformHandle uVelCur, uVelPrev, uVelParams, uTaaParams, uTaaParams2, sVelocity, sHistory;
 	public static bgfx.UniformHandle sSsgi, sSsgiHistory, sSsgiLit, sAlbedoBuffer, uSsgiParams, uSsgiParams2;
 	public static bgfx.ProgramHandle LineProgram;
 	// Decals (tallowengine.com/docs/decals).
@@ -93,6 +96,19 @@ static class RenderResources
 		DofCombineProgram = Gfx.LoadProgram("vs_fullscreen", "fs_dof_combine");
 		MotionBlurProgram = Gfx.LoadProgram("vs_fullscreen", "fs_motion_blur");
 		DepthAlbedoProgram = Gfx.LoadProgram("vs_depth_albedo", "fs_depth_albedo");
+		DepthVelProgram = Gfx.LoadProgram("vs_depth_vel", "fs_depth_vel");
+		DepthAlbedoVelProgram = Gfx.LoadProgram("vs_depth_albedo_vel", "fs_depth_albedo_vel");
+		SkyVelProgram = Gfx.LoadProgram("vs_fullscreen", "fs_depth_sky_vel");
+		SkyVelAlbedoProgram = Gfx.LoadProgram("vs_fullscreen", "fs_depth_sky_vel_albedo");
+		TaaProgram = Gfx.LoadProgram("vs_fullscreen", "fs_taa");
+		VelocityViewProgram = Gfx.LoadProgram("vs_fullscreen", "fs_velocity_view");
+		uVelCur = bgfx.create_uniform("u_velCur", .Mat4, 1);
+		uVelPrev = bgfx.create_uniform("u_velPrev", .Mat4, 1);
+		uVelParams = bgfx.create_uniform("u_velParams", .Vec4, 1);
+		uTaaParams = bgfx.create_uniform("u_taaParams", .Vec4, 1);
+		uTaaParams2 = bgfx.create_uniform("u_taaParams2", .Vec4, 1);
+		sVelocity = bgfx.create_uniform("s_velocity", .Sampler, 1);
+		sHistory = bgfx.create_uniform("s_history", .Sampler, 1);
 		SsgiGatherProgram = Gfx.LoadProgram("vs_fullscreen", "fs_ssgi");
 		SsgiApplyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_ssgi_apply");
 		sSsgi = bgfx.create_uniform("s_ssgi", .Sampler, 1);
@@ -267,6 +283,19 @@ static class RenderResources
 		bgfx.destroy_uniform(sBlend);
 		bgfx.destroy_program(DepthProgram);
 		bgfx.destroy_program(DepthAlbedoProgram);
+		bgfx.destroy_program(DepthVelProgram);
+		bgfx.destroy_program(DepthAlbedoVelProgram);
+		bgfx.destroy_program(SkyVelProgram);
+		bgfx.destroy_program(SkyVelAlbedoProgram);
+		bgfx.destroy_program(TaaProgram);
+		bgfx.destroy_program(VelocityViewProgram);
+		bgfx.destroy_uniform(uVelCur);
+		bgfx.destroy_uniform(uVelPrev);
+		bgfx.destroy_uniform(uVelParams);
+		bgfx.destroy_uniform(uTaaParams);
+		bgfx.destroy_uniform(uTaaParams2);
+		bgfx.destroy_uniform(sVelocity);
+		bgfx.destroy_uniform(sHistory);
 		bgfx.destroy_program(SsgiGatherProgram);
 		bgfx.destroy_program(SsgiApplyProgram);
 		bgfx.destroy_program(AoProgram);

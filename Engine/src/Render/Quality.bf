@@ -116,8 +116,8 @@ static class Quality
 			v.reflectionSize = 64;
 		case .High,.Custom:
 		case .Ultra:
-			// TAA: added by the temporal pass. Ultra becomes .TAA once Antialiasing.TemporalAvailable; until then 4x multisampling.
-			v.antialiasMode = .MSAA4x;
+			// TAA (a graphics card that cannot do it falls back to FXAA: Antialiasing.Resolve).
+			v.antialiasMode = .TAA;
 			v.shadowedLights = 16;
 			v.globalIllumination = .ProbeGridAndScreenSpace;
 			v.shadowDistance = 1.5f;

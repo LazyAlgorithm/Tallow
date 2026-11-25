@@ -69,7 +69,7 @@ extension RenderView
 		EnsureDepthPass(camera);
 		let view = (uint16)(ViewBase + DecalView);
 		var viewMatrix = camera.view;
-		var projMatrix = camera.projection;
+		var projMatrix = SceneProjection(camera);
 		SetUpView(view, "Decals", mSceneFb, 0, 0, mWidth, mHeight);
 		bgfx.set_view_transform(view, &viewMatrix, &projMatrix);
 		// In order: later decals are laid over earlier ones.

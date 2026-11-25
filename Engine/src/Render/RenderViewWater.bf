@@ -94,7 +94,7 @@ extension RenderView
 		CopySceneForWater((uint16)(ViewBase + WaterCopyView), "Water copy");
 		let view = (uint16)(ViewBase + WaterView);
 		var viewMatrix = camera.view;
-		var projMatrix = camera.projection;
+		var projMatrix = SceneProjection(camera);
 		SetUpView(view, "Water", mSceneFb, 0, 0, mWidth, mHeight);
 		bgfx.set_view_transform(view, &viewMatrix, &projMatrix);
 		if (mirrors)

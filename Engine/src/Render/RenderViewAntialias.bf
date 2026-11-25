@@ -42,6 +42,8 @@ extension RenderView
 	struct PostPlan
 	{
 		public AntialiasMode aa;
+		/// The picture is made at the scene's size (TAA and FSR 1 work there; a plain stretch happens after).
+		public bool sceneSize;
 		public bool easu;
 		public bool rcas;
 		public int32 passes;
@@ -60,6 +62,7 @@ extension RenderView
 		Release(ref mUpFb);
 		Release(ref mSmaaEdgesFb);
 		Release(ref mSmaaWeightsFb);
+		ReleaseTaaTargets();
 		mLdrWidth = mLdrHeight = 0;
 	}
 
@@ -70,7 +73,8 @@ extension RenderView
 		if (Capture)
 			return .Off;
 		var mode = Antialiasing.Resolve(AntialiasingMode);
-		if (Antialiasing.IsPost(mode) && !AllowPostAa)
+		// TAA also needs the post passes' view ids (the resolve) and a view that draws every frame.
+		if ((Antialiasing.IsPost(mode) || Antialiasing.IsTemporal(mode)) && (!AllowPostAa || shading != .Rendered))
 		{
 			mode = Antialiasing.Resolve(.MSAA4x);
 			if (Antialiasing.IsPost(mode))
@@ -79,8 +83,16 @@ extension RenderView
 		return mode;
 	}
 
-	/// The Resolve of the temporal antialiasing (TAA) goes here, on the scene's HDR picture before the bloom and the
-	/// tonemap, with the camera's jitter set in the projection by Render. TAA: added by the temporal pass.
+	/// The multisampling the scene target has: none for TAA (and for a temporal upscaler, which also needs a plain
+	/// picture) and the filters, the mode's own for MSAA.
+	int32 ViewSamples()
+	{
+		if (TemporalUpscaleWired && AllowPostAa && Upscaling.IsTemporal(Upscaling.Effective))
+			return 0;
+		return Antialiasing.Samples(ViewAntialias());
+	}
+
+	/// The temporal antialiasing (TAA) resolve is DrawTaa (RenderViewTemporal.bf), after the tonemap: see DrawFinish.
 
 	/// The temporal upscalers' hook (DLSS, FSR 3), called with the HDR scene picture at the scene's size once the
 	/// screen effects have run. When it draws the picture at the window's size into `output` and returns true, the
@@ -88,8 +100,24 @@ extension RenderView
 	/// path, which then uses FSR 1 (Upscaling.Effective already says FSR 1 while the native upscaler is missing).
 	bool UpscaleTemporal(UpscalerKind kind, CameraData camera, bgfx.TextureHandle sceneColor, out bgfx.TextureHandle output)
 	{
-		output = default;
-		return false;
+		return ApplyTemporalUpscale(kind, MakeTemporalInputs(camera, sceneColor), out output);
+	}
+
+	/// A test switch: TALLOW_DEBUG_VELOCITY=1 shows the motion vectors instead of the picture.
+	static bool sDebugVelocityRead;
+	static bool sDebugVelocity;
+	static bool DebugVelocity
+	{
+		get
+		{
+			if (!sDebugVelocityRead)
+			{
+				sDebugVelocityRead = true;
+				let value = scope String();
+				sDebugVelocity = Environment.GetEnvironmentVariable("TALLOW_DEBUG_VELOCITY", value) case .Ok && value == "1";
+			}
+			return sDebugVelocity;
+		}
 	}
 
 	bool ClaimPostViews()
@@ -110,7 +138,13 @@ extension RenderView
 		if (Capture || shading != .Rendered)
 			return plan;
 		plan.aa = ViewAntialias();
-		if (!Antialiasing.IsPost(plan.aa))
+		if (plan.aa == .TAA)
+		{
+			// Decided at the start of the frame (BeginTemporal), which also claimed the view ids.
+			if (!mTaaOn)
+				plan.aa = .Off;
+		}
+		else if (!Antialiasing.IsPost(plan.aa))
 			plan.aa = .Off;
 		if (plan.aa == .SMAA && !Antialiasing.EnsureSmaaTextures())
 			plan.aa = .FXAA;
@@ -127,8 +161,15 @@ extension RenderView
 			plan.easu = false;
 			plan.rcas = false;
 		}
-		plan.passes = (plan.aa == .FXAA ? 1 : (plan.aa == .SMAA ? 3 : 0)) + (plan.easu ? 1 : 0) + (plan.rcas ? 1 : 0);
-		if (plan.passes > 0 && (!AllowPostAa || !ClaimPostViews()))
+		if (plan.aa == .TAA)
+		{
+			plan.sceneSize = true;
+			// With nothing sharpening already, a light RCAS (which also stretches a smaller scene to the window).
+			if (!plan.easu)
+				plan.rcas = true;
+		}
+		plan.passes = (plan.aa == .TAA ? 1 : 0) + (plan.aa == .FXAA ? 1 : (plan.aa == .SMAA ? 3 : 0)) + (plan.easu ? 1 : 0) + (plan.rcas ? 1 : 0);
+		if (plan.passes > 0 && (!AllowPostAa || (plan.aa != .TAA && !ClaimPostViews())))
 			return PostPlan();
 		return plan;
 	}
@@ -190,6 +231,15 @@ extension RenderView
 	/// The tonemap, then whatever antialiasing and upscaling is on, into the output.
 	void DrawFinish(SceneEnvironment env, bgfx.TextureHandle picture, float bloom)
 	{
+		if (mTemporalOn && mVelocityColor.Valid && DebugVelocity)
+		{
+			// A test view (TALLOW_DEBUG_VELOCITY=1): the motion vectors instead of the picture.
+			bgfx.set_texture(0, RenderResources.sColor, mVelocityColor, uint32.MaxValue);
+			let view = NextPostView();
+			SetUpView(view, "Velocity view", mOutputFb, 0, 0, mOutWidth, mOutHeight, 0, 0);
+			SubmitFullscreen(view, RenderResources.VelocityViewProgram, Gfx.StateWriteRGB | Gfx.StateWriteA);
+			return;
+		}
 		let plan = PlanPost();
 		if (plan.passes == 0)
 		{
@@ -197,13 +247,18 @@ extension RenderView
 			return;
 		}
 		// The size of the picture the filters work on: the scene's when FSR 1 will enlarge it afterwards.
-		let width = plan.easu ? mWidth : mOutWidth;
-		let height = plan.easu ? mHeight : mOutHeight;
+		let width = (plan.easu || plan.sceneSize) ? mWidth : mOutWidth;
+		let height = (plan.easu || plan.sceneSize) ? mHeight : mOutHeight;
 		EnsureLdrTargets(width, height);
 		DrawTonemap(env, picture, bloom, mLdrFb[0], width, height);
 		var source = mLdrColor[0];
 
-		if (plan.aa != .Off)
+		if (plan.aa == .TAA)
+		{
+			// The resolve keeps its result in its history target, which is the next pass's source.
+			source = DrawTaa(source, width, height);
+		}
+		else if (plan.aa != .Off)
 		{
 			let last = !plan.easu && !plan.rcas;
 			let target = last ? mOutputFb : mLdrFb[1];
@@ -237,11 +292,12 @@ extension RenderView
 		if (plan.rcas)
 		{
 			// Sharpness 0..1 as FSR's scale of stops of reduction: 1 the full amount, 0 none.
-			let stops = (1.0f - Math.Clamp(Upscaling.Sharpness, 0.0f, 1.0f)) * 2.0f;
+			let sharpness = (plan.aa == .TAA && !plan.easu) ? Antialiasing.TaaSharpness : Upscaling.Sharpness;
+			let stops = (1.0f - Math.Clamp(sharpness, 0.0f, 1.0f)) * 2.0f;
 			Vector4 fsrParams = .(Math.Pow(2.0f, -stops), 0, 0, 0);
 			bgfx.set_uniform(RenderResources.uFsrParams, &fsrParams, 1);
 			bgfx.set_texture(0, RenderResources.sColor, source, uint32.MaxValue);
-			PostPass("FSR RCAS", mOutputFb, mOutWidth, mOutHeight, mOutWidth, mOutHeight, RenderResources.RcasProgram);
+			PostPass("FSR RCAS", mOutputFb, mOutWidth, mOutHeight, plan.easu ? mOutWidth : width, plan.easu ? mOutHeight : height, RenderResources.RcasProgram);
 		}
 	}
 }

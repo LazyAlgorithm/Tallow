@@ -104,7 +104,7 @@ extension EditorApp
 			for (int i < 7)
 			{
 				let mode = (AntialiasMode)i;
-				// What the card cannot do: multisampling it lacks, and TAA until it is built.
+				// What the card cannot do: multisampling it lacks, and TAA without four render targets.
 				var reason = scope String();
 				var available = true;
 				if (Antialiasing.IsMsaa(mode) && !Antialiasing.SamplesSupported(Antialiasing.Samples(mode)))
@@ -115,7 +115,7 @@ extension EditorApp
 				else if (mode == .TAA && !Antialiasing.TemporalAvailable)
 				{
 					available = false;
-					reason.Set("Temporal antialiasing is not built yet; FXAA is used instead");
+					reason.Set("Temporal antialiasing needs a graphics card with four render targets at once; FXAA is used instead");
 				}
 				if (ImGui.Selectable(scope String(aaNames[i]).CStr(), aaIndex == i, available ? 0 : ImGui.SelectableFlags.Disabled))
 				{

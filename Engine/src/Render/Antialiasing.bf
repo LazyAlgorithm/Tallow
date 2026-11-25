@@ -22,8 +22,9 @@ enum AntialiasMode : int32
 	MSAA4x,
 	/// Multisampled edges on the scene (8 samples per pixel).
 	MSAA8x,
-	/// Temporal antialiasing: smooths edges, shimmer and specular sparkle using the previous frames. Falls back to
-	/// FXAA until the temporal pass is built (Antialiasing.TemporalAvailable).
+	/// Temporal antialiasing: smooths edges, shimmer and specular sparkle using the previous frames (a sub-pixel
+	/// jitter, motion vectors, and a history resolve; see RenderViewTemporal.bf). Needs a graphics card with four
+	/// render targets at once (Antialiasing.TemporalAvailable); otherwise FXAA is used.
 	TAA
 }
 
@@ -31,14 +32,23 @@ enum AntialiasMode : int32
 /// fallbacks when it cannot do the one asked for (each logged once).
 static class Antialiasing
 {
-	/// Whether the temporal pass (motion vectors, camera jitter, history resolve) exists, so TAA can be chosen.
-	/// TAA: added by the temporal pass. Until then TAA falls back to FXAA.
-	public static bool TemporalAvailable = false;
+	/// Whether the temporal pass (motion vectors, camera jitter, history resolve) can run here, so TAA can be chosen:
+	/// the depth pass writes the distance, the motion vector and the surface colour at once (four render targets,
+	/// which every Vulkan, Metal, desktop OpenGL, OpenGL ES 3 and WebGL 2 device has).
+	public static bool TemporalAvailable => Gfx.Initialized && bgfx.get_caps().limits.maxFBAttachments >= 4;
+
+	/// How much the result of TAA is sharpened (0 to 1, as Upscaling.Sharpness): the history filtering softens a little.
+	/// Used when FSR 1 is not already sharpening the picture.
+	public static float TaaSharpness = 0.5f;
+	/// How much of the history TAA keeps in a still picture (0 to 1): more is smoother and ghosts more.
+	public static float TaaHistory = 0.9f;
 
 	static AntialiasMode sAsked = (AntialiasMode)-1;
 	static AntialiasMode sGot;
 	static bool sInitialized;
 	static HashSet<int32> sLogged = new .() ~ delete _;
+
+	public static bool IsTemporal(AntialiasMode mode) => mode == .TAA;
 
 	public static bool IsMsaa(AntialiasMode mode) => mode == .MSAA2x || mode == .MSAA4x || mode == .MSAA8x;
 
@@ -81,9 +91,14 @@ static class Antialiasing
 	}
 
 	/// The mode that will really be used for the one asked for: multisampling the card cannot do steps down a count
-	/// (and to FXAA if it can do none), TAA is FXAA until it exists. Logged once each.
-	public static AntialiasMode Resolve(AntialiasMode asked)
+	/// (and to FXAA if it can do none), TAA is FXAA where the card cannot do it. Logged once each.
+	public static AntialiasMode Resolve(AntialiasMode askedMode)
 	{
+		var asked = askedMode;
+		// A test switch: TALLOW_AA=<mode number> forces a mode whatever the settings say.
+		let forced = scope String();
+		if (Environment.GetEnvironmentVariable("TALLOW_AA", forced) case .Ok && int32.Parse(forced) case .Ok(let number))
+			asked = (AntialiasMode)number;
 		if (sInitialized && sAsked == asked)
 			return sGot;
 		if (!Gfx.Initialized)
@@ -91,7 +106,7 @@ static class Antialiasing
 		var mode = asked;
 		if (mode == .TAA && !TemporalAvailable)
 		{
-			LogOnce(1, "TAA is not available yet: using FXAA.");
+			LogOnce(1, "TAA needs four render targets at once, which this graphics card lacks: using FXAA.");
 			mode = .FXAA;
 		}
 		if (IsMsaa(mode))

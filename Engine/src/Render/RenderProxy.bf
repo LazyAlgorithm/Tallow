@@ -93,6 +93,12 @@ class RenderProxy
 	/// Set by lines and trails whose colours fade: drawn see-through, as an alpha below 1 in Color is.
 	[NonSerialized]
 	public bool vertexAlpha;
+	/// The world matrix this renderer was drawn with last frame and this frame, for the motion vectors (RenderView's
+	/// depth pass keeps them; MotionFrame is the frame of MotionWorld).
+	[NonSerialized]
+	public Matrix4 MotionPrevWorld, MotionWorld;
+	[NonSerialized]
+	public int64 MotionFrame = -1000;
 	/// World-space offset applied only when drawing. The network layer uses it to blend out corrections.
 	[NonSerialized]
 	public Vector3 VisualOffset;
