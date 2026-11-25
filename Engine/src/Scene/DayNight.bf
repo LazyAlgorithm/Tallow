@@ -8,6 +8,11 @@ namespace Tallow;
 /// colours come from the air they shine through (Atmosphere); with Auto Colours on, so do the ambient and fog colours.
 static class DayNight
 {
+	/// The sun casts shadows while it is higher than this (degrees); below it the moon may (Moon Shadows).
+	public const float SunShadowElevation = -2;
+	/// The moon casts shadows only higher than this (degrees).
+	public const float MoonShadowElevation = 2;
+
 	/// Length of the moon's cycle in days.
 	public const double LunarMonth = 29.53;
 
@@ -82,6 +87,16 @@ static class DayNight
 
 	/// The sun's height above the horizon in degrees (below it negative).
 	public static float SunElevation(SceneEnvironment env) => Math.Asin(Math.Clamp(SunDirection(env).y, -1, 1)) * Mathf.Rad2Deg;
+
+	/// How far on lights marked Only At Night are, 0 (day) to 1 (night): they fade in as the sun goes from 2 degrees
+	/// above the horizon to 4 below, and out again at dawn. 1 with Day / Night off.
+	public static float NightFactor(SceneEnvironment env)
+	{
+		if (!env.dayNight)
+			return 1;
+		let t = Math.Clamp((SunElevation(env) - 2) / (-4 - 2.0f), 0, 1);
+		return t * t * (3 - 2 * t);
+	}
 
 	/// Whether it is night: the sun more than 6 degrees below the horizon (the end of civil twilight).
 	public static bool IsNight(SceneEnvironment env) => SunElevation(env) < -6;

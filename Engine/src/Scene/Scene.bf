@@ -123,7 +123,11 @@ class SceneEnvironment
 	// ---- Day / Night (tallowengine.com/docs/day-night). Off by default so older scenes keep their hand-placed sun;
 	// new scenes switch it on (SceneTemplates). ----
 
-	/// Day / Night: the sun (and moon) are turned by a clock instead of being placed by hand.
+	/// Day / Night: the sun (and moon) are turned by a clock instead of being placed by hand. While it runs, the sky's
+	/// reflection and ambient are re-made every half degree the sun moves, baked light probes follow the sky's
+	/// brightness, the shadows follow the sun (the moon's at night with Moon Shadows) and lights marked Only At Night
+	/// switch. Baked lightmaps keep the light they were baked with; bake with the sun set to Realtime (Baked Only off)
+	/// and bake only indirect/local lights for a moving sun.
 	public bool dayNight;
 	/// The time of day in hours, 0 to 24 (12 is noon). Drag it in the editor to move the sun.
 	public float timeOfDay = 10;

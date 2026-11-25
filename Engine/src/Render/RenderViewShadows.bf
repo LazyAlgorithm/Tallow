@@ -137,6 +137,9 @@ extension RenderView
 		return drawCount;
 	}
 
+	/// Day / Night: the step, in degrees, the sun's direction moves in for its shadow cascades.
+	public const float ShadowAngleStep = 0.05f;
+
 	/// How far behind a cascade's view things can stand and still cast a shadow into it.
 	const float CasterDistance = 150.0f;
 
@@ -146,8 +149,25 @@ extension RenderView
 		float[RenderResources.CascadeCount + 1] splits = default;
 		CascadeSplits(camera, shadowDistance, ref splits);
 
-		let lightForward = lightDirection.Normalized;
-		var lightRight = Vector3.Cross(Vector3.Up, lightForward);
+		var lightForward = lightDirection.Normalized;
+		Vector3 lightRight = .Zero;
+		if (mShadowPole.LengthSquared > 0.5f)
+		{
+			// Day / Night: the sun turns round the celestial pole. The cascades see it from a direction stepped by
+			// ShadowAngleStep round and away from the pole (steps too small to see, so shadow edges do not crawl
+			// every frame), and their basis comes from the pole, so it turns smoothly with the sun instead of
+			// flipping where the sun passes overhead.
+			let pole = mShadowPole.Normalized;
+			let e1 = Vector3.Cross(pole, Math.Abs(pole.x) < 0.9f ? Vector3.Right : Vector3.Forward).Normalized;
+			let e2 = Vector3.Cross(pole, e1);
+			let step = ShadowAngleStep * Mathf.Deg2Rad;
+			let around = Math.Round(Math.Atan2(Vector3.Dot(lightForward, e2), Vector3.Dot(lightForward, e1)) / step) * step;
+			let up = Math.Round(Math.Asin(Math.Clamp(Vector3.Dot(lightForward, pole), -1, 1)) / step) * step;
+			lightForward = ((e1 * Math.Cos(around) + e2 * Math.Sin(around)) * Math.Cos(up) + pole * Math.Sin(up)).Normalized;
+			lightRight = Vector3.Cross(pole, lightForward);
+		}
+		if (lightRight.LengthSquared < 1.0e-6f)
+			lightRight = Vector3.Cross(Vector3.Up, lightForward);
 		if (lightRight.LengthSquared < 1.0e-6f)
 			lightRight = Vector3.Cross(Vector3.Right, lightForward);
 		lightRight = lightRight.Normalized;

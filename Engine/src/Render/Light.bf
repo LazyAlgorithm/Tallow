@@ -87,6 +87,9 @@ struct LightData
 	/// How dark the light's shadows are: 1 is fully dark, 0 none.
 	[Range(0, 1)]
 	public float shadowStrength = 1.0f;
+	/// On only at night (street lights, windows): with Day / Night on, the light fades in as the sun sets (from 2
+	/// degrees above the horizon to 4 below) and out again at dawn. With Day / Night off it is always on.
+	public bool onlyAtNight = false;
 	// What NetworkSync last saw of these settings (0: not looked at yet).
 	uint64 mSharedHash = 0;
 

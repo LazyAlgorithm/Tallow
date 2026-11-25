@@ -158,6 +158,9 @@ class LightProbeGrid
 class LightProbeSet
 {
 	public List<LightProbeGrid> grids = new .() ~ DeleteContainerAndItems!(_);
+	/// The luminance of the sky's ambient light (linear ambientSky times ambientIntensity) when the probes were baked
+	/// (0: not known, an older file). With Day / Night on, the probes are scaled by the sky now over this.
+	public float bakeSkyLuminance;
 
 	bgfx.TextureHandle mTexture = .() { idx = uint16.MaxValue };
 	int32 mWidth, mHeight, mDepth;
@@ -222,7 +225,11 @@ class LightProbeSet
 	/// The `.tprobes` file: a header, then each grid (the scene's first).
 	public void Write(String output)
 	{
-		output.Append("tprobes 2\n");
+		// The sky's luminance rides on the header line, which older readers skip.
+		if (bakeSkyLuminance > 0)
+			output.AppendF("tprobes 2 sky {0:0.######}\n", bakeSkyLuminance);
+		else
+			output.Append("tprobes 2\n");
 		for (let grid in grids)
 		{
 			output.Append("grid\n");
@@ -242,7 +249,11 @@ class LightProbeSet
 				continue;
 			let parts = scope List<StringView>(line.Split(' ', .RemoveEmptyEntries));
 			if (parts[0] == "tprobes")
+			{
+				if (parts.Count >= 4 && parts[2] == "sky")
+					bakeSkyLuminance = Math.Max(float.Parse(parts[3]) case .Ok(let skyValue) ? skyValue : 0, 0);
 				continue;
+			}
 			if (parts[0] == "grid" || current == null)
 			{
 				current = new .();
@@ -376,6 +387,23 @@ static class LightProbes
 
 	/// Sets the shader's probes for the next draw (none: the ambient colours): grid `pick` of the set (Pick), with
 	/// the scene's grid round it when that is a volume.
+	/// What the baked probes are multiplied by for the frame being drawn (AmbientScaleFor; 1 without Day / Night).
+	public static float AmbientScale = 1;
+
+	/// Baked probes hold the sky's light and its bounce as they were at bake time. With Day / Night on they follow
+	/// the sky now: scaled by the luminance of the ambient sky now over the one they were baked with (1 for files that
+	/// do not say, or with Day / Night off).
+	public static float AmbientScaleFor(LightProbeSet probes, SceneEnvironment env)
+	{
+		if (probes == null || !env.dayNight || probes.bakeSkyLuminance <= 0)
+			return 1;
+		let sky = LightBaker.Linear(env.ambientSky, env.ambientIntensity);
+		return Math.Clamp(Luminance(sky) / probes.bakeSkyLuminance, 0, 16);
+	}
+
+	/// Rec. 709 luminance of a linear colour.
+	public static float Luminance(Vector3 c) => 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z;
+
 	public static void Bind(LightProbeSet probes, int32 pick = 0)
 	{
 		bgfx.TextureHandle texture = probes != null ? probes.Texture : .() { idx = uint16.MaxValue };
@@ -403,7 +431,7 @@ static class LightProbes
 			if (chosen > 0)
 				Put(probes.grids[0], 4, &uniforms);
 			uniforms[8] = .(probes.TextureSize, 0);
-			uniforms[9] = .(probes.grids[chosen].max, 0);
+			uniforms[9] = .(probes.grids[chosen].max, AmbientScale);
 		}
 		else
 		{

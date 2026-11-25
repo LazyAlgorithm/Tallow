@@ -1006,6 +1006,11 @@ public readonly partial record struct Light
     /// How dark the light's shadows are: 1 is fully dark, 0 none.
     /// </summary>
     public float ShadowStrength { get => Fields.GetFloat("shadowStrength"); set => Fields.Set("shadowStrength", value); }
+    /// <summary>
+    /// On only at night (street lights, windows): with Day / Night on, the light fades in as the sun sets (from 2
+    /// degrees above the horizon to 4 below) and out again at dawn. With Day / Night off it is always on.
+    /// </summary>
+    public bool OnlyAtNight { get => Fields.GetBool("onlyAtNight"); set => Fields.Set("onlyAtNight", value); }
 }
 
 /// <summary>
@@ -3352,7 +3357,7 @@ internal static partial class NativeComponentTypes
         [typeof(AudioSource)] = ["AudioClip", "Group", "LocalOnly", "Volume", "Pitch", "Loop", "PlayOnStart", "Stream", "Spatial", "MinDistance", "MaxDistance", "Rolloff", "Doppler", "Occlusion", "AirAbsorption", "ReverbSend", "ConeAngle", "ConeOuterVolume", "Subtitles", "Lowpass", "OtherWorldVolume", "OtherWorldLowpass"],
         [typeof(CharacterController)] = ["Shape", "BoxSize", "Center", "StepHeight", "MaxSlope", "Mass", "GravityScale", "TurnShapeWithObject", "JumpGrace", "SoftCharacterContact", "SeparationSpeed", "CanSwim", "SwimDepth", "SwimSpeed"],
         [typeof(CharacterMotor)] = ["MoveSpeed", "SprintSpeed", "JumpSpeed", "Acceleration", "AirControl", "MouseSensitivity", "FaceLookDirection"],
-        [typeof(Light)] = ["InverseSquare", "BakedOnly", "ShadowMaskChannel", "InnerSpotAngle", "ShadowStrength"],
+        [typeof(Light)] = ["InverseSquare", "BakedOnly", "ShadowMaskChannel", "InnerSpotAngle", "ShadowStrength", "OnlyAtNight"],
         [typeof(MeshRenderer)] = ["EmissiveFromColor", "Lightmap", "LightmapDirection", "LightmapShadowmask", "LightmapScaleOffset", "LightmapDecode", "WindSway", "ShadowOnly", "BakedLighting", "ScreenReflections", "InReflectionProbes", "PlanarReflection", "UseModelMaterials", "Occluder", "VirtualGeometry"],
         [typeof(NavigationAgent)] = ["SnapDistance", "BaseOffset", "RepathInterval", "FaceMovement", "TurnSpeed", "SmoothPath", "AvoidOthers", "Radius", "AvoidancePriority", "UseLinks"],
         [typeof(NavigationSurface)] = ["BakedData", "Size", "CellSize", "AgentRadius", "AgentHeight", "MaxStep", "MaxSlope", "ChunkSize", "Flying", "Backend", "IncludeRenderMeshes", "RebuildOnStart", "DrawNavigation"],

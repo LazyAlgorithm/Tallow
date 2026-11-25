@@ -15,7 +15,7 @@ extension EditorApp
 		BeginProperty("Day / Night");
 		changed |= ImGui.Checkbox("##dn", ref env.dayNight);
 		if (ImGui.IsItemHovered())
-			ImGui.SetTooltip("Turn the sun (and moon) by a clock instead of placing them by hand.\nThe sun light's rotation is set from the time each frame.");
+			ImGui.SetTooltip("Turn the sun (and moon) by a clock instead of placing them by hand.\nThe sun light's rotation is set from the time each frame.\nBaked lightmaps keep the light they were baked with: for a moving sun,\nleave the sun Realtime (Baked Only off) and bake only indirect and local lights.");
 		if (env.dayNight)
 		{
 			BeginProperty("Time Of Day");

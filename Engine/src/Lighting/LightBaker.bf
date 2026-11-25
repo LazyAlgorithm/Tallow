@@ -1249,6 +1249,7 @@ class LightBaker
 		if (Probes != null)
 		{
 			let text = scope String();
+			Probes.bakeSkyLuminance = Math.Max(LightProbes.Luminance(mSky), 1e-6f);
 			Probes.Write(text);
 			if (System.IO.File.WriteAllText(scope $"{full}/Probes.tprobes" , text) case .Err)
 			{

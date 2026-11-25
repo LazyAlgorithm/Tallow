@@ -52,6 +52,8 @@ class LightClusters
 
 	/// The lights drawn, directional ones first.
 	public List<Light> Lights = new .() ~ delete _;
+	/// How far on Only At Night lights are for this view (DayNight.NightFactor, from the scene's clock).
+	public float NightFactor = 1;
 	/// How many of Lights are directional (they light every pixel, not by cluster).
 	public int32 DirectionalCount;
 	public List<ShadowTile> Tiles = new .() ~ delete _;
@@ -110,10 +112,14 @@ class LightClusters
 		DirectionalCount = 0;
 		Dropped = 0;
 		SetCamera(camera);
+		NightFactor = DayNight.NightFactor(scene.Environment);
 		let frustum = Frustum(ViewProj, Gfx.HomogeneousDepth);
 		for (let light in scene.Lights)
 		{
 			if (!light.IsActiveAndEnabled || !light.GameObject.InActiveWorld || light == sun || light.GameObject.HiddenInHierarchy)
+				continue;
+			// Only At Night lights are off by day (and cast no shadow then).
+			if (light.onlyAtNight && NightFactor <= 0)
 				continue;
 			if (light.type == .Directional)
 			{
@@ -387,7 +393,7 @@ class LightClusters
 			let light = Lights[i];
 			let texel = i * TexelsPerLight;
 			let position = light.Transform.Position;
-			let color = LinearColor(light.color, light.intensity);
+			let color = LinearColor(light.color, light.intensity * (light.onlyAtNight ? NightFactor : 1));
 			let type = light.type == .Directional ? 2 : (light.type == .Spot ? 1 : 0);
 			let outer = Math.Cos(light.spotAngle * 0.5f * Mathf.Deg2Rad);
 			let innerAngle = light.innerSpotAngle < 0 ? light.spotAngle * 0.8f : Math.Clamp(light.innerSpotAngle, 0, light.spotAngle);

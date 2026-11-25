@@ -31,6 +31,8 @@ namespace Tallow;
 ///                                                      under <staging>/.cache/clod, no window (Streaming/StreamingCook.bf)
 ///   --streaming-test                                   check the streaming core (page files, pools, IO threads, the
 ///                                                      feedback ring) with no window, and exit 0 or 1
+///   --daynight-test --full-day <s> [--shots <dir>]     play a whole day in s seconds in a window and check the scene
+///                                                      reacts (sky rebuilds, shadows, Only At Night lights)
 ///   --daynight-test                                    print the sun and moon through the day with no window and check
 ///                                                      the sun's path, the scene's sun light and saving (exit 1 on a failure)
 ///   --quality-test                                     switch each quality preset with no window, print the applied
@@ -346,7 +348,14 @@ class Application
 		}
 		if (HasArg("--quality-test"))
 			return QualityTest.Run();
-		if (HasArg("--daynight-test"))
+		// --full-day plays a whole day in a window (D1e); without it the check needs no window.
+		if (HasArg("--daynight-test") && HasArg("--full-day") && !(this is FullDayTestApp))
+		{
+			let test = scope FullDayTestApp();
+			test.Run(args);
+			return test.Result;
+		}
+		if (HasArg("--daynight-test") && !(this is FullDayTestApp))
 			return DayNightTest.Run();
 		let streamingTest = scope String();
 		if (GetArg("--streaming-test", streamingTest) && streamingTest == "textures" && !(this is TextureStreamTestApp))

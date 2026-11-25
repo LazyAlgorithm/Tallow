@@ -302,5 +302,31 @@ static class DayNightTest
 		let oldColor = oldSun.color;
 		DayNight.Update(old, 1);
 		Check(oldSun.color == oldColor && oldSun.intensity == 1 && o.ambientSky == fresh.ambientSky, "an old scene's sun keeps its colour");
+
+		// Baked probes follow the sky (D1e): the bake's sky luminance rides on the header; old files scale by 1.
+		let probes = scope LightProbeSet();
+		Check(probes.Parse("tprobes 2\ngrid\nmin 0 0 0\nmax 1 1 1\ncount 1 1 1\n1 0 0 0 1 0 0 0 1 0 0 0\n") && probes.bakeSkyLuminance == 0, "an old .tprobes file reads");
+		let probeEnv = scope SceneEnvironment();
+		probeEnv.dayNight = true;
+		Check(LightProbes.AmbientScaleFor(probes, probeEnv) == 1, "old probes are not scaled");
+		probes.bakeSkyLuminance = 0.5f;
+		let probeText = scope String();
+		probes.Write(probeText);
+		let probesBack = scope LightProbeSet();
+		Check(probesBack.Parse(probeText) && Math.Abs(probesBack.bakeSkyLuminance - 0.5f) < 1e-5f, "the bake's sky luminance saves and loads");
+		probeEnv.timeOfDay = 12;
+		probeEnv.autoColors = true;
+		probeEnv.sunIntensity = Atmosphere.ReferenceSunIntensity;
+		let noonScene = scope Scene();
+		noonScene.Environment.CopyFrom(probeEnv);
+		DayNight.Apply(noonScene);
+		let noonScale = LightProbes.AmbientScaleFor(probesBack, noonScene.Environment);
+		noonScene.Environment.timeOfDay = 0;
+		DayNight.Apply(noonScene);
+		let nightScale = LightProbes.AmbientScaleFor(probesBack, noonScene.Environment);
+		Console.WriteLine(scope $"probe ambient scale (baked sky luminance 0.5): noon {noonScale:F3}, midnight {nightScale:F3}");
+		Check(nightScale < noonScale * 0.2f, "probes dim at night");
+		noonScene.Environment.dayNight = false;
+		Check(LightProbes.AmbientScaleFor(probesBack, noonScene.Environment) == 1, "probes not scaled with Day / Night off");
 	}
 }

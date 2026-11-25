@@ -284,6 +284,7 @@ static class Reflections
 	static int32 sSkyLastLevel;
 	static int64 sSkyState = int64.MinValue;
 	static int64 sUpdatedFrame = -1;
+	static int64 sSkyStartFrame = int64.MinValue / 2;
 	// Bound where a draw has no cube to use (nothing reads it then).
 	static bgfx.TextureHandle sBlackCube = .() { idx = uint16.MaxValue };
 	static int32 sGeneration;
@@ -412,18 +413,35 @@ static class Reflections
 			Step(scene, sunDir, sunColor);
 	}
 
+	/// How far the sun may move (degrees) before a moving clock (Day / Night) re-makes the sky's cube.
+	public const float SkyAngleStep = 0.5f;
+	/// The fewest frames between two sky rebuilds while the clock moves, so the work stays spread out.
+	public const int32 SkyMinimumFrames = 30;
+
 	static int64 SkyState(SceneEnvironment env, Vector4 sunDir, Vector4 sunColor)
 	{
 		int64 hash = 17;
 		for (let color in Color[?](env.skyZenith, env.skyHorizon, env.skyGround))
 			Mix(ref hash, .(color.r, color.g, color.b));
+		if (env.dayNight)
+		{
+			// A turning sun: the clock puts the sun, the moon and the stars (and DayNight their colours), so the clock
+			// to half a degree of the sun's turn (two minutes) stands for all of them, and the cube is re-made every
+			// half degree, not every frame. The physical sky's tables follow the same sun: only their first build counts.
+			Mix(ref hash, .(Math.Round(env.timeOfDay * 15 / SkyAngleStep), env.latitude, env.dayOfYear));
+			Mix(ref hash, .(env.axisTilt, env.northDirection, env.sunIntensity));
+			Mix(ref hash, .(env.moonIntensity, env.skyMode != .Gradient ? env.skyBrightness : 0, env.skyMode != .Gradient ? env.turbidity : 0));
+			let state = PhysicalSky.State(env);
+			hash = hash * 1099511628211 ^ (state >= 4 ? 4 + state % 4 : state);
+			return hash;
+		}
 		Mix(ref hash, .(sunDir.x, sunDir.y, sunDir.z));
 		Mix(ref hash, .(sunColor.x, sunColor.y, sunColor.z));
 		// The physical sky: a new table, the moon and stars' clock, and its settings.
 		hash = hash * 1099511628211 ^ PhysicalSky.State(env);
 		if (env.skyMode != .Gradient)
 		{
-			Mix(ref hash, .(env.skyBrightness, env.turbidity, env.dayNight ? env.sunIntensity : 0));
+			Mix(ref hash, .(env.skyBrightness, env.turbidity, 0));
 			Mix(ref hash, .(env.timeOfDay, env.latitude, env.dayOfYear));
 		}
 		return hash;
@@ -439,8 +457,11 @@ static class Reflections
 	static void StartNext(Scene scene, Vector4 sunDir, Vector4 sunColor)
 	{
 		let skyState = SkyState(scene.Environment, sunDir, sunColor);
-		if (skyState != sSkyState || !sSkyCube.Valid)
+		// While the clock moves, at least SkyMinimumFrames between rebuilds (probes may capture meanwhile).
+		let tooSoon = scene.Environment.dayNight && sSkyCube.Valid && sSkyReady && Time.FrameCount - sSkyStartFrame < SkyMinimumFrames;
+		if ((skyState != sSkyState && !tooSoon) || !sSkyCube.Valid)
 		{
+			sSkyStartFrame = Time.FrameCount;
 			sJobRunning = true;
 			sJobSky = true;
 			sJobProbe = default;

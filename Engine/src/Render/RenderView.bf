@@ -277,6 +277,12 @@ class RenderView
 	float[RenderResources.CascadeCount] mCascadeRadius;
 	Vector3 mLightRight, mLightUp;
 	bool mHasSun;
+	// Day / Night: whether the sun or moon may cast the cascades now, and the celestial pole the cascades turn round
+	// (zero with Day / Night off).
+	bool mDayNightShadows = true;
+	Vector3 mShadowPole;
+	/// Whether the last Render drew the sun's (or the moon's) shadow cascades.
+	public bool SunShadowsDrawn { get; private set; }
 	/// This view's point, spot and extra directional lights, in clusters, and the shadow tiles of the nearest.
 	LightClusters mLights = new .() ~ delete _;
 	bool mHasLocalShadows;
@@ -428,7 +434,11 @@ class RenderView
 		let env = scene.Environment;
 		let sun = GatherLights(scene, camera);
 		let lightDirection = SetSun(sun);
-		let castShadows = DrawShadows && ShadowsEnabled && sun && sun.castShadows && shading == .Rendered;
+		let castShadows = DrawShadows && ShadowsEnabled && sun && sun.castShadows && shading == .Rendered && mDayNightShadows;
+		// Day / Night with neither the sun nor the moon casting: no shadow at all.
+		if (!mDayNightShadows)
+			mSunDir.w = 0;
+		SunShadowsDrawn = castShadows;
 		SetFrameConstants(camera, env);
 		// The physical sky's tables follow the camera (before the reflections, which draw the sky too).
 		if (!Capture)
@@ -539,12 +549,29 @@ class RenderView
 			if (!sun || (!sun.castShadows && light.castShadows))
 				sun = light;
 		}
-		// With Day / Night on, the sun is the light the clock turns (SceneEnvironment.sunLight can name one).
-		if (scene.Environment.dayNight)
+		// With Day / Night on, the sun is the light the clock turns (SceneEnvironment.sunLight can name one). It casts
+		// the cascades while it is above -2 degrees; after that the moon does (Moon Shadows, the moon over 2 degrees,
+		// and the moon light casting shadows), becoming the main light, else nothing does.
+		mDayNightShadows = true;
+		mShadowPole = .Zero;
+		let env = scene.Environment;
+		if (env.dayNight)
 		{
 			let driven = DayNight.FindSun(scene);
 			if (driven && driven.IsActiveAndEnabled && driven.GameObject.InActiveWorld)
 				sun = driven;
+			DayNight.CelestialBasis(env, var poleX, var poleY, out mShadowPole);
+			if (DayNight.SunElevation(env) <= DayNight.SunShadowElevation)
+			{
+				mDayNightShadows = false;
+				let moon = DayNight.FindMoon(scene);
+				if (env.moonShadows && moon && moon.castShadows && moon.intensity > 0 && moon.IsActiveAndEnabled && moon.GameObject.InActiveWorld &&
+					DayNight.MoonDirection(env).y > Math.Sin(DayNight.MoonShadowElevation * Mathf.Deg2Rad))
+				{
+					sun = moon;
+					mDayNightShadows = true;
+				}
+			}
 		}
 		let shadowed = DrawShadows && ShadowsEnabled ? MaxShadowedLights : 0;
 		mLights.Build(scene, camera, sun, shadowed, RenderResources.ShadowAtlasSize);
@@ -589,6 +616,7 @@ class RenderView
 		mCamPos = .(camera.position, 1);
 		mTanHalfFov = camera.orthographic ? 0 : Math.Tan(camera.fieldOfView * 0.5f * (Math.PI_f / 180));
 		mProbeGrid = BakedLightingOn ? LightProbes.Get(env.lightProbes) : null;
+		LightProbes.AmbientScale = LightProbes.AmbientScaleFor(mProbeGrid, env);
 		mAmbientSky = Linear(env.ambientSky, env.ambientIntensity);
 		mAmbientGround = Linear(env.ambientGround, env.ambientIntensity);
 		let fog = Linear(env.fogColor);

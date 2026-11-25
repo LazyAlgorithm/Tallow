@@ -274,13 +274,13 @@ vec3 probeGridAmbient(vec4 lo, vec4 scale, vec4 count, vec4 offset, vec3 wpos, v
 }
 
 // The baked light probes' ambient light at a point for a surface facing n: the draw's grid, fading into the scene's
-// grid towards the edges of a Light Probe Volume's box.
+// grid towards the edges of a Light Probe Volume's box. u_lightProbe[9].w scales it to the sky now (Day / Night).
 vec3 probeAmbient(vec3 wpos, vec3 n)
 {
-	vec3 inner = probeGridAmbient(u_lightProbe[0], u_lightProbe[1], u_lightProbe[2], u_lightProbe[3], wpos, n);
+	vec3 inner = probeGridAmbient(u_lightProbe[0], u_lightProbe[1], u_lightProbe[2], u_lightProbe[3], wpos, n) * u_lightProbe[9].w;
 	if (u_lightProbe[4].w < 0.5)
 		return inner;
-	vec3 outer = probeGridAmbient(u_lightProbe[4], u_lightProbe[5], u_lightProbe[6], u_lightProbe[7], wpos, n);
+	vec3 outer = probeGridAmbient(u_lightProbe[4], u_lightProbe[5], u_lightProbe[6], u_lightProbe[7], wpos, n) * u_lightProbe[9].w;
 	vec3 inside = min(wpos - u_lightProbe[0].xyz, u_lightProbe[9].xyz - wpos);
 	float weight = clamp(min(min(inside.x, inside.y), inside.z) * u_lightProbe[1].w, 0.0, 1.0);
 	return mix(outer, inner, weight);

@@ -158,7 +158,7 @@ extension NetworkSync
 		public int32 type;
 		public Color color;
 		public float intensity, range, innerSpotAngle, spotAngle, shadowStrength;
-		public bool inverseSquare, castShadows, bakedOnly, enabled;
+		public bool inverseSquare, castShadows, bakedOnly, enabled, onlyAtNight;
 
 		public this(Light light)
 		{
@@ -174,6 +174,7 @@ extension NetworkSync
 			inverseSquare = light.inverseSquare;
 			castShadows = light.castShadows;
 			bakedOnly = light.bakedOnly;
+			onlyAtNight = light.onlyAtNight;
 		}
 
 		public bool Valid => type >= 0 && type <= 2 && color.r.IsFinite && color.g.IsFinite && color.b.IsFinite && color.a.IsFinite && intensity.IsFinite && range.IsFinite
@@ -191,6 +192,7 @@ extension NetworkSync
 			light.inverseSquare = inverseSquare;
 			light.castShadows = castShadows;
 			light.bakedOnly = bakedOnly;
+			light.onlyAtNight = onlyAtNight;
 			light.enabled = enabled;
 		}
 
