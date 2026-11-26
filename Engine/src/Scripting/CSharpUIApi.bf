@@ -106,4 +106,18 @@ static class CSharpUI
 	[CSharpExpose]
 	public static void SetAttribute(uint64 session, uint64 entity, StringView id, StringView name, StringView value) =>
 		Element(session, entity, id)?.attributes.Set(name, value);
+
+	/// Where the element is laid out this frame (a scrolling list's rows), in document units relative to the
+	/// document. Layout runs again next frame; call it each draw.
+	[CSharpExpose]
+	public static void SetLayoutRect(uint64 session, uint64 entity, StringView id, float x, float y, float width, float height)
+	{
+		let element = Element(session, entity, id);
+		if (element == null)
+			return;
+		element.x = x;
+		element.y = y;
+		element.width = width;
+		element.height = height;
+	}
 }

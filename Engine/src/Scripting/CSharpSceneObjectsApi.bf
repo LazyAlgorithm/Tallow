@@ -277,4 +277,24 @@ static class CSharpSceneObjects
         }
         return false;
     }
+	/// Shares an object every machine already has (a map loaded additively on each peer) under a network id the game
+	/// works out the same way on every machine. Adds a Network Identity if it has none. False without the object.
+	[CSharpExpose]
+	public static bool ShareSceneObject(uint64 session, uint64 entity, int32 netId, bool fullPrecision)
+	{
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		if (obj == null)
+			return false;
+		var identity = obj.GetComponent<NetworkIdentity>();
+		if (!identity.IsValid)
+			identity = obj.AddComponent<NetworkIdentity>();
+		if (!identity.IsValid)
+			return false;
+		identity.Enabled = false;
+		identity.NetId = (uint32)netId;
+		identity.fullPrecision = fullPrecision;
+		identity.Enabled = true;
+		return true;
+	}
+
 }

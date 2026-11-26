@@ -237,3 +237,68 @@ static class CSharpSettings
 		return Copy(output, buffer);
 	}
 }
+
+/// The game's own folder and its player-folder names, for a game that migrates files from beside the program or from
+/// the folder it used before a rename.
+[CSharpExpose]
+static class CSharpGamePaths
+{
+	static int32 Copy(StringView text, Span<uint8> buffer)
+	{
+		let count = Math.Min(text.Length, buffer.Length);
+		for (int i < count)
+			buffer[i] = (uint8)text[i];
+		return (int32)text.Length;
+	}
+
+	/// The game's folder, ending in a slash (empty until the game has started).
+	[CSharpExpose]
+	public static int32 GameFolder(Span<uint8> buffer) => Copy(GamePaths.GameFolder, buffer);
+
+	/// The game's name in the player's folder (the last part).
+	[CSharpExpose]
+	public static int32 Game(Span<uint8> buffer) => Copy(GamePaths.Game, buffer);
+
+	/// The publisher's name in the player's folder (the first part).
+	[CSharpExpose]
+	public static int32 Company(Span<uint8> buffer) => Copy(GamePaths.Company, buffer);
+}
+
+/// The engine's built-in map-editor pieces (primitives, walls, floors) for a C# map editor: "builtin:Walls/Wall 4 m".
+[CSharpExpose]
+static class CSharpMapPieces
+{
+	static int32 CopyList(Span<StringView> items, Span<uint8> buffer)
+	{
+		let text = scope String();
+		for (int i < items.Length)
+		{
+			if (i > 0)
+				text.Append('\x1F');
+			text.Append(items[i]);
+		}
+		let count = Math.Min(text.Length, buffer.Length);
+		for (int i < count)
+			buffer[i] = (uint8)text[i];
+		return (int32)text.Length;
+	}
+
+	/// Every piece's name, separated by 0x1F.
+	[CSharpExpose]
+	public static int32 Names(Span<uint8> buffer) => CopyList(MapPieces.Names, buffer);
+
+	/// The palette folders, separated by 0x1F.
+	[CSharpExpose]
+	public static int32 Folders(Span<uint8> buffer) => CopyList(MapPieces.Folders, buffer);
+
+	/// Makes a piece in the scene at the origin; 0 for a name that is not one.
+	[CSharpExpose]
+	public static uint64 Create(uint64 session, StringView name)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		if (scene == null)
+			return 0;
+		let made = MapPieces.Create(scene, name);
+		return made != null ? (uint64)made.Id : 0;
+	}
+}

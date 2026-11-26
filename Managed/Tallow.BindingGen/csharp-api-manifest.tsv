@@ -189,6 +189,9 @@ method	Tallow.CSharpGUI	Label	void	x:float	y:float	text:string	color:System.Nume
 method	Tallow.CSharpGUI	MouseOverControl	bool
 method	Tallow.CSharpGUI	Slider	float	x:float	y:float	width:float	label:string	value:float	min:float	max:float
 method	Tallow.CSharpGUI	Toggle	bool	x:float	y:float	label:string	value:bool
+method	Tallow.CSharpGamePaths	Company	int	buffer:System.Span<byte>
+method	Tallow.CSharpGamePaths	Game	int	buffer:System.Span<byte>
+method	Tallow.CSharpGamePaths	GameFolder	int	buffer:System.Span<byte>
 method	Tallow.CSharpGameplay	GameTime	float
 method	Tallow.CSharpGameplay	NetRandomValue	float	session:ulong	entity:ulong	salt:int
 method	Tallow.CSharpGpuDriven	Available	bool
@@ -238,6 +241,9 @@ method	Tallow.CSharpJoints	IsAlive	bool	session:ulong	id:ulong	hinge:bool
 method	Tallow.CSharpJoints	SetHingeMotor	void	session:ulong	id:ulong	speed:float	torque:float	angle:float	mode:int	response:float	maximumSpeed:float
 method	Tallow.CSharpJoints	SetSuspensionSpring	void	session:ulong	id:ulong	stiffness:float	damping:float
 method	Tallow.CSharpJoints	SuspensionPosition	float	session:ulong	id:ulong
+method	Tallow.CSharpMapPieces	Create	ulong	session:ulong	name:string
+method	Tallow.CSharpMapPieces	Folders	int	buffer:System.Span<byte>
+method	Tallow.CSharpMapPieces	Names	int	buffer:System.Span<byte>
 method	Tallow.CSharpMaps	Check	int	file:string	buffer:System.Span<byte>
 method	Tallow.CSharpMaps	ClearOffers	void
 method	Tallow.CSharpMaps	CountComponents	int	file:string	typeName:string
@@ -467,6 +473,7 @@ method	Tallow.CSharpSceneObjects	SetLayer	bool	session:ulong	entity:ulong	layer:
 method	Tallow.CSharpSceneObjects	SetName	bool	session:ulong	entity:ulong	name:string
 method	Tallow.CSharpSceneObjects	SetParent	bool	session:ulong	entity:ulong	parent:ulong	keepWorldPose:bool
 method	Tallow.CSharpSceneObjects	SetTransient	void	session:ulong	entity:ulong	transient:bool
+method	Tallow.CSharpSceneObjects	ShareSceneObject	bool	session:ulong	entity:ulong	netId:int	fullPrecision:bool
 method	Tallow.CSharpScenes	AllowActivation	void	id:int	allow:bool
 method	Tallow.CSharpScenes	Group	ulong	id:int
 method	Tallow.CSharpScenes	Preload	int	paths:string
@@ -556,6 +563,7 @@ method	Tallow.CSharpUI	HasElement	bool	session:ulong	entity:ulong	id:string
 method	Tallow.CSharpUI	ReloadDocument	void	session:ulong	entity:ulong
 method	Tallow.CSharpUI	SetAttribute	void	session:ulong	entity:ulong	id:string	name:string	value:string
 method	Tallow.CSharpUI	SetClass	void	session:ulong	entity:ulong	id:string	name:string	on:bool
+method	Tallow.CSharpUI	SetLayoutRect	void	session:ulong	entity:ulong	id:string	x:float	y:float	width:float	height:float
 method	Tallow.CSharpUI	SetText	void	session:ulong	entity:ulong	id:string	text:string
 method	Tallow.CSharpUI	SetValue	void	session:ulong	entity:ulong	id:string	value:float
 method	Tallow.CSharpUI	SetVisible	void	session:ulong	entity:ulong	id:string	visible:bool

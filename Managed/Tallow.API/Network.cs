@@ -265,3 +265,13 @@ public readonly partial record struct Scene
     /// <summary>Server only: removes a networked object on every machine. False on a client.</summary>
     public bool Despawn(GameObject gameObject) => CSharpNetwork.Despawn(SessionId, gameObject.Id);
 }
+
+public readonly partial record struct Scene
+{
+    /// <summary>
+    /// Shares an object every machine already has (a map both peers loaded additively) under a network id the game
+    /// works out the same way everywhere. Adds a Network Identity if it has none.
+    /// </summary>
+    public bool ShareSceneObject(GameObject gameObject, int netId, bool fullPrecision = true) =>
+        CSharpSceneObjects.ShareSceneObject(SessionId, gameObject.Id, netId, fullPrecision);
+}

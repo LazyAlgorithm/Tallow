@@ -26,7 +26,7 @@ public readonly partial record struct UIDocument(GameObject GameObject) : ICompo
 }
 
 /// <summary>An element of a UI document, by its id. Setting things on one that is gone does nothing.</summary>
-public readonly record struct UIElement(GameObject GameObject, string Id)
+public readonly partial record struct UIElement(GameObject GameObject, string Id)
 {
     /// <summary>Whether the document has an element with this id.</summary>
     public bool Exists => !string.IsNullOrEmpty(Id) && CSharpUI.HasElement(GameObject.SceneId, GameObject.Id, Id);
@@ -123,4 +123,12 @@ public readonly record struct UIElement(GameObject GameObject, string Id)
     /// <summary>Sets an attribute of the element (a picture's "src", a control's "disabled"...).</summary>
     public void SetAttribute(string name, string value) =>
         CSharpUI.SetAttribute(GameObject.SceneId, GameObject.Id, Id, name ?? "", value ?? "");
+}
+
+public readonly partial record struct UIElement
+{
+    /// <summary>Places the element this frame, in document units (a scrolling list's rows). Layout runs again next
+    /// frame; call it each draw.</summary>
+    public void SetLayoutRect(float x, float y, float width, float height) =>
+        CSharpUI.SetLayoutRect(GameObject.SceneId, GameObject.Id, Id, x, y, width, height);
 }

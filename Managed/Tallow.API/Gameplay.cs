@@ -24,10 +24,19 @@ internal static class NativeText
 }
 
 /// <summary>Where the game may write files on this machine.</summary>
-public static class GamePaths
+public static partial class GamePaths
 {
     /// <summary>The player's folder for this game (saves, settings, screenshots), ending in a slash.</summary>
     public static string PlayerData => NativeText.Read(CSharpWorld.CopyPlayerDataPath) ?? "";
+
+    /// <summary>The game's own folder (where a built game's program is), ending in a slash; empty before it starts.</summary>
+    public static string GameFolder => NativeText.Read(CSharpGamePaths.GameFolder) ?? "";
+
+    /// <summary>The game's name in the player's folder.</summary>
+    public static string GameName => NativeText.Read(CSharpGamePaths.Game) ?? "";
+
+    /// <summary>The publisher's name in the player's folder ("Tallow", or "Tessera" before the engine rename).</summary>
+    public static string Company => NativeText.Read(CSharpGamePaths.Company) ?? "";
 }
 
 /// <summary>Plays sounds.</summary>

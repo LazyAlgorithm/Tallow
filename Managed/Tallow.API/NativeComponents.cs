@@ -605,3 +605,27 @@ public static class CommandLine
     public static int GetInt(string name, int fallback = 0) =>
         int.TryParse(Get(name), NumberStyles.Integer, CultureInfo.InvariantCulture, out int value) ? value : fallback;
 }
+
+public readonly partial record struct Camera
+{
+    /// <summary>The camera's transform (where it is and which way it faces).</summary>
+    public Transform Transform => GameObject.Transform;
+}
+
+public readonly partial record struct SpawnPoint
+{
+    /// <summary>The spawn point's transform: its position and facing.</summary>
+    public Transform Transform => GameObject.Transform;
+}
+
+public readonly partial record struct Light
+{
+    /// <summary>The light's transform.</summary>
+    public Transform Transform => GameObject.Transform;
+}
+
+public readonly partial record struct MeshRenderer
+{
+    /// <summary>The mesh's transform.</summary>
+    public Transform Transform => GameObject.Transform;
+}
