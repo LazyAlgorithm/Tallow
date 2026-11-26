@@ -221,6 +221,37 @@ static class CSharpNetwork
 		NetworkSession.PortOverride = Math.Max(port, 0);
 	}
 
+	/// Starts a session in the running scene at once: mode 1 server (no local player), 2 host, 3 client (to
+	/// address); transport 0 Direct, 1 Steam. False when the scene has a session already, the mode is wrong or the
+	/// transport could not start. The scene needs a Network Session only for sessions started at load; this makes
+	/// them from a menu instead.
+	[CSharpExpose]
+	public static bool StartSession(uint64 session, int32 mode, StringView address, int32 port,
+		int32 transport, StringView playerPrefab, bool hostMigration, bool autoReplicate)
+	{
+		let scene = CSharpRuntime.PhysicsScene(session);
+		if (scene == null || scene.Network != null || mode < 1 || mode > 3 || port < 0 || port > 65535)
+			return false;
+		let network = new NetworkManager(scene);
+		network.PlayerPrefab.Set(playerPrefab.IsEmpty ? "Player" : playerPrefab);
+		network.Transport = transport == 1 ? .Steam : .Direct;
+		network.HostMigration = hostMigration;
+		network.AutoReplicate = autoReplicate;
+		scene.Network = network;
+		bool ok;
+		if (mode == 3)
+			ok = network.StartClient(address.IsEmpty ? "127.0.0.1" : address, (uint16)port);
+		else
+			ok = network.StartServer((uint16)port, mode == 2);
+		if (!ok)
+		{
+			scene.Network = null;
+			delete network;
+			return false;
+		}
+		return true;
+	}
+
 	/// Ends this scene's session (the scene plays on offline). False when there was none.
 	[CSharpExpose]
 	public static bool StopSession(uint64 session)
@@ -255,6 +286,18 @@ static class CSharpNetwork
 		for (int i < Math.Min(list.Count, ids.Length))
 			ids[i] = list[i]; // exact: client ids are small
 		return (int32)list.Count;
+	}
+
+	/// The object's shared network id (the identity server and clients use for it), 0 when it has no Network
+	/// Identity or no session is running.
+	[CSharpExpose]
+	public static int32 NetId(uint64 session, uint64 entity)
+	{
+		let obj = CSharpRuntime.PhysicsObject(session, entity);
+		if (obj == null || obj.Scene.Network == null)
+			return 0;
+		let identity = obj.GetComponent<NetworkIdentity>();
+		return identity.IsValid ? (int32)identity.NetId : 0;
 	}
 
 	/// The object spawned as a client's player (0: the host's own); 0 when it has none.

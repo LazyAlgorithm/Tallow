@@ -13,6 +13,9 @@ public readonly partial record struct UIDocument(GameObject GameObject) : ICompo
     /// <summary>Whether the object still has a UI Document.</summary>
     public bool IsValid => CSharpUI.HasDocument(GameObject.SceneId, GameObject.Id);
 
+    /// <summary>Reads the document file again at once (the next draw reads a changed one by itself).</summary>
+    public void Reload() => CSharpUI.ReloadDocument(GameObject.SceneId, GameObject.Id);
+
     /// <summary>The element with id="...", or null.</summary>
     public UIElement? Find(string id)
     {
@@ -65,4 +68,13 @@ public readonly record struct UIElement(GameObject GameObject, string Id)
         get => CSharpUI.GetValue(GameObject.SceneId, GameObject.Id, Id);
         set => CSharpUI.SetValue(GameObject.SceneId, GameObject.Id, Id, value);
     }
+
+    /// <summary>Gives the element a class its stylesheet can style, or takes it away (the "chosen" highlight of a
+    /// selected option or the current page).</summary>
+    public void SetClass(string name, bool on) =>
+        CSharpUI.SetClass(GameObject.SceneId, GameObject.Id, Id, name ?? "", on);
+
+    /// <summary>Whether the element has that class.</summary>
+    public bool HasClass(string name) =>
+        CSharpUI.HasClass(GameObject.SceneId, GameObject.Id, Id, name ?? "");
 }

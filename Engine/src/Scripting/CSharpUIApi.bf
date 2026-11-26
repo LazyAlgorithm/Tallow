@@ -18,6 +18,10 @@ static class CSharpUI
 	[CSharpExpose]
 	public static bool HasDocument(uint64 session, uint64 entity) => Document(session, entity) != null;
 
+	/// Reads the document from disk again at once (after document or Variant changed), instead of at its next draw.
+	[CSharpExpose]
+	public static void ReloadDocument(uint64 session, uint64 entity) => Document(session, entity)?.Reload();
+
 	[CSharpExpose]
 	public static bool HasElement(uint64 session, uint64 entity, StringView id) => Element(session, entity, id) != null;
 
@@ -58,4 +62,13 @@ static class CSharpUI
 		if (element != null)
 			element.value = value;
 	}
+
+	/// Gives the element a class (its stylesheet can style it), or takes the class away.
+	[CSharpExpose]
+	public static void SetClass(uint64 session, uint64 entity, StringView id, StringView name, bool on) =>
+		Element(session, entity, id)?.SetClass(name, on);
+
+	[CSharpExpose]
+	public static bool HasClass(uint64 session, uint64 entity, StringView id, StringView name) =>
+		Element(session, entity, id)?.HasClass(name) ?? false;
 }

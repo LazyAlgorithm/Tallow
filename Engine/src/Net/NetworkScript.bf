@@ -139,9 +139,13 @@ static class LocalControls
 	/// held. Off by default: the mouse always turns it (lock the mouse to keep the cursor in the window).
 	public static bool HoldRightMouseToLook = false;
 
+	/// Degrees of turn per unit of mouse movement for objects with no NetworkScript of their own (a game's mouse
+	/// sensitivity setting).
+	public static float Sensitivity = 0.15f;
+
 	public static void Read(ref NetInput input)
 	{
-		Read(ref input, ref Yaw, ref Pitch, true, HoldRightMouseToLook);
+		Read(ref input, ref Yaw, ref Pitch, true, HoldRightMouseToLook, Sensitivity);
 	}
 
 	public static void Read(ref NetInput input, ref float yaw, ref float pitch, bool mouseLook = true, bool holdRightMouseToLook = false, float sensitivity = 0.15f)

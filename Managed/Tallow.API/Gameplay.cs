@@ -146,6 +146,16 @@ public static class InputActions
 
     /// <summary>Switches a whole map of actions ("Player", "Vehicle", "Menu") on or off.</summary>
     public static void SetMapEnabled(string map, bool enabled) => CSharpInputActions.SetMapEnabled(map, enabled);
+
+    /// <summary>
+    /// How far the mouse turns a player, in degrees per unit of mouse movement (the sensitivity setting; 0.15 by
+    /// default). Networked scripts without their own look code read it through their tick's controls.
+    /// </summary>
+    public static float LookSensitivity
+    {
+        get => CSharpPlatform.LookSensitivity();
+        set => CSharpPlatform.SetLookSensitivity(value);
+    }
 }
 
 /// <summary>Random numbers every machine agrees on, for networked scripts (System.Random is seeded differently

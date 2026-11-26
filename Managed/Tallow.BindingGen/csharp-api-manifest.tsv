@@ -291,6 +291,7 @@ method	Tallow.CSharpNetwork	Despawn	bool	session:ulong	entity:ulong
 method	Tallow.CSharpNetwork	EndLagCompensation	void	session:ulong
 method	Tallow.CSharpNetwork	IsPrefabRegistered	bool	name:string
 method	Tallow.CSharpNetwork	LagCompensationTick	double	session:ulong
+method	Tallow.CSharpNetwork	NetId	int	session:ulong	entity:ulong
 method	Tallow.CSharpNetwork	PlayerObject	ulong	session:ulong	clientId:int
 method	Tallow.CSharpNetwork	RegisterPrefabFile	bool	name:string	path:string
 method	Tallow.CSharpNetwork	RelevantTo	int	session:ulong	entity:ulong	clientId:int
@@ -301,6 +302,7 @@ method	Tallow.CSharpNetwork	SetSetting	void	session:ulong	which:int	value:int
 method	Tallow.CSharpNetwork	SetTeamChooser	void	on:bool
 method	Tallow.CSharpNetwork	Setting	int	session:ulong	which:int
 method	Tallow.CSharpNetwork	Spawn	ulong	session:ulong	prefab:string	position:System.Numerics.Vector3	rotation:System.Numerics.Quaternion	ownerId:int
+method	Tallow.CSharpNetwork	StartSession	bool	session:ulong	mode:int	address:string	port:int	transport:int	playerPrefab:string	hostMigration:bool	autoReplicate:bool
 method	Tallow.CSharpNetwork	StopSession	bool	session:ulong
 method	Tallow.CSharpNetwork	TakeHostChange	int	session:ulong	buffer:System.Span<byte>
 method	Tallow.CSharpPhysicsQueries	CastAll	int	session:ulong	kind:int	point1:System.Numerics.Vector3	point2:System.Numerics.Vector3	radius:float	size:System.Numerics.Vector3	orientation:System.Numerics.Vector4	direction:System.Numerics.Vector3	maxDistance:float	layerMask:uint	ignoreBody:uint	buffer:System.Span<byte>
@@ -330,6 +332,8 @@ method	Tallow.CSharpPlatform	GamepadKindOf	int	pad:int
 method	Tallow.CSharpPlatform	GamepadNameOf	int	pad:int	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	GamepadRumble	void	low:float	high:float	seconds:float	pad:int
 method	Tallow.CSharpPlatform	GpuVendorKind	int
+method	Tallow.CSharpPlatform	LookSensitivity	float
+method	Tallow.CSharpPlatform	SetLookSensitivity	void	value:float
 method	Tallow.CSharpPlatform	QualityCurrent	int
 method	Tallow.CSharpPlatform	QualityLightingLevel	int
 method	Tallow.CSharpPlatform	QualityRecommended	int
@@ -510,6 +514,9 @@ method	Tallow.CSharpUI	GetVisible	bool	session:ulong	entity:ulong	id:string
 method	Tallow.CSharpUI	HasDocument	bool	session:ulong	entity:ulong
 method	Tallow.CSharpUI	HasElement	bool	session:ulong	entity:ulong	id:string
 method	Tallow.CSharpUI	SetText	void	session:ulong	entity:ulong	id:string	text:string
+method	Tallow.CSharpUI	SetClass	void	session:ulong	entity:ulong	id:string	name:string	on:bool
+method	Tallow.CSharpUI	HasClass	bool	session:ulong	entity:ulong	id:string	name:string
+method	Tallow.CSharpUI	ReloadDocument	void	session:ulong	entity:ulong
 method	Tallow.CSharpUI	SetValue	void	session:ulong	entity:ulong	id:string	value:float
 method	Tallow.CSharpUI	SetVisible	void	session:ulong	entity:ulong	id:string	visible:bool
 method	Tallow.CSharpWorld	CarveVoxels	bool	session:ulong	entity:ulong	point:System.Numerics.Vector3	radius:float

@@ -19,6 +19,32 @@ public static class Network
     /// <summary>Runs a dedicated server (no local player) from the next scene with a Network Session.</summary>
     public static void Serve(int port = 0) => CSharpNetwork.SetSession(1, "", port);
 
+    /// <summary>How a session reaches other machines: Direct is UDP to an IP address, Steam goes through Steam's
+    /// relays with the host's Steam ID as the address.</summary>
+    public enum Transport
+    {
+        /// <summary>UDP straight to an IP address and port.</summary>
+        Direct,
+        /// <summary>Through Steam (the Steam client must be running).</summary>
+        Steam
+    }
+
+    /// <summary>
+    /// Starts a session in a scene that is already running, instead of in the next scene that loads: the host plays,
+    /// or a dedicated server does not; a client joins address. The player prefab (a name from
+    /// <see cref="RegisterPrefab"/>) is spawned once per player. False when the scene already has a session or the
+    /// transport could not start. <see cref="Leave"/> ends it.
+    /// </summary>
+    public static bool Start(Scene scene, Transport transport, int port, string address = "",
+        bool dedicated = false, string playerPrefab = "Player", bool hostMigration = false,
+        bool autoReplicate = false)
+    {
+        ArgumentNullException.ThrowIfNull(playerPrefab);
+        int mode = string.IsNullOrEmpty(address) ? (dedicated ? 1 : 2) : 3;
+        return CSharpNetwork.StartSession(scene.SessionId, mode, address ?? "", Math.Max(port, 0),
+            transport == Transport.Steam ? 1 : 0, playerPrefab, hostMigration, autoReplicate);
+    }
+
     /// <summary>Joins the game at an address from the next scene with a Network Session.</summary>
     public static void Join(string address, int port = 0)
     {
@@ -71,6 +97,12 @@ public static class Network
         ulong id = CSharpNetwork.PlayerObject(scene.SessionId, clientId);
         return id == 0 ? null : new GameObject(scene.SessionId, id);
     }
+
+    /// <summary>The object's shared network id (the same on every machine in the session), 0 when it has no
+    /// Network Identity or no session runs. Use it to name a player, not <see cref="GameObject.Id"/> (that is local
+    /// to each machine for spawned objects).</summary>
+    public static int NetworkId(GameObject gameObject) =>
+        CSharpNetwork.NetId(gameObject.SceneId, gameObject.Id);
 
     /// <summary>Names a prefab file for Spawn and for a Network Session's player prefab.</summary>
     public static void RegisterPrefab(string name, string prefabPath)

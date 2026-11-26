@@ -22,6 +22,14 @@ static class CSharpPlatform
 
 	// ---- gamepads
 
+	/// Mouse-look sensitivity for networked scripts without their own Network Script: degrees of turn per unit of
+	/// mouse movement (the game's sensitivity setting). The default is 0.15.
+	[CSharpExpose]
+	public static float LookSensitivity() => LocalControls.Sensitivity;
+
+	[CSharpExpose]
+	public static void SetLookSensitivity(float value) => LocalControls.Sensitivity = Math.Clamp(value, 0.001f, 2);
+
 	[CSharpExpose]
 	public static bool GamepadConnected(int32 pad) => pad >= 0 && pad < Gamepad.MaxPads && Gamepad.IsConnected(pad);
 
