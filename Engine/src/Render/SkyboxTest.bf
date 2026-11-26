@@ -148,7 +148,9 @@ class SkyboxTestApp : Application
 		const int32 PanoW = 256;
 		const int32 PanoH = 128;
 		const int32 FaceSize = 32;
-		let pano = scope float[PanoW * PanoH * 4];
+		// On the heap: these are over a megabyte together, which overflows Windows' 1 MB main-thread stack.
+		let pano = new float[PanoW * PanoH * 4];
+		defer delete pano;
 		Panorama(pano, PanoW, PanoH);
 		let cube = scope float[FaceSize * FaceSize * 4 * 6];
 		for (int face < 6)
@@ -167,7 +169,8 @@ class SkyboxTestApp : Application
 			Write(scope $"{skies}/faces_named/{longNames[face]}.hdr", 2, FaceSize, FaceSize, &cube[FaceSize * FaceSize * 4 * face]);
 		}
 		// All red: the lighting check's skybox.
-		let red = scope float[PanoW * PanoH * 4];
+		let red = new float[PanoW * PanoH * 4];
+		defer delete red;
 		for (int i < PanoW * PanoH)
 		{
 			red[i * 4] = 1;
@@ -177,9 +180,12 @@ class SkyboxTestApp : Application
 		}
 		Write(scope $"{skies}/red.hdr", 2, PanoW, PanoH, red.Ptr);
 		// S2c: a plain day sky (light blue, white below) and a night sky (dark violet), and clouds on black for the blend.
-		let day = scope float[PanoW * PanoH * 4];
-		let night = scope float[PanoW * PanoH * 4];
-		let clouds = scope float[PanoW * PanoH * 4];
+		let day = new float[PanoW * PanoH * 4];
+		defer delete day;
+		let night = new float[PanoW * PanoH * 4];
+		defer delete night;
+		let clouds = new float[PanoW * PanoH * 4];
+		defer delete clouds;
 		for (int i < PanoW * PanoH)
 		{
 			let upper = i < PanoW * PanoH / 2;
