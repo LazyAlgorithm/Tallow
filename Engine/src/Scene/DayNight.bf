@@ -40,7 +40,7 @@ static class DayNight
 		return Vector3((float)x, (float)up, (float)z).Normalized;
 	}
 
-	static double HourAngle(float hours) => (hours - 12.0) * 15.0 * Math.PI_d / 180.0;
+	static double HourAngle(double hours) => (hours - 12.0) * 15.0 * Math.PI_d / 180.0;
 
 	static double YearAngle(SceneEnvironment env) => 2.0 * Math.PI_d * (env.dayOfYear + 10) / 365.0;
 
@@ -63,7 +63,16 @@ static class DayNight
 
 	/// The direction towards the sun at the environment's time of day.
 	public static Vector3 SunDirection(SceneEnvironment env) =>
-		Direction(env, HourAngle(env.timeOfDay), SunDeclination(env));
+		SunDirectionAt(env, env.timeOfDay);
+
+	/// The direction towards the sun at a time of day in hours. The time may run past 24 (a clock going on past
+	/// midnight) or below 0; the sun's path is the same every day, so both give the right direction.
+	public static Vector3 SunDirectionAt(SceneEnvironment env, double hours) =>
+		Direction(env, HourAngle(hours), SunDeclination(env));
+
+	/// The sun's height above the horizon in degrees at a time of day in hours (below it negative).
+	public static float SunElevationAt(SceneEnvironment env, double hours) =>
+		Math.Asin(Math.Clamp(SunDirectionAt(env, hours).y, -1, 1)) * Mathf.Rad2Deg;
 
 	/// The direction towards the moon at the environment's time of day.
 	public static Vector3 MoonDirection(SceneEnvironment env)
@@ -156,15 +165,23 @@ static class DayNight
 	/// Moves the clock on by `deltaTime` seconds (0 in Edit mode, or when paused) and turns the sun and moon.
 	/// Does nothing while Day / Night is off. In a network session the server owns the clock (N4a): every machine
 	/// works the time out from the server's tick instead of stepping it, and the server sends the settings only when
-	/// they change.
+	/// they change. Sunrise, sunset and each whole hour that goes by are queued for C# (DayNightEvents, N4b).
 	public static void Update(Scene scene, float deltaTime)
 	{
 		let env = scene.Environment;
 		let network = scene.Network;
+		// How far the scene's own clock ran this update; negative: work it out from the session's ticks instead.
+		var elapsed = -1.0;
 		if (network != null && network.Mode != .Offline)
 			DayNightNet.Update(scene, network);
 		else if (env.dayNight && deltaTime > 0 && !env.dayNightPaused && env.dayLengthMinutes > 0)
+		{
 			env.timeOfDay = WrapHours(env.timeOfDay + deltaTime * 24.0f / (env.dayLengthMinutes * 60.0f));
+			elapsed = deltaTime * 24.0 / (env.dayLengthMinutes * 60.0);
+		}
+		else
+			elapsed = 0;
+		DayNightEvents.Update(scene, elapsed);
 		Apply(scene);
 	}
 

@@ -100,6 +100,7 @@ static class DayNightTest
 
 		ColorChecks();
 		SceneChecks();
+		EventChecks();
 		Console.WriteLine(sFailed == 0 ? "DAYNIGHT TEST PASS" : scope $"DAYNIGHT TEST FAIL ({sFailed})");
 		return sFailed == 0 ? 0 : 1;
 	}
@@ -201,6 +202,52 @@ static class DayNightTest
 		env.dayOfYear = day;
 		env.timeOfDay = 12;
 		return DayNight.SunElevation(env);
+	}
+
+	/// C# events (N4b): a playing scene's clock queues the hours, sunrise and sunset it crosses, and nothing else.
+	static void EventChecks()
+	{
+		let scene = scope Scene();
+		scene.StartPlay();
+		let env = scene.Environment;
+		env.dayNight = true;
+		env.timeOfDay = 5.8f;
+		env.dayLengthMinutes = 1; // 0.4 h a second.
+		env.latitude = 0;
+		env.dayOfYear = 80; // The equinox: sunrise 06:00, sunset 18:00.
+		DayNight.Update(scene, 0);
+		Check(DayNightEvents.Count(scene) == 0, "no events before the clock crosses anything");
+		// 0.6 s of a one-minute day is 0.24 h: 05:48 to 06:02, over the sixth hour and the equinox sunrise.
+		DayNight.Update(scene, 0.6f);
+		let first = DayNightEvents.Take(scene);
+		let second = DayNightEvents.Take(scene);
+		Check(first >= 0 && ((first >> 32) & 3) == DayNightEvents.Hour && ((first >> 34) & 31) == 6,
+			scope $"the clock queues the sixth hour ({first})");
+		Check(second >= 0 && ((second >> 32) & 3) == DayNightEvents.Sunrise, scope $"the clock queues the sunrise ({second})");
+		Check(DayNightEvents.Count(scene) == 0, "nothing else crossed");
+		// 30 s (12 h) runs to 18:02: each hour from 7 to 18, and the sunset.
+		DayNight.Update(scene, 30);
+		var hours = 0, sunrises = 0, sunsets = 0;
+		for (var e = DayNightEvents.Take(scene); e >= 0; e = DayNightEvents.Take(scene))
+		{
+			switch ((int32)((e >> 32) & 3))
+			{
+			case DayNightEvents.Hour: hours++;
+			case DayNightEvents.Sunrise: sunrises++;
+			default: sunsets++;
+			}
+		}
+		Check(sunsets == 1 && sunrises == 0, scope $"the clock queues the sunset ({sunsets} sunsets, {sunrises} sunrises)");
+		Check(hours == 12, scope $"the clock queues each hour it crossed ({hours} hours)");
+		// Stopped, nothing is queued, and starting again does not replay the gap.
+		scene.StopPlay();
+		DayNight.Update(scene, 60);
+		scene.StartPlay();
+		DayNight.Update(scene, 0);
+		Check(DayNightEvents.Count(scene) == 0, "a stopped clock queues nothing, and starting again replays nothing");
+		scene.StopPlay();
+		DayNightEvents.Forget(scene);
+		Check(DayNightEvents.Count(scene) == 0, "a forgotten scene has no events");
 	}
 
 	static void SceneChecks()

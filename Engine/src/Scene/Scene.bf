@@ -964,6 +964,7 @@ class Scene
 		mNextId = 1;
 		// Object ids start again, so C# handles to the old objects must stop resolving.
 		CSharpRuntime.SceneCleared(this);
+		DayNightEvents.Forget(this);
 		Decals.Clear(this);
 	}
 

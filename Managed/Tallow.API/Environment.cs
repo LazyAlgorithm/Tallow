@@ -199,6 +199,23 @@ public readonly record struct SceneEnvironment(ulong SessionId)
                 throw new InvalidOperationException("The scene's environment cannot be changed (no scene).");
         }
     }
+    /// <summary>The skybox drawn after sunset in place of (or under) the day one, fading in as the sun goes down: a
+    /// project path to a 2:1 panorama (.hdr, .exr, .png, .jpg), a cubemap (.ktx, .dds) or a folder of six faces named
+    /// px/nx/py/ny/pz/nz or right/left/up/down/front/back. Empty for none (the day skybox stays). Loaded when first
+    /// drawn.</summary>
+    public string NightSkybox
+    {
+        get
+        {
+            ulong session = SessionId;
+            return ActionText.Read(buffer => CSharpEnvironment.GetNightSkybox(session, buffer)) ?? "";
+        }
+        set
+        {
+            if (!CSharpEnvironment.SetNightSkybox(SessionId, value ?? ""))
+                throw new InvalidOperationException("The scene's environment cannot be changed (no scene).");
+        }
+    }
     /// <summary>How far the skybox is turned round the vertical axis, in degrees (clockwise seen from above).</summary>
     public float SkyboxRotation
     {
@@ -283,6 +300,32 @@ public readonly record struct SceneEnvironment(ulong SessionId)
     {
         get => Float(41);
         set => Set(41, value, 0, 0, 0);
+    }
+    /// <summary>The physical sky's brightness next to the sun light (1 as the air makes it).</summary>
+    public float SkyBrightness
+    {
+        get => Float(42);
+        set => Set(42, value, 0, 0, 0);
+    }
+    /// <summary>How bright the stars are at night in the physical sky. 0 is no stars.</summary>
+    public float StarBrightness
+    {
+        get => Float(43);
+        set => Set(43, value, 0, 0, 0);
+    }
+    /// <summary>Auto Colours: Day / Night also sets the ambient sky, ambient ground and fog colours from the sun's
+    /// height (blue by day, warm at sunset, dark at night). Off keeps the hand-picked colours.</summary>
+    public bool AutoColors
+    {
+        get => Float(44) != 0;
+        set => Set(44, value ? 1 : 0, 0, 0, 0);
+    }
+    /// <summary>The sun light's brightness at noon: Day / Night sets the sun light's colour and intensity from it and
+    /// the air the light comes through. <see cref="DayNight.SunIntensity"/> is how bright the sun is right now.</summary>
+    public float SunIntensity
+    {
+        get => Float(45);
+        set => Set(45, value, 0, 0, 0);
     }
 
     private float Float(int which)

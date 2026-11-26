@@ -60,6 +60,11 @@ static class CSharpEnvironment
 		case 39: values[0] = env.vfSunScattering;
 		case 40: values[0] = env.vfAmbient;
 		case 41: values[0] = env.vfDistance;
+		// Sky and Day / Night (N4b).
+		case 42: values[0] = env.skyBrightness;
+		case 43: values[0] = env.starBrightness;
+		case 44: values[0] = env.autoColors ? 1 : 0;
+		case 45: values[0] = env.sunIntensity;
 		default: return false;
 		}
 		return true;
@@ -116,6 +121,11 @@ static class CSharpEnvironment
 		case 39: env.vfSunScattering = Math.Max(x, 0);
 		case 40: env.vfAmbient = Math.Max(x, 0);
 		case 41: env.vfDistance = Math.Max(x, 1);
+		// Sky and Day / Night (N4b).
+		case 42: env.skyBrightness = Math.Max(x, 0);
+		case 43: env.starBrightness = Math.Max(x, 0);
+		case 44: env.autoColors = x != 0;
+		case 45: env.sunIntensity = Math.Max(x, 0);
 		default: return false;
 		}
 		return true;
@@ -143,6 +153,31 @@ static class CSharpEnvironment
 		if (env == null)
 			return false;
 		env.skybox.Set(path);
+		return true;
+	}
+
+	/// The night skybox (faded in after sunset): its project path, copied into buffer; the full length is returned
+	/// (-1 without a scene).
+	[CSharpExpose]
+	public static int32 GetNightSkybox(uint64 session, Span<uint8> buffer)
+	{
+		let env = CSharpRuntime.PhysicsScene(session)?.Environment;
+		if (env == null)
+			return -1;
+		let count = Math.Min(env.nightSkybox.Length, buffer.Length);
+		for (int i < count)
+			buffer[i] = (uint8)env.nightSkybox[i];
+		return (int32)env.nightSkybox.Length;
+	}
+
+	/// Sets the night skybox's project path (empty: none). Loaded on its first draw.
+	[CSharpExpose]
+	public static bool SetNightSkybox(uint64 session, StringView path)
+	{
+		let env = CSharpRuntime.PhysicsScene(session)?.Environment;
+		if (env == null)
+			return false;
+		env.nightSkybox.Set(path);
 		return true;
 	}
 

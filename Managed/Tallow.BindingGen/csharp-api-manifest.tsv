@@ -142,13 +142,18 @@ method	Tallow.CSharpDataAssets	ReadCopy	int	path:string	buffer:System.Span<byte>
 method	Tallow.CSharpDataAssets	ReadFile	int	path:string	buffer:System.Span<byte>
 method	Tallow.CSharpDataAssets	Rescan	void
 method	Tallow.CSharpDataAssets	WriteCopy	bool	path:string	fields:string
+method	Tallow.CSharpDayNight	Get	bool	which:int	values:System.Span<float>
+method	Tallow.CSharpDayNight	Set	bool	which:int	value:float
+method	Tallow.CSharpDayNight	TakeEvent	long
 method	Tallow.CSharpDraw	Box	void	layer:int	center:System.Numerics.Vector3	size:System.Numerics.Vector3	color:System.Numerics.Vector4
 method	Tallow.CSharpDraw	Line	void	layer:int	a:System.Numerics.Vector3	b:System.Numerics.Vector3	color:System.Numerics.Vector4
 method	Tallow.CSharpDraw	Sphere	void	layer:int	center:System.Numerics.Vector3	radius:float	color:System.Numerics.Vector4
 method	Tallow.CSharpEnvironment	Get	bool	session:ulong	which:int	values:System.Span<float>
+method	Tallow.CSharpEnvironment	GetNightSkybox	int	session:ulong	buffer:System.Span<byte>
 method	Tallow.CSharpEnvironment	GetScreenEffect	float	which:int
 method	Tallow.CSharpEnvironment	GetSkybox	int	session:ulong	buffer:System.Span<byte>
 method	Tallow.CSharpEnvironment	Set	bool	session:ulong	which:int	x:float	y:float	z:float	w:float
+method	Tallow.CSharpEnvironment	SetNightSkybox	bool	session:ulong	path:string
 method	Tallow.CSharpEnvironment	SetScreenEffect	void	which:int	value:float
 method	Tallow.CSharpEnvironment	SetSkybox	bool	session:ulong	path:string
 method	Tallow.CSharpGUI	Bar	void	x:float	y:float	width:float	height:float	fraction:float	color:System.Numerics.Vector4
@@ -157,14 +162,14 @@ method	Tallow.CSharpGUI	Label	void	x:float	y:float	text:string	color:System.Nume
 method	Tallow.CSharpGUI	MouseOverControl	bool
 method	Tallow.CSharpGUI	Slider	float	x:float	y:float	width:float	label:string	value:float	min:float	max:float
 method	Tallow.CSharpGUI	Toggle	bool	x:float	y:float	label:string	value:bool
+method	Tallow.CSharpGameplay	GameTime	float
+method	Tallow.CSharpGameplay	NetRandomValue	float	session:ulong	entity:ulong	salt:int
 method	Tallow.CSharpGpuDriven	Available	bool
 method	Tallow.CSharpGpuDriven	DebugMip	int
 method	Tallow.CSharpGpuDriven	DebugView	int
 method	Tallow.CSharpGpuDriven	Enabled	bool
 method	Tallow.CSharpGpuDriven	SetDebugView	bool	view:int	mip:int
 method	Tallow.CSharpGpuDriven	Stat	double	id:int
-method	Tallow.CSharpGameplay	GameTime	float
-method	Tallow.CSharpGameplay	NetRandomValue	float	session:ulong	entity:ulong	salt:int
 method	Tallow.CSharpIK	AddLimb	int	session:ulong	entity:ulong
 method	Tallow.CSharpIK	Count	int	session:ulong	entity:ulong	kind:int
 method	Tallow.CSharpIK	FadeWeight	bool	session:ulong	entity:ulong	kind:int	index:int	to:float	seconds:float

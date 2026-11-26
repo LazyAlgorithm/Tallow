@@ -38,6 +38,9 @@ static class DayNightNet
 		public bool received;
 		public bool warned;
 		public int32 bytesSent;
+		/// Bumped whenever the clock's mapping from ticks to time changes (it starts, is rebased, or a client takes the
+		/// server's state): Day / Night events start again from the new time instead of crossing the gap (N4b).
+		public int32 epoch;
 	}
 
 	static List<ClockState> sStates = new .() ~ DeleteContainerAndItems!(_);
@@ -73,6 +76,9 @@ static class DayNightNet
 
 	public static bool Warned(NetworkManager network) => Find(network, false)?.warned ?? false;
 
+	/// Which mapping from ticks to time the clock is on (DayNightEvents starts again when it changes).
+	public static int32 Epoch(NetworkManager network) => Find(network, false)?.epoch ?? 0;
+
 	/// Hours wrapped into [0, 24).
 	public static double Wrap(double hours)
 	{
@@ -84,13 +90,46 @@ static class DayNightNet
 
 	static float SpeedFrom(float dayLengthMinutes) => dayLengthMinutes > 0 ? 24.0f / (dayLengthMinutes * 60.0f) : 0;
 
-	/// The time on the session's simulation clock, from the tick every machine simulates the same.
+	/// The session tick the shared clock runs on: the server's own, or the server's tick as a client knows it (its
+	/// ServerTick). Using the same timeline on every machine means a client that joined late is on the server's time
+	/// at once, not back at the clock's first day; the clock is the server's, so it is not part of a deterministic
+	/// simulation (as the scene's physics is) that could not use this.
+	public static double SharedTick(NetworkManager network) => network.ServerTick - 1;
+
+	/// The time on the session's simulation clock, from the tick every machine simulates the same (the shared
+	/// timeline above, so host and clients agree even when a client joined late).
 	public static double SimulationTime(NetworkManager network) =>
-		Clock(Find(network, false), network.Tick);
+		Clock(Find(network, false), SharedTick(network));
 
 	/// The time to draw, from the server's tick as this machine knows it, eased between ticks.
 	public static double ViewTime(NetworkManager network) =>
 		Clock(Find(network, false), network.ServerTick - 1 + Time.InterpolationAlpha);
+
+	/// The shared clock in hours since its start, not wrapped at midnight, so it only ever goes up while the clock
+	/// runs. Every peer works out the same value from the same ticks; 0 before the server's settings arrive.
+	public static double UnwrappedTime(NetworkManager network)
+	{
+		let state = Find(network, false);
+		if (state == null || !state.initialized || !state.enabled)
+			return 0;
+		if (state.paused || state.speed <= 0)
+			return state.startTime;
+		return state.startTime + (SharedTick(network) - state.startTick) / Time.TickRate * state.speed;
+	}
+
+	/// The session tick at which the shared clock reaches `hours` (an UnwrappedTime value): the tick nearest the
+	/// crossing. Worked out from the server's settings only, so host and clients get the same number, late joiners
+	/// included.
+	public static int64 EventTick(NetworkManager network, double hours)
+	{
+		let state = Find(network, false);
+		if (state == null || !state.initialized || !state.enabled || state.paused || state.speed <= 0)
+			return (int64)SharedTick(network);
+		let tick = state.startTick + (hours - state.startTime) / state.speed * Time.TickRate;
+		// The tick the crossing falls nearest: worked out from the server's settings alone, so every machine gets the
+		// same number (the hour's own tick when it lands on one).
+		return (int64)Math.Round(tick);
+	}
 
 	static double Clock(ClockState state, double tick)
 	{
@@ -129,6 +168,7 @@ static class DayNightNet
 			state.startTime = Wrap(state.lastTime);
 			state.startTick = network.Tick;
 			changed = true;
+			state.epoch++;
 		}
 		let now = Clock(state, network.Tick);
 		if (env.dayNight != state.enabled)
@@ -136,12 +176,14 @@ static class DayNightNet
 			state.enabled = env.dayNight;
 			changed = true;
 			rebase = true;
+			state.epoch++;
 		}
 		if (env.dayNightPaused != state.paused)
 		{
 			state.paused = env.dayNightPaused;
 			changed = true;
 			rebase = true;
+			state.epoch++;
 		}
 		if (env.dayLengthMinutes != state.dayLengthMinutes)
 		{
@@ -149,6 +191,7 @@ static class DayNightNet
 			state.speed = SpeedFrom(env.dayLengthMinutes);
 			changed = true;
 			rebase = true;
+			state.epoch++;
 		}
 		// Someone set the time itself (the editor's scrub, a script, the C# setter): carry on from there.
 		if (Math.Abs(env.timeOfDay - state.writtenTime) > TimeEpsilon)
@@ -157,6 +200,7 @@ static class DayNightNet
 			state.startTick = network.Tick;
 			changed = true;
 			userSet = true;
+			state.epoch++;
 		}
 		if (state.latitude != env.latitude || state.axisTilt != env.axisTilt || state.northDirection != env.northDirection ||
 			state.dayOfYear != env.dayOfYear)
@@ -228,6 +272,7 @@ static class DayNightNet
 		state.dayOfYear = env.dayOfYear;
 		state.lastTime = state.startTime;
 		state.initialized = true;
+		state.epoch++;
 	}
 
 	/// Puts the clock's settings in the environment (the time first thing: whoever changed it is overruled).
@@ -335,6 +380,7 @@ static class DayNightNet
 		state.dayOfYear = dayOfYear;
 		state.received = true;
 		state.initialized = true;
+		state.epoch++;
 		state.lastTime = Clock(state, network.Tick);
 		// Take it straight away, so the sky is right from this frame (not just from the next update).
 		Write(network, state, network.Scene.Environment);

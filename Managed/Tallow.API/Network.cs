@@ -184,6 +184,7 @@ public static class Network
         sOnBecameHost = null;
         AntiCheat.ClearHandlers();
         VoiceChat.ClearHandlers();
+        DayNight.ClearHandlers();
     }
 
     /// <summary>Server: removes a player from the session (a banned player, a cheater). False on a client, without
