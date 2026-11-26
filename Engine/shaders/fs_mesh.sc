@@ -6,6 +6,13 @@ $input v_wpos, v_normal, v_color0, v_texcoord0, v_depth, v_texcoord1, v_surface
 #include <bgfx_shader.sh>
 #include "lighting.sh"
 #include "palette.sh"
+#ifdef TW_VFOG
+// Drawn after the volumetric fog's apply (see-through things): the fog's sums take stage 10 instead of the lightmap's
+// shadowmask, and are read at each fragment's own depth (include/vfog.sh).
+SAMPLER3D(s_vfog, 10);
+#include "post.sh"
+#include "vfog.sh"
+#endif
 
 SAMPLER2D(s_albedo, 0);
 SAMPLER2D(s_texture1, 2);
@@ -21,7 +28,9 @@ SAMPLER2D(s_emissiveMap, 7);
 #else
 SAMPLER2D(s_lightmap, 8);
 SAMPLER2D(s_lightmapDirection, 9);
+#ifndef TW_VFOG
 SAMPLER2D(s_lightmapShadowmask, 10);
+#endif
 uniform vec4 u_lightmapTransform;
 uniform vec4 u_lightmapDecode;
 #define TW_LIGHTMAP_MODE u_lightmapDecode.w
@@ -184,8 +193,10 @@ void main()
 		}
 	}
 	vec4 bakedMask = vec4_splat(1.0);
+#ifndef TW_VFOG
 	if (u_lightmapDecode.w > 2.5)
 		bakedMask = texture2D(s_lightmapShadowmask, v_texcoord1 * u_lightmapTransform.xy + u_lightmapTransform.zw);
+#endif
 #else
 	vec4 bakedMask = vec4_splat(1.0);
 #endif
@@ -198,7 +209,13 @@ void main()
 
 	color += emissive;
 
+#ifdef TW_VFOG
+	// Drawn after the fog's apply: the fog at this fragment's own depth.
+	vec4 fog = vfogSampleWorld(v_wpos);
+	color = color * fog.a + fog.rgb;
+#else
 	color = applyFog(color, v_wpos);
+#endif
 
 	gl_FragColor = vec4(color, alpha);
 }

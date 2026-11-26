@@ -20,9 +20,12 @@ def main():
     failed = []
     # Shaders that are another shader's source with a define added after its first ($input) line: fs_cluster is fs_mesh
     # without lightmaps, which draws from buffers in the stages the lightmaps use (cluster LOD drawing); the _blend skies
-    # draw the physical sky under a custom skybox (Skybox.bf).
+    # draw the physical sky under a custom skybox (Skybox.bf); the _vfog pair read the volumetric fog's sums at each
+    # fragment's own depth, for the see-through things and the water drawn after its apply (RenderViewVolumetric.bf).
     variants = {'fs_cluster': ('fs_mesh.sc', '#define TW_NO_LIGHTMAP 1\n'),
                 'fs_cluster_vt': ('fs_mesh.sc', '#define TW_NO_LIGHTMAP 1\n#define TW_VT 1\n'),
+                'fs_mesh_vfog': ('fs_mesh.sc', '#define TW_VFOG 1\n'),
+                'fs_water_vfog': ('fs_water.sc', '#define TW_VFOG 1\n'),
                 'vs_cluster_debug': ('vs_cluster.sc', '#define TW_DEBUG 1\n'),
                 'fs_cluster_debug_vt': ('fs_cluster_debug.sc', '#define TW_VT 1\n'),
                 'fs_sky_custom_blend': ('fs_sky_custom.sc', '#define TW_SKY_BLEND 1\n'),
@@ -44,7 +47,7 @@ def main():
                 output.parent.mkdir(parents=True, exist_ok=True)
                 result = subprocess.run([compiler, '-f', str(shader), '-o', str(output), '--type', stage,
                                          '--platform', platform, '-p', profile, '-i', str(root / 'third_party/bgfx.cmake/bgfx/src'),
-                                         '-i', str(source / 'include'), '--varyingdef', str(source / 'varying.def.sc'), '-O', '3'])
+                                         '-i', str(source / 'include'), '-i', str(source), '--varyingdef', str(source / 'varying.def.sc'), '-O', '3'])
                 if result.returncode:
                     failed.append(f'{shader.name} ({backend})')
     if failed:

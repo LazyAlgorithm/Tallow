@@ -680,6 +680,46 @@ public readonly partial record struct Floater(GameObject GameObject) : IComponen
 }
 
 /// <summary>
+/// A box or ball of fog for a part of the scene (tallowengine.com/docs/day-night): with Volumetric Fog on, the fog
+/// inside it takes its density and colour, so a misty hollow, a smoke-filled room or a warm glow in the air is one
+/// object. Its edges fade out, so it has no hard sides, and like the rest of the fog it is lit by the sun (shadows cut
+/// light shafts out of it), the sky's ambient light and the point and spot lights that scatter in it. Several can
+/// overlap; their fog adds up.
+///
+/// Only fog drawn volumetrically knows volumes: with Volumetric Fog off, or beyond the scene's Volumetric Distance,
+/// the distance fog (Fog Density) is all there is, and it has no volumes. Open web and mobile devices that cannot run
+/// compute shaders likewise use the distance fog.
+/// </summary>
+[NativeComponent("Tallow.FogVolume")]
+public readonly partial record struct FogVolume(GameObject GameObject) : IComponent
+{
+    private NativeComponent Data => new(GameObject, "Tallow.FogVolume");
+    /// <summary>Whether the object still exists and has this component.</summary>
+    public bool IsValid => Data.IsValid;
+    /// <summary>
+    /// A box, or a ball (an ellipsoid when the object's scale is uneven).
+    /// </summary>
+    public FogVolumeShape Shape { get => Data.GetEnum<FogVolumeShape>("shape"); set => Data.Set("shape", value); }
+    /// <summary>
+    /// Its size in metres before the object's scale (a sphere's width, height and depth).
+    /// </summary>
+    public Vector3 Size { get => Data.GetVector3("size"); set => Data.Set("size", value); }
+    /// <summary>
+    /// How much fog it holds: the fog's optical depth through a metre of it. Higher is thicker mist; 0 is none.
+    /// </summary>
+    public float Density { get => Data.GetFloat("density"); set => Data.Set("density", value); }
+    /// <summary>
+    /// The colour of the fog in it.
+    /// </summary>
+    public Color Color { get => Data.GetColor("color"); set => Data.Set("color", value); }
+    /// <summary>
+    /// How much of the way in from its edge the fog fades from full density to none (0: right up to the edge; 1: from
+    /// the middle outwards). A little keeps it from ending in a hard line.
+    /// </summary>
+    public float EdgeFade { get => Data.GetFloat("edgeFade"); set => Data.Set("edgeFade", value); }
+}
+
+/// <summary>
 /// One kind of plant, many times over: grass, flowers, bushes, rocks, trees. Every plant of a Foliage component is the
 /// same model, drawn together by the graphics card (instanced), so tens of thousands cost little; each gets its own
 /// turn, size and shade so that they do not look stamped out. Add one Foliage for each kind of plant, each on an
@@ -2971,6 +3011,21 @@ public enum CharacterShape
 }
 
 /// <summary>
+/// The shape of a Fog Volume.
+/// </summary>
+public enum FogVolumeShape
+{
+    /// <summary>
+    /// A box: the object's position, rotation and scale give it.
+    /// </summary>
+    Box = 0,
+    /// <summary>
+    /// A ball (an ellipsoid when the object's scale is uneven): the object's position, rotation and scale give it.
+    /// </summary>
+    Sphere = 1,
+}
+
+/// <summary>
 /// The ready-made hand shapes of a Hand Pose.
 /// </summary>
 public enum HandShape
@@ -3387,6 +3442,7 @@ internal static partial class NativeComponentTypes
         Known[typeof(Decal)] = ("Tallow.Decal", o => new Decal(o));
         Known[typeof(DialogueRunner)] = ("Tallow.DialogueRunner", o => new DialogueRunner(o));
         Known[typeof(Floater)] = ("Tallow.Floater", o => new Floater(o));
+        Known[typeof(FogVolume)] = ("Tallow.FogVolume", o => new FogVolume(o));
         Known[typeof(Foliage)] = ("Tallow.Foliage", o => new Foliage(o));
         Known[typeof(FoliageBender)] = ("Tallow.FoliageBender", o => new FoliageBender(o));
         Known[typeof(FootPlacement)] = ("Tallow.FootPlacement", o => new FootPlacement(o));

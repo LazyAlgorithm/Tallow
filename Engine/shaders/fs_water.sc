@@ -9,6 +9,12 @@ $input v_wpos, v_normal, v_color0, v_texcoord0, v_depth
 #include "lighting.sh"
 #include "post.sh"
 #include "water.sh"
+#ifdef TW_VFOG
+// Water is drawn after the volumetric fog's apply, so it asks the fog's sums (stage 10) for the fog at its own depth
+// (include/vfog.sh).
+SAMPLER3D(s_vfog, 10);
+#include "vfog.sh"
+#endif
 
 SAMPLER2D(s_color, 0);
 SAMPLER2D(s_depth, 2);
@@ -207,7 +213,12 @@ void main()
 		vec3 foamLit = u_waterFoam.rgb * (sun * max(dot(waveNormal, u_sunDir.xyz), 0.0) + ambient);
 		color = mix(color, foamLit, foam);
 	}
+#ifdef TW_VFOG
+	vec4 fog = vfogSampleWorld(wpos);
+	color = color * fog.a + fog.rgb;
+#else
 	color = applyFog(color, wpos);
+#endif
 	// Where the surface meets the ground it fades into what is under it, instead of a hard line.
 	color = mix(texture2D(s_color, screen).rgb, color, smoothstep(0.0, 0.12, straightThrough));
 	gl_FragColor = vec4(color, 1.0);

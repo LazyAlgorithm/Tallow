@@ -310,11 +310,14 @@ extension RenderView
 		bgfx.set_texture(0, RenderResources.sColor, mWaterCopy, uint32.MaxValue);
 		bgfx.set_texture(1, RenderResources.sShadowMap, RenderResources.ShadowMap, uint32.MaxValue);
 		bgfx.set_texture(2, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
+		// The water is drawn after the volumetric fog's apply: with it on, the surface asks the fog's sums (stage 10) for
+		// the fog at its own depth, in the fog's water shader (RenderViewVolumetric.bf).
+		let volumetric = BindVolumetricFogSampling();
 		bgfx.set_vertex_buffer(0, grid.VertexBuffer, 0, (uint32)grid.VertexCount);
 		bgfx.set_index_buffer(grid.IndexBuffer, 0, (uint32)grid.IndexCount);
 		// Both sides: from under the water the surface is seen from below.
 		bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateWriteZ | Gfx.StateDepthLess | Gfx.StateMsaa, 0);
-		bgfx.submit(view, RenderResources.WaterProgram, 0, 0xff);
+		bgfx.submit(view, volumetric ? RenderResources.WaterVFogProgram : RenderResources.WaterProgram, 0, 0xff);
 		DrawCalls++;
 		Triangles += grid.IndexCount / 3;
 		VisibleWater++;

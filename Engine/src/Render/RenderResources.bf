@@ -37,9 +37,13 @@ static class RenderResources
 	public static bgfx.UniformHandle uVelCur, uVelPrev, uVelParams, uTaaParams, uTaaParams2, sVelocity, sHistory;
 	public static bgfx.UniformHandle sSsgi, sSsgiHistory, sSsgiLit, sAlbedoBuffer, uSsgiParams, uSsgiParams2;
 	// Volumetric fog (tallowengine.com/docs/day-night; RenderViewVolumetric.bf): the froxel inject and integrate compute
-	// shaders and the fullscreen apply.
+	// shaders, the fullscreen apply, and the see-through things' and water's variants that sample the sums themselves.
 	public static bgfx.ProgramHandle VFogInjectProgram, VFogIntegrateProgram, VFogApplyProgram;
+	public static bgfx.ProgramHandle MeshVFogProgram, WaterVFogProgram;
+	/// The most Fog Volumes one view draws (the rest are left out).
+	public const int32 FogVolumeMax = 32;
 	public static bgfx.UniformHandle uVFogMedium, uVFogLight, uVFogGrid, uVFogSize, sVFog;
+	public static bgfx.UniformHandle uVFogTemporal, uVFogPrevViewProj, uFogVolumes, uFogVolumeCount;
 	public static bool VFogReady;
 	public static bgfx.ProgramHandle LineProgram;
 	// Decals (tallowengine.com/docs/decals).
@@ -221,12 +225,19 @@ static class RenderResources
 		VFogInjectProgram = LoadCompute("cs_vfog_inject");
 		VFogIntegrateProgram = LoadCompute("cs_vfog_integrate");
 		VFogApplyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_vfog_apply");
+		MeshVFogProgram = Gfx.LoadProgram("vs_mesh", "fs_mesh_vfog");
+		WaterVFogProgram = Gfx.LoadProgram("vs_water", "fs_water_vfog");
 		uVFogMedium = bgfx.create_uniform("u_vfogMedium", .Vec4, 1);
 		uVFogLight = bgfx.create_uniform("u_vfogLight", .Vec4, 1);
 		uVFogGrid = bgfx.create_uniform("u_vfogGrid", .Vec4, 1);
 		uVFogSize = bgfx.create_uniform("u_vfogSize", .Vec4, 1);
 		sVFog = bgfx.create_uniform("s_vfog", .Sampler, 1);
-		VFogReady = VFogInjectProgram.Valid && VFogIntegrateProgram.Valid && VFogApplyProgram.Valid;
+		uVFogTemporal = bgfx.create_uniform("u_vfogTemporal", .Vec4, 1);
+		uVFogPrevViewProj = bgfx.create_uniform("u_vfogPrevViewProj", .Mat4, 1);
+		uFogVolumes = bgfx.create_uniform("u_fogVolumes", .Vec4, FogVolumeMax * 5);
+		uFogVolumeCount = bgfx.create_uniform("u_vfogVolumeCount", .Vec4, 1);
+		VFogReady = VFogInjectProgram.Valid && VFogIntegrateProgram.Valid && VFogApplyProgram.Valid
+			&& MeshVFogProgram.Valid && WaterVFogProgram.Valid;
 
 		// Depth render target sampled with hardware comparison (PCF).
 		let shadowFlags = Gfx.TextureRenderTarget | Gfx.SamplerCompareLequal | Gfx.SamplerClamp;
@@ -343,11 +354,19 @@ static class RenderResources
 			bgfx.destroy_program(VFogIntegrateProgram);
 		if (VFogApplyProgram.Valid)
 			bgfx.destroy_program(VFogApplyProgram);
+		if (MeshVFogProgram.Valid)
+			bgfx.destroy_program(MeshVFogProgram);
+		if (WaterVFogProgram.Valid)
+			bgfx.destroy_program(WaterVFogProgram);
 		bgfx.destroy_uniform(uVFogMedium);
 		bgfx.destroy_uniform(uVFogLight);
 		bgfx.destroy_uniform(uVFogGrid);
 		bgfx.destroy_uniform(uVFogSize);
 		bgfx.destroy_uniform(sVFog);
+		bgfx.destroy_uniform(uVFogTemporal);
+		bgfx.destroy_uniform(uVFogPrevViewProj);
+		bgfx.destroy_uniform(uFogVolumes);
+		bgfx.destroy_uniform(uFogVolumeCount);
 		VFogReady = false;
 		bgfx.destroy_program(DecalProgram);
 		bgfx.destroy_program(WaterProgram);

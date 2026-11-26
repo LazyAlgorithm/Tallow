@@ -253,12 +253,21 @@ class RenderView
 	int32 mGiFrame;
 	bool mGiWasOn;
 	Vector4 mPostRight, mPostUp, mPostForward, mPostEye;
-	// Volumetric fog (RenderViewVolumetric.bf): the froxel grid's two 3D textures, made when a scene turns it on, and
+	// Volumetric fog (RenderViewVolumetric.bf): the froxel grid's 3D textures, made when a scene turns it on, and
 	// whether this view draws it this frame.
-	bgfx.TextureHandle mFogScatter = .() { idx = uint16.MaxValue };
+	// The cells (light and density), two of them: this frame's is written while last frame's is read (the temporal
+	// blend), then they swap.
+	bgfx.TextureHandle[2] mFogScatter = .(.() { idx = uint16.MaxValue }, .() { idx = uint16.MaxValue });
+	int mFogScatterIndex;
+	// The sums down each column of this frame's cells.
 	bgfx.TextureHandle mFogIntegrated = .() { idx = uint16.MaxValue };
+	// This frame's sums; not valid when the fog did not run this frame (the apply and the see-through things read it).
+	bgfx.TextureHandle mFogSums = .() { idx = uint16.MaxValue };
 	int32 mFogCellsX, mFogCellsY, mFogSlices;
 	bool mVolumetricFogActive;
+	/// Draws the fog blended with last frame's (smoothed over the frame-to-frame jitter, so it does not flicker).
+	/// Off, each frame stands alone: steadier on a still camera, but more banded.
+	public bool FogTemporalEnabled = true;
 	/// Whether the last Render drew volumetric fog (the froxel passes and their apply).
 	public bool VolumetricFogDrawn { get; private set; }
 
@@ -453,8 +462,13 @@ class RenderView
 		if (!mDayNightShadows)
 			mSunDir.w = 0;
 		SunShadowsDrawn = castShadows;
+		// The Fog Volumes this view sees, before it is known whether the fog runs at all (a scene can have no height
+		// fog and still want its volumes drawn).
+		GatherFogVolumes(scene, camera, frustum, env);
 		mVolumetricFogActive = UsesVolumetricFog(camera, env);
 		VolumetricFogDrawn = mVolumetricFogActive;
+		if (!mVolumetricFogActive)
+			mFogSums.idx = uint16.MaxValue;
 		SetFrameConstants(camera, env);
 		// The physical sky's tables follow the camera (before the reflections, which draw the sky too).
 		if (!Capture)
@@ -1200,7 +1214,8 @@ class RenderView
 		SetUpView(view, "Transparent", mSceneFb, 0, 0, mWidth, mHeight);
 		bgfx.set_view_transform(view, &viewMatrix, &projMatrix);
 		bgfx.set_view_mode(view, .Sequential);
-		SubmitBackToFront(view, mTransparentItems, camera.position);
+		// Drawn after the volumetric fog's apply: with it on, each surface brings its own fog (RenderViewVolumetric.bf).
+		SubmitBackToFront(view, mTransparentItems, camera.position, true);
 	}
 
 	/// The viewmodel, over everything, with its own field of view and near clip.
@@ -1221,7 +1236,7 @@ class RenderView
 		SubmitBackToFront(view, mViewmodelTransparent, camera.position);
 	}
 
-	void SubmitBackToFront(uint16 view, List<RenderItem> items, Vector3 eye)
+	void SubmitBackToFront(uint16 view, List<RenderItem> items, Vector3 eye, bool vfog = false)
 	{
 		items.Sort(scope (a, b) => (b.center - eye).LengthSquared <=> (a.center - eye).LengthSquared);
 		// Neighbours in that order that could share a batch are one instanced draw: instances blend in order, so the
@@ -1232,7 +1247,7 @@ class RenderView
 			int end = start + 1;
 			while (end < items.Count && items[end].key == items[start].key)
 				end++;
-			SubmitBatch(view, items, start, end - start, true);
+			SubmitBatch(view, items, start, end - start, true, false, vfog);
 			start = end;
 		}
 	}
@@ -1318,7 +1333,7 @@ class RenderView
 	/// instance memory has room for).
 	/// mirror: drawn again over itself with what the screen shows mirrored in it (Screen Reflections), added to the
 	/// picture; scene and depth are the picture so far and the depth pass.
-	void SubmitBatch(uint16 view, List<RenderItem> items, int start, int count, bool transparent = false, bool mirror = false)
+	void SubmitBatch(uint16 view, List<RenderItem> items, int start, int count, bool transparent = false, bool mirror = false, bool vfog = false)
 	{
 		// A material's custom shader makes its own surface, which the mirror pass cannot repeat.
 		if (mirror)
@@ -1332,7 +1347,7 @@ class RenderView
 		var done = 0;
 		while (done < count)
 		{
-			let drawn = SubmitBatchPiece(view, items, start + done, count - done, transparent, mirror);
+			let drawn = SubmitBatchPiece(view, items, start + done, count - done, transparent, mirror, vfog);
 			if (drawn <= 0)
 			{
 				InstancesDropped += (int32)(count - done);
@@ -1346,7 +1361,7 @@ class RenderView
 	public static int64 InstancesDropped;
 
 	/// One instanced draw of up to `count` items from `start`: as many as the instance memory has room for. Returns how many.
-	int SubmitBatchPiece(uint16 view, List<RenderItem> items, int start, int count, bool transparent, bool mirror)
+	int SubmitBatchPiece(uint16 view, List<RenderItem> items, int start, int count, bool transparent, bool mirror, bool vfog)
 	{
 		let stride = (uint16)sizeof(InstanceData);
 		let available = (int)bgfx.get_avail_instance_data_buffer((uint32)count, stride);
@@ -1394,7 +1409,14 @@ class RenderView
 		surface.cull = FacingCull(surface.cull);
 		if (shaded)
 			ApplyShading(ref surface);
+		// A see-through surface drawn after the volumetric fog's apply asks the fog's sums for the fog at its own depth
+		// (the TW_VFOG shader). A custom material shader has no such variant and keeps its own.
+		let volumetric = vfog && mVolumetricFogActive && mFogSums.Valid && surface.program.idx == RenderResources.MeshProgram.idx;
+		if (volumetric)
+			surface.program = RenderResources.MeshVFogProgram;
 		SetLightmapUniforms(renderer, first.mesh);
+		if (volumetric)
+			BindVolumetricFogSampling();
 		SetSurfaceUniforms(renderer, ref surface);
 		if (mirror)
 		{

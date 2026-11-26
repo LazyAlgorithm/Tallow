@@ -4,6 +4,7 @@
 // (S - S exp(-sigma dz)) / sigma is Hillaire's (Frostbite, 2015).
 #include "bgfx_compute.sh"
 #include "post.sh"
+#define VFOG_NO_VOLUME 1
 #include "vfog.sh"
 
 IMAGE3D_RO(i_scatter, rgba16f, 0);

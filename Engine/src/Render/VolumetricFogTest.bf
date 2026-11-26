@@ -9,10 +9,11 @@ namespace Tallow;
 /// (default: a scratch folder): the same scene with it off, with it on, and off again. A wall with a gap has the sun
 /// behind it, so with the fog on a shaft of light shows through the gap while the fog behind the wall stays dark.
 /// A spot light then fills a cone in the fog, with a box in front of it cutting a shadow out of the cone (three shots:
-/// the spot off, on with the box, and on without it). Finally the pass's GPU time is logged with 0, 16 and 128 point
-/// lights. Checks the shaft is brighter than the fog in the wall's shadow, that the off shots match, that the cone and
-/// its shadow show, and logs the pass's GPU time. Needs a window and a backend with compute shaders (Vulkan, Direct3D
-/// 11/12 or Metal); elsewhere it skips.
+/// the spot off, on with the box, and on without it). Then a Fog Volume's fog shows only where the volume is (the
+/// ground nearer than it does not change), and a dark see-through panel inside it is fogged too. The temporal blend is
+/// checked on a still camera (no flicker) and just after a camera move (no ghost of where the camera was). Finally the
+/// pass's GPU time is logged with 0, 16 and 128 point lights. Needs a window and a backend with compute shaders
+/// (Vulkan, Direct3D 11/12 or Metal); elsewhere it skips.
 class VolumetricFogTestApp : Application
 {
 	const int32 ShotWidth = 640;
@@ -33,6 +34,18 @@ class VolumetricFogTestApp : Application
 		public bool checkSun;
 		public bool checkSpot;
 		public bool checkCost;
+		// Fog Density for this phase (below 0: the scene's 0.05), the Fog Volume and the see-through panel.
+		public float density = -1;
+		public bool volume;
+		public bool transparent;
+		// The temporal blend, whether the camera stands aside, and how many frames to settle for.
+		public bool temporal = true;
+		public float cameraX;
+		public int32 settle = SettleFrames;
+		// 0 none, 1 the first of a pair, 2 the second, 3 one frame after the camera moved, 4 the same without the
+		// history to compare against.
+		public int32 pair;
+		public bool checkVolume;
 	}
 
 	Scene mScene ~ delete _;
@@ -56,6 +69,18 @@ class VolumetricFogTestApp : Application
 	// The spot's cone (between it and the box) and its shadow (behind the box) at each spot phase.
 	float mConeOff, mShadowBlocked, mShadowOpen;
 	float mConeOn;
+	// The Fog Volume, and the see-through panel drawn inside it.
+	FogVolume mVolume;
+	MeshRenderer mPanelRenderer;
+	uint8[] mVolumePixels ~ delete _;
+	float mVolumeOffInside, mVolumeOffOutside, mVolumeOffPanel;
+	int mVolumeOutsideChanged;
+	// The first of a shot pair (the still camera's, then the one just after the move) and the second's difference.
+	uint8[] mPairPixels ~ delete _;
+	int mPairChanged;
+	float mPairMean;
+	int mGhostChanged;
+	float mGhostMean;
 	bool mSkip;
 
 	protected override bool LoadsPlayerQuality => false;
@@ -99,6 +124,15 @@ class VolumetricFogTestApp : Application
 		mPhases.Add(.() { name = "lights0", volumetric = true, checkCost = true });
 		mPhases.Add(.() { name = "lights16", volumetric = true, lights = 16, checkCost = true });
 		mPhases.Add(.() { name = "lights128", volumetric = true, lights = 128, checkCost = true });
+		// A Fog Volume: no height fog at all, so only the volume puts fog in the picture; the see-through panel is in it.
+		mPhases.Add(.() { name = "volume-off", volumetric = true, density = 0, transparent = true, checkVolume = true });
+		mPhases.Add(.() { name = "volume-on", volumetric = true, density = 0, volume = true, transparent = true, checkVolume = true });
+		// The temporal blend: two still frames (no flicker), then one frame just after a camera move and the same frame
+		// without the history (no ghost of where the camera stood).
+		mPhases.Add(.() { name = "temporal-a", volumetric = true, pair = 1 });
+		mPhases.Add(.() { name = "temporal-b", volumetric = true, settle = 1, pair = 2 });
+		mPhases.Add(.() { name = "temporal-moved", volumetric = true, cameraX = 0.6f, settle = 1, pair = 3 });
+		mPhases.Add(.() { name = "temporal-moved-off", volumetric = true, cameraX = 0.6f, temporal = false, settle = 1, pair = 4 });
 
 		mScene = new Scene();
 		let cameraObject = mScene.CreateGameObject("Camera");
@@ -180,6 +214,25 @@ class VolumetricFogTestApp : Application
 			}
 		}
 
+		// A Fog Volume between the camera and the wall (and on above it, against the dark backdrop), and a dark
+		// see-through panel standing in it.
+		let mist = mScene.CreateGameObject("Mist");
+		mVolume = mist.AddComponent<FogVolume>();
+		mVolume.shape = .Box;
+		mVolume.size = .(24, 44, 70);
+		mVolume.density = 0.3f;
+		mVolume.edgeFade = 0.25f;
+		mist.Transform.Position = .(0, 20, 45);
+		mVolume.enabled = false;
+		let panel = mScene.CreateGameObject("Panel");
+		let panelRenderer = panel.AddComponent<MeshRenderer>();
+		panelRenderer.mesh.Set("builtin:cube");
+		panelRenderer.color = .(0.03f, 0.03f, 0.04f, 0.85f);
+		mPanelRenderer = panelRenderer;
+		panel.Transform.Position = .(0, 3.5f, 20);
+		panel.Transform.LocalScale = .(8, 3, 0.2f);
+		mPanelRenderer.enabled = false;
+
 		let env = mScene.Environment;
 		env.skyMode = .Physical;
 		env.dayNight = false;
@@ -237,6 +290,33 @@ class VolumetricFogTestApp : Application
 		return changed;
 	}
 
+	/// How many of the pixels in a rectangle (0..1 across and down) differ by more than one level of grey.
+	int RegionChanged(uint8[] a, uint8[] b, float x0, float x1, float y0, float y1)
+	{
+		int xa = (int)(x0 * ShotWidth), xb = (int)(x1 * ShotWidth);
+		int ya = (int)(y0 * ShotHeight), yb = (int)(y1 * ShotHeight);
+		int changed = 0;
+		for (int y = ya; y < yb; y++)
+		{
+			for (int x = xa; x < xb; x++)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				if (Math.Abs((int32)a[i] - b[i]) > 1 || Math.Abs((int32)a[i + 1] - b[i + 1]) > 1 || Math.Abs((int32)a[i + 2] - b[i + 2]) > 1)
+					changed++;
+			}
+		}
+		return changed;
+	}
+
+	/// The average difference between two pictures, in levels of grey (0..255).
+	float MeanDiff(uint8[] a, uint8[] b)
+	{
+		double sum = 0;
+		for (int32 i = 0; i < ShotWidth * ShotHeight * 4; i += 4)
+			sum += Math.Abs((int32)a[i] - b[i]) + Math.Abs((int32)a[i + 1] - b[i + 1]) + Math.Abs((int32)a[i + 2] - b[i + 2]);
+		return (float)(sum / (ShotWidth * ShotHeight * 3));
+	}
+
 	protected override void OnRender()
 	{
 		if (mSkip)
@@ -254,10 +334,15 @@ class VolumetricFogTestApp : Application
 			}
 			let phase = mPhases[mPhase];
 			mScene.Environment.volumetricFog = phase.volumetric;
+			mScene.Environment.vfDensity = phase.density >= 0 ? phase.density : 0.05f;
 			mSunLight.enabled = phase.sun;
 			mSpotLight.enabled = phase.spot;
 			mSpotLight.volumetric = phase.spotVolumetric;
 			mBlockerRenderer.enabled = phase.blocker;
+			mVolume.enabled = phase.volume;
+			mPanelRenderer.enabled = phase.transparent;
+			mView.FogTemporalEnabled = phase.temporal;
+			mCameraObject.Transform.Position = .(phase.cameraX, 2, 0);
 			for (int i < mPerfLights.Count)
 				mPerfLights[i].enabled = i < phase.lights;
 			mFrame = 0;
@@ -266,7 +351,7 @@ class VolumetricFogTestApp : Application
 		mView.Resize(ShotWidth, ShotHeight);
 		mView.Render(mScene, mCamera.GetCameraData((float)ShotWidth / ShotHeight));
 		mFrame++;
-		if (mFrame < SettleFrames)
+		if (mFrame < mPhases[mPhase].settle)
 			return;
 		if (mShot == null)
 			mShot = new CompareShot();
@@ -326,6 +411,57 @@ class VolumetricFogTestApp : Application
 				{
 					mShadowOpen = shadow;
 					Console.WriteLine(scope $"vfog-test: spot shadow (no box) {shadow:F3}");
+				}
+			}
+			if (phase.checkVolume)
+			{
+				// The fog over the dark backdrop above the wall (inside the volume), the near ground (in front of it),
+				// and the see-through panel standing in it.
+				let inside = RegionMean(mShot.Pixels, 0.44f, 0.56f, 0.06f, 0.14f);
+				let outside = RegionMean(mShot.Pixels, 0.30f, 0.45f, 0.86f, 0.94f);
+				let panel = RegionMean(mShot.Pixels, 0.45f, 0.55f, 0.365f, 0.44f);
+				if (!phase.volume)
+				{
+					mVolumeOffInside = inside;
+					mVolumeOffOutside = outside;
+					mVolumeOffPanel = panel;
+					mVolumePixels = new uint8[mShot.Pixels.Count];
+					Internal.MemCpy(mVolumePixels.CArray(), mShot.Pixels.CArray(), (int)mVolumePixels.Count);
+				}
+				else
+				{
+					Console.WriteLine(scope $"vfog-test: volume inside {mVolumeOffInside:F3} -> {inside:F3}; ground outside {mVolumeOffOutside:F3} -> {outside:F3}; see-through panel {mVolumeOffPanel:F3} -> {panel:F3}");
+					Check(mView.VolumetricFogDrawn, "volume: the fog is drawn from the volume alone (no height fog)");
+					Check(inside > mVolumeOffInside + 0.02f, "volume: the fog shows inside it");
+					Check(panel > mVolumeOffPanel + 0.01f, "volume: the see-through panel is fogged too");
+					mVolumeOutsideChanged = RegionChanged(mVolumePixels, mShot.Pixels, 0.30f, 0.45f, 0.86f, 0.94f);
+					Console.WriteLine(scope $"vfog-test: volume outside changed pixels {mVolumeOutsideChanged}");
+					Check(mVolumeOutsideChanged == 0, "volume: nothing changes outside it (the near ground)");
+				}
+			}
+			if (phase.pair != 0)
+			{
+				if (phase.pair == 1 || phase.pair == 3)
+				{
+					DeleteAndNullify!(mPairPixels);
+					mPairPixels = new uint8[mShot.Pixels.Count];
+					Internal.MemCpy(mPairPixels.CArray(), mShot.Pixels.CArray(), (int)mPairPixels.Count);
+				}
+				else if (phase.pair == 2)
+				{
+					mPairChanged = ChangedPixels(mPairPixels, mShot.Pixels);
+					mPairMean = MeanDiff(mPairPixels, mShot.Pixels);
+					Console.WriteLine(scope $"vfog-test: still camera, the next frame: {mPairChanged} pixels changed, mean {mPairMean:F2}/255");
+					Check(mPairChanged < ShotWidth * ShotHeight / 50, "temporal: the fog does not flicker frame to frame");
+					Check(mPairMean < 1.5f, "temporal: the frame-to-frame change is under a level of grey");
+				}
+				else
+				{
+					mGhostChanged = ChangedPixels(mPairPixels, mShot.Pixels);
+					mGhostMean = MeanDiff(mPairPixels, mShot.Pixels);
+					Console.WriteLine(scope $"vfog-test: one frame after the camera moved, against no history: {mGhostChanged} pixels changed, mean {mGhostMean:F2}/255");
+					Check(mGhostChanged < ShotWidth * ShotHeight / 50, "temporal: no ghost of where the camera stood");
+					Check(mGhostMean < 2.0f, "temporal: the ghost is under two levels of grey");
 				}
 			}
 			if (phase.checkCost)
