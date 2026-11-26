@@ -847,6 +847,7 @@ class NetworkManager
 	/// Leaves the session: a server tells its clients and closes, a client disconnects.
 	public void Stop()
 	{
+		DayNightNet.SessionStopped(this);
 		NativeStop();
 		if (mTransport != null)
 		{

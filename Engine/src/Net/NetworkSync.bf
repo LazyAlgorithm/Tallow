@@ -861,6 +861,12 @@ static class NetworkSync
 
 	static void OnEvent(int32 sender, ref NetReader reader)
 	{
+		// The Day / Night clock is the scene's, not an object's: it starts with its own name marker instead.
+		if (DayNightNet.IsStateMessage(ref reader))
+		{
+			DayNightNet.ReadState(ref reader);
+			return;
+		}
 		let network = Active(Scene.Active);
 		if (network == null)
 			return;
@@ -1653,6 +1659,7 @@ static class NetworkSync
 	/// Server: brings a player who has just connected up to date with everything above.
 	public static void ClientJoined(NetworkManager network, int32 clientId)
 	{
+		DayNightNet.ClientJoined(network, clientId);
 		SendSchemaTo(network, clientId);
 		network.Replay(clientId);
 		let payload = scope NetWriter();

@@ -304,6 +304,7 @@ extension NetworkManager
 			Send(peer, true);
 		}
 		AntiCheat.ClientJoined(this, id);
+		DayNightNet.ClientJoined(this, id);
 		NativeClientJoined(id);
 		mRosterIn = 0;
 		Log.Info(scope $"Client {id} came back.");

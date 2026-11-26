@@ -154,16 +154,46 @@ static class DayNight
 	}
 
 	/// Moves the clock on by `deltaTime` seconds (0 in Edit mode, or when paused) and turns the sun and moon.
-	/// Does nothing while Day / Night is off.
+	/// Does nothing while Day / Night is off. In a network session the server owns the clock (N4a): every machine
+	/// works the time out from the server's tick instead of stepping it, and the server sends the settings only when
+	/// they change.
 	public static void Update(Scene scene, float deltaTime)
 	{
 		let env = scene.Environment;
-		if (!env.dayNight)
-			return;
-		if (deltaTime > 0 && !env.dayNightPaused && env.dayLengthMinutes > 0)
+		let network = scene.Network;
+		if (network != null && network.Mode != .Offline)
+			DayNightNet.Update(scene, network);
+		else if (env.dayNight && deltaTime > 0 && !env.dayNightPaused && env.dayLengthMinutes > 0)
 			env.timeOfDay = WrapHours(env.timeOfDay + deltaTime * 24.0f / (env.dayLengthMinutes * 60.0f));
 		Apply(scene);
 	}
+
+	/// The clock gameplay and its events run on: in a network session, the server's, the same on every machine without
+	/// being sent per frame; offline, the scene's own clock (the same as SceneEnvironment.timeOfDay). Hours.
+	public static double SimulationTime(Scene scene)
+	{
+		let network = scene?.Network;
+		if (network != null && network.Mode != .Offline)
+			return DayNightNet.SimulationTime(network);
+		return scene?.Environment.timeOfDay ?? 0;
+	}
+
+	/// The time the sky is drawn at: a moment behind SimulationTime so it moves smoothly between ticks, from the
+	/// server's tick as this machine knows it. Offline, the scene's own clock.
+	public static double ViewTime(Scene scene)
+	{
+		let network = scene?.Network;
+		if (network != null && network.Mode != .Offline)
+			return DayNightNet.ViewTime(network);
+		return scene?.Environment.timeOfDay ?? 0;
+	}
+
+	/// In a network session: the bytes the server has sent for this clock (the settings, and each change once), for
+	/// tests and the network panel. 0 offline.
+	public static int32 BytesSent(NetworkManager network) => DayNightNet.BytesSent(network);
+
+	/// In a network session: whether this client has warned (once) that Day / Night belongs to the server.
+	public static bool ChangeIgnored(NetworkManager network) => DayNightNet.Warned(network);
 
 	/// Turns the sun and moon to the environment's time now (the editor calls it when the time is dragged).
 	public static void Apply(Scene scene)

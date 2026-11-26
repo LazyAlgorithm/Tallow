@@ -36,6 +36,8 @@ namespace Tallow;
 ///                                                      reacts (sky rebuilds, shadows, Only At Night lights)
 ///   --daynight-test                                    print the sun and moon through the day with no window and check
 ///                                                      the sun's path, the scene's sun light and saving (exit 1 on a failure)
+///   --daynight-net-test                                play a networked host and clients on loopback with no window and
+///                                                      check the server-owned Day / Night clock (exit 1 on a failure)
 ///   --quality-test                                     switch each quality preset with no window, print the applied
 ///                                                      GPU-path and streaming values, check the quality file, exit 0 or 1
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
@@ -368,6 +370,9 @@ class Application
 		}
 		if (HasArg("--daynight-test") && !(this is FullDayTestApp))
 			return DayNightTest.Run();
+		// The networked clock check plays a host and clients on loopback with no window (N4a).
+		if (HasArg("--daynight-net-test") && !(this is FullDayTestApp))
+			return DayNightNetTest.Run();
 		let streamingTest = scope String();
 		if (GetArg("--streaming-test", streamingTest) && streamingTest == "textures" && !(this is TextureStreamTestApp))
 		{
