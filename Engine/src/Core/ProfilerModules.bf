@@ -51,6 +51,9 @@ static class ProfilerModules
 	static ProfilerCounter sGpuVtMs = .("GPU Time: VT Feedback", .Rendering, "ms");
 	/// Volumetric fog's inject, integrate and apply passes, the latest frame, in ms (0 when off).
 	static ProfilerCounter sGpuVFogMs = .("GPU Time: Volumetric fog", .Rendering, "ms");
+	/// The fog grid's cells (across x down x deep) and the point and spot lights that scattered into them, last frame.
+	static ProfilerCounter sVFogCells = .("Volumetric Fog Cells", .Rendering);
+	static ProfilerCounter sVFogLights = .("Volumetric Fog Local Lights", .Rendering);
 	/// The latest frame's volumetric fog GPU time in ms (read by tests and --gpu-bench).
 	public static double VolumetricFogMs { get; private set; }
 	// Virtual textures (VirtualTextures.bf).
@@ -168,6 +171,8 @@ static class ProfilerModules
 		sVisible.Set(RenderView.FrameVisible);
 		sViews.Set(RenderView.FrameViews);
 		sShadowTiles.Set(RenderView.FrameShadowTiles);
+		sVFogCells.Set(RenderView.VolumetricFogCells);
+		sVFogLights.Set(RenderView.VolumetricFogLights);
 		RenderView.FrameDrawCalls = RenderView.FrameInstances = RenderView.FrameTriangles = 0;
 		RenderView.FrameVisible = RenderView.FrameViews = RenderView.FrameShadowTiles = 0;
 		sGpuBins.Set(GpuDriven.FrameBins);

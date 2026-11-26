@@ -224,6 +224,66 @@ public readonly record struct SceneEnvironment(ulong SessionId)
         get => Float(32);
         set => Set(32, value, 0, 0, 0);
     }
+    /// <summary>Volumetric fog: fog lit by the sun, with light shafts where shadows cut it, by the scene's point and
+    /// spot lights, and by Fog Volumes. Off, the scene keeps its plain distance fog (<see cref="FogDensity"/>). Needs
+    /// Vulkan, Direct3D or Metal; OpenGL and the web draw a cheaper height fog with sun shafts instead. The graphics
+    /// quality setting can also turn it off (Low).</summary>
+    public bool VolumetricFog
+    {
+        get => Float(33) != 0;
+        set => Set(33, value ? 1 : 0, 0, 0, 0);
+    }
+    /// <summary>How thick the volumetric fog is at and below <see cref="FogHeight"/>, per metre (0.02 fades out over
+    /// about 50 m). 0 leaves only Fog Volumes.</summary>
+    public float VolumetricDensity
+    {
+        get => Float(34);
+        set => Set(34, value, 0, 0, 0);
+    }
+    /// <summary>The height, in metres (world space), the volumetric fog starts to thin out above.</summary>
+    public float FogHeight
+    {
+        get => Float(35);
+        set => Set(35, value, 0, 0, 0);
+    }
+    /// <summary>How fast the volumetric fog thins above <see cref="FogHeight"/>, per metre (0: the same everywhere).</summary>
+    public float FogFalloff
+    {
+        get => Float(36);
+        set => Set(36, value, 0, 0, 0);
+    }
+    /// <summary>How much light goes on forward through the volumetric fog: -0.9 to 0.9. Higher makes a bright glow
+    /// round the sun when looking towards it; 0 scatters every way the same.</summary>
+    public float FogAnisotropy
+    {
+        get => Float(37);
+        set => Set(37, value, 0, 0, 0);
+    }
+    /// <summary>The volumetric fog's colour: what share of each colour of light it scatters back (white leaves light as
+    /// it is).</summary>
+    public Color FogAlbedo
+    {
+        get => Color(38);
+        set => Set(38, value.R, value.G, value.B, value.A);
+    }
+    /// <summary>How much sunlight the volumetric fog scatters: 1 as it should, more for stronger light shafts.</summary>
+    public float SunScattering
+    {
+        get => Float(39);
+        set => Set(39, value, 0, 0, 0);
+    }
+    /// <summary>How much of the ambient (sky) light the volumetric fog scatters.</summary>
+    public float VolumetricAmbient
+    {
+        get => Float(40);
+        set => Set(40, value, 0, 0, 0);
+    }
+    /// <summary>How far the volumetric fog's grid reaches, in metres: beyond it the fog goes on as plain height fog.</summary>
+    public float FogDistance
+    {
+        get => Float(41);
+        set => Set(41, value, 0, 0, 0);
+    }
 
     private float Float(int which)
     {

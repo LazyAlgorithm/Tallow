@@ -409,11 +409,12 @@ extension EditorApp
 				mSceneOcclusion = !mSceneOcclusion;
 			if (ImGui.MenuItem("Occlusion Picture", null, mShowOcclusionPicture))
 				mShowOcclusionPicture = !mShowOcclusionPicture;
-			// What the GPU-driven draw shows (GpuDriven.DebugView): the viewport's debug views.
-			if (ImGui.BeginMenu("GPU Debug View", GpuDriven.Available))
+			// What the GPU-driven draw shows (GpuDriven.DebugView): the viewport's debug views. The fog views need
+			// volumetric fog to be on; without it they show the normal picture.
+			if (ImGui.BeginMenu("GPU Debug View", GpuDriven.Available || RenderResources.VFogReady))
 			{
-				StringView[7] names = .("Off", "Clusters", "LOD Level", "Triangles", "HZB", "Residency", "Virtual Texture Pages");
-				for (int k < 7)
+				StringView[9] names = .("Off", "Clusters", "LOD Level", "Triangles", "HZB", "Residency", "Virtual Texture Pages", "Fog Density", "Fog Light");
+				for (int k < 9)
 				{
 					if (ImGui.MenuItem(scope String(names[k]).CStr(), null, (int)GpuDriven.View == k))
 						GpuDriven.View = (GpuDriven.DebugView)k;

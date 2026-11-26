@@ -114,6 +114,38 @@ extension EditorApp
 				v.skyQuality = (int32)Math.Round(skySlider);
 				changed = true;
 			}
+			// Volumetric fog (RenderViewVolumetric.bf): the froxel grid's fineness, its temporal blend and its lights.
+			changed |= ImGui.Checkbox("Volumetric Fog", ref v.volumetricFog);
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("Fog lit by the sun (with light shafts where shadows cut it), by point and spot lights and by Fog Volumes. Off, or on a card without compute shaders (OpenGL, the web), a cheaper height fog with sun shafts is drawn instead.");
+			ImGui.BeginDisabled(!v.volumetricFog);
+			StringView[3] fogTileNames = .("16 px", "12 px", "8 px");
+			var tileIndex = (float)(v.fogTileSize >= 16 ? 0 : (v.fogTileSize >= 12 ? 1 : 2));
+			if (ImGui.SliderFloat(scope String()..AppendF("Fog Detail ({})###fogdetail", fogTileNames[(int)tileIndex]).CStr(), ref tileIndex, 0, 2, ""))
+			{
+				let step = (int32)Math.Round(Math.Clamp(tileIndex, 0, 2));
+				v.fogTileSize = step == 0 ? 16 : (step == 1 ? 12 : 8);
+				changed = true;
+			}
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("How fine the fog's grid of cells is: 8 px cells are the smoothest and cost the most.");
+			StringView[4] fogSliceNames = .("32", "48", "64", "128");
+			var sliceIndex = (float)(v.fogSlices >= 128 ? 3 : (v.fogSlices >= 64 ? 2 : (v.fogSlices >= 48 ? 1 : 0)));
+			if (ImGui.SliderFloat(scope String()..AppendF("Fog Depth ({})###fogdepth", fogSliceNames[(int)sliceIndex]).CStr(), ref sliceIndex, 0, 3, ""))
+			{
+				let step = (int32)Math.Round(Math.Clamp(sliceIndex, 0, 3));
+				v.fogSlices = step >= 3 ? 128 : (step >= 2 ? 64 : (step >= 1 ? 48 : 32));
+				changed = true;
+			}
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("How many cells deep the fog's grid is: more is smoother and costs more.");
+			changed |= ImGui.Checkbox("Fog Temporal Blend", ref v.fogTemporal);
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("Blends each frame's fog with the last, which hides the banding between depth cells.");
+			changed |= ImGui.DragInt("Fog Local Lights", ref v.fogLocalLights, 1, 0, 256);
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("How many point and spot lights may scatter into the fog in a view (the first in each cell's list).");
+			ImGui.EndDisabled();
 			if (changed)
 			{
 				Quality.Current = v;

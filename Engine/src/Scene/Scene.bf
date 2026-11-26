@@ -190,8 +190,9 @@ class SceneEnvironment
 	public float skyboxBlend;
 
 	/// Volumetric fog (tallowengine.com/docs/day-night): fog lit by the sun, with light shafts where shadows cut it, worked
-	/// out in a grid of cells over the view (Vulkan, Direct3D and Metal; OpenGL keeps the distance fog). It replaces the
-	/// distance fog (fogDensity) while on.
+	/// out in a grid of cells over the view (Vulkan, Direct3D and Metal; OpenGL and the web draw a cheaper height fog with
+	/// sun shafts instead). It replaces the distance fog (fogDensity) while on. The graphics quality setting can also turn
+	/// it off (Low).
 	public bool volumetricFog;
 	/// Volumetric fog: how thick the fog is at and below Fog Height, per metre (0.02: about 50 m to fade out).
 	public float vfDensity = 0.02f;

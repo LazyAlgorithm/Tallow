@@ -35,7 +35,11 @@ static class GpuDriven
 		/// Green: clusters at the detail they ask for; orange: clusters whose finer group is not in memory yet (virtual geometry).
 		Residency,
 		/// The mip level of the virtual texture each pixel shows: green is the level it needs, orange to red a coarser one.
-		VtPages
+		VtPages,
+		/// Volumetric fog's cells' density (grey), at each pixel's own depth. Fog off: the normal picture.
+		FogDensity,
+		/// The light the volumetric fog's cells scatter towards the camera.
+		FogLight
 	}
 
 	/// The bgfx view the culling dispatches go in: after the skinning's (Compute.View) and before every camera's.

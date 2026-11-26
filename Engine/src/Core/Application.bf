@@ -272,7 +272,8 @@ class Application
 			else
 				Log.Warning(scope $"--gpu-occlusion takes on or off, not '{gpuOcclusion}'");
 		}
-		// --gpu-debug-view off|clusters|lod|triangles|hzb|residency|vt [--gpu-debug-mip N]: draw the GPU-driven path's debug picture.
+		// --gpu-debug-view off|clusters|lod|triangles|hzb|residency|vt|fog-density|fog-light [--gpu-debug-mip N]: draw a
+		// debug picture (the GPU-driven path's, or the volumetric fog's cells).
 		let debugView = scope String();
 		if (GetArg("--gpu-debug-view", debugView))
 		{
@@ -286,7 +287,9 @@ class Application
 			case "hzb": GpuDriven.View = .Hzb;
 			case "residency": GpuDriven.View = .Residency;
 			case "vt", "vtpages": GpuDriven.View = .VtPages;
-			default: Log.Warning(scope $"--gpu-debug-view takes off, clusters, lod, triangles, hzb, residency or vt, not '{debugView}'");
+			case "fog", "fogdensity", "fog-density": GpuDriven.View = .FogDensity;
+			case "foglight", "fog-light": GpuDriven.View = .FogLight;
+			default: Log.Warning(scope $"--gpu-debug-view takes off, clusters, lod, triangles, hzb, residency, vt, fog-density or fog-light, not '{debugView}'");
 			}
 		}
 		let debugMip = scope String();

@@ -68,12 +68,23 @@ struct QualityValues : IEquatable<QualityValues>
 	public int32 vtBudgetMB = 512;
 	/// The physical sky's detail: 0 the smallest sky table (128 x 72), 1 192 x 108, 2 384 x 216 with more samples.
 	public int32 skyQuality = 1;
+	/// Volumetric fog (RenderViewVolumetric.bf): fog lit by the sun and local lights with shafts. Off, the scene keeps
+	/// its plain distance/height fog.
+	public bool volumetricFog = true;
+	/// How many pixels across and down each froxel cell covers: smaller is finer and costs more (8 to 32).
+	public int32 fogTileSize = 12;
+	/// How many cells deep the fog grid is: more is smoother and costs more (16 to 160).
+	public int32 fogSlices = 64;
+	/// Blend each frame's fog cells with last frame's, which hides the banding between depth slices.
+	public bool fogTemporal = true;
+	/// How many point and spot lights may scatter into the fog in a view (the first in each cell's cluster list).
+	public int32 fogLocalLights = 64;
 
 	public this()
 	{
 	}
 
-	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialiasMode == other.antialiasMode && upscaler == other.upscaler && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize && gpuDriven == other.gpuDriven && pixelError == other.pixelError && gpuOcclusion == other.gpuOcclusion && streamGeometry == other.streamGeometry && geometryBudgetMB == other.geometryBudgetMB && textureBudgetMB == other.textureBudgetMB && vtBudgetMB == other.vtBudgetMB && skyQuality == other.skyQuality;
+	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialiasMode == other.antialiasMode && upscaler == other.upscaler && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize && gpuDriven == other.gpuDriven && pixelError == other.pixelError && gpuOcclusion == other.gpuOcclusion && streamGeometry == other.streamGeometry && geometryBudgetMB == other.geometryBudgetMB && textureBudgetMB == other.textureBudgetMB && vtBudgetMB == other.vtBudgetMB && skyQuality == other.skyQuality && volumetricFog == other.volumetricFog && fogTileSize == other.fogTileSize && fogSlices == other.fogSlices && fogTemporal == other.fogTemporal && fogLocalLights == other.fogLocalLights;
 	public static bool operator ==(QualityValues a, QualityValues b) => a.Equals(b);
 }
 
@@ -121,6 +132,12 @@ static class Quality
 			v.textureBudgetMB = 512;
 			v.vtBudgetMB = 256;
 			v.skyQuality = 0;
+			// Low keeps the fallback's plain height fog and cheap sun shafts instead of the grid.
+			v.volumetricFog = false;
+			v.fogTileSize = 16;
+			v.fogSlices = 32;
+			v.fogTemporal = false;
+			v.fogLocalLights = 0;
 		case .Medium:
 			v.renderScale = 0.85f;
 			v.upscaler = .FSR1;
@@ -136,6 +153,11 @@ static class Quality
 			v.reflectionSize = 64;
 			v.pixelError = 2.0f;
 			v.skyQuality = 0;
+			v.volumetricFog = true;
+			v.fogTileSize = 16;
+			v.fogSlices = 48;
+			v.fogTemporal = true;
+			v.fogLocalLights = 16;
 		case .High,.Custom:
 		case .Ultra:
 			// TAA (a graphics card that cannot do it falls back to FXAA: Antialiasing.Resolve).
@@ -151,6 +173,10 @@ static class Quality
 			v.textureBudgetMB = 2048;
 			v.vtBudgetMB = 1024;
 			v.skyQuality = 2;
+			// High is the fog grid's default (12 px cells, 64 slices, temporal, 64 lights); Ultra refines it.
+			v.fogTileSize = 8;
+			v.fogSlices = 128;
+			v.fogLocalLights = 128;
 		}
 		return v;
 	}
@@ -211,6 +237,14 @@ static class Quality
 			GpuDriven.StreamGeometry = Current.streamGeometry;
 		StreamingCore.ApplyBudgetsMB(Current.geometryBudgetMB, Current.textureBudgetMB, Current.vtBudgetMB);
 		PhysicalSky.Quality = Math.Clamp(Current.skyQuality, 0, 2);
+		// Volumetric fog (RenderViewVolumetric.bf): whether a scene may use it at all, its grid, its temporal blend and
+		// how many local lights may scatter into it.
+		RenderView.FogEnabled = Current.volumetricFog;
+		RenderView.FogTileSize = Math.Clamp(Current.fogTileSize, 4, 32);
+		RenderView.FogSlices = Math.Clamp(Current.fogSlices, 16, 160);
+		RenderView.FogTemporalAllowed = Current.fogTemporal;
+		RenderView.FogLocalLights = Math.Clamp(Current.fogLocalLights, 0, 256);
+		RenderView.FogHistoryBlend = Level == .Ultra ? 0.95f : 0.9f;
 	}
 
 	/// The preset suggested for this machine: Low on phones, Medium on integrated graphics and in a browser, High
@@ -229,8 +263,8 @@ static class Quality
 	/// The settings as text, one `name=value` a line.
 	public static void Write(QualityValues v, String text)
 	{
-		text.AppendF("renderScale={}\nantialias={}\nantialiasMode={}\nupscaler={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\ngpuDriven={}\npixelError={}\ngpuOcclusion={}\nstreamGeometry={}\ngeometryBudgetMB={}\ntextureBudgetMB={}\nvtBudgetMB={}\nskyQuality={}\n",
-			v.renderScale, v.antialiasMode != .Off ? 1 : 0, (int32)v.antialiasMode, (int32)v.upscaler, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize, v.gpuDriven ? 1 : 0, v.pixelError, v.gpuOcclusion ? 1 : 0, v.streamGeometry ? 1 : 0, v.geometryBudgetMB, v.textureBudgetMB, v.vtBudgetMB, v.skyQuality);
+		text.AppendF("renderScale={}\nantialias={}\nantialiasMode={}\nupscaler={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\ngpuDriven={}\npixelError={}\ngpuOcclusion={}\nstreamGeometry={}\ngeometryBudgetMB={}\ntextureBudgetMB={}\nvtBudgetMB={}\nskyQuality={}\nvolumetricFog={}\nfogTileSize={}\nfogSlices={}\nfogTemporal={}\nfogLocalLights={}\n",
+			v.renderScale, v.antialiasMode != .Off ? 1 : 0, (int32)v.antialiasMode, (int32)v.upscaler, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize, v.gpuDriven ? 1 : 0, v.pixelError, v.gpuOcclusion ? 1 : 0, v.streamGeometry ? 1 : 0, v.geometryBudgetMB, v.textureBudgetMB, v.vtBudgetMB, v.skyQuality, v.volumetricFog ? 1 : 0, v.fogTileSize, v.fogSlices, v.fogTemporal ? 1 : 0, v.fogLocalLights);
 	}
 
 	/// Reads settings from text (unknown or missing lines keep the values given).
@@ -279,6 +313,11 @@ static class Quality
 			case "textureBudgetMB": v.textureBudgetMB = (int32)Math.Clamp(number, 16, 16384);
 			case "vtBudgetMB": v.vtBudgetMB = (int32)Math.Clamp(number, 16, 16384);
 			case "skyQuality": v.skyQuality = (int32)Math.Clamp(number, 0, 2);
+			case "volumetricFog": v.volumetricFog = flag;
+			case "fogTileSize": v.fogTileSize = (int32)Math.Clamp(number, 4, 32);
+			case "fogSlices": v.fogSlices = (int32)Math.Clamp(number, 16, 160);
+			case "fogTemporal": v.fogTemporal = flag;
+			case "fogLocalLights": v.fogLocalLights = (int32)Math.Clamp(number, 0, 256);
 			}
 		}
 		return v;

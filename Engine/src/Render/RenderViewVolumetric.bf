@@ -17,26 +17,44 @@ namespace Tallow;
 /// history), cs_vfog_integrate.sc sums them, fs_vfog_apply.sc draws the result. See-through things and the water,
 /// which are drawn after the apply, ask the same sums for their own depths in their shaders (the TW_VFOG variants of
 /// fs_mesh and fs_water); the shared maths is Engine/shaders/include/vfog.sh, and the local lights' is in
-/// vfog_local.sh. Vulkan, Direct3D 11/12 and Metal draw it; OpenGL and the web keep the distance fog.
+/// vfog_local.sh. Vulkan, Direct3D 11/12 and Metal draw it; OpenGL, the web and `--gpu-driven-caps-off` use the
+/// fallback: fs_vfog_fallback.sc draws the same height fog (its exact integral along each ray) with cheap
+/// screen-space sun shafts from the depth pass.
+///
+/// The grid's cell size and depth, the temporal blend and the number of local lights are the graphics quality settings
+/// (Quality.bf); Low draws only the fallback. `--gpu-debug-view fog-density|fog-light` shows the cells' density or
+/// light instead of the lit picture.
 ///
 /// The phase function, ambient term and shadow lookup follow Bevy's volumetric_fog (bevy_pbr, MIT; the notice is in
 /// Engine/shaders/licenses/Bevy-LICENSE-MIT.txt); the cell grid, its sums and the reprojection are the published froxel
 /// method (Wronski 2014, Hillaire 2015).
 extension RenderView
 {
-	/// How many pixels of the picture one froxel cell covers (the grid is that much coarser than the screen).
-	const int32 VFogTileSize = 16;
-	/// How many cells deep the grid is (spaced exponentially from VFogNear to the scene's vfDistance).
-	const int32 VFogSlices = 48;
+	/// How many pixels of the picture one froxel cell covers (the grid is that much coarser than the screen): the
+	/// quality setting (Quality.Apply). 12 is High; lower is finer and costs more.
+	public static int32 FogTileSize = 12;
+	/// How many cells deep the grid is (spaced exponentially from VFogNear to the scene's vfDistance): the quality
+	/// setting. 64 is High.
+	public static int32 FogSlices = 64;
+	/// Whether a scene's volumetric fog uses the froxel grid (the quality setting; Low turns it off and draws the
+	/// fallback's height fog and sun shafts instead).
+	public static bool FogEnabled = true;
+	/// Whether frames blend their cells with last frame's (the quality setting).
+	public static bool FogTemporalAllowed = true;
+	/// How many point and spot lights may scatter into the fog in a view (the quality setting).
+	public static int32 FogLocalLights = 64;
+	/// How much of last frame's cells the temporal blend keeps: 0.9, or 0.95 on Ultra (Quality.Apply).
+	public static float FogHistoryBlend = 0.9f;
 	/// The nearest slice boundary, in metres in front of the camera.
 	const float VFogNear = 0.5f;
 	/// How far away the sky is taken to be for the fog, in metres along the view ray.
 	const float VFogSkyDistance = 400;
-	/// How much of last frame's cells the temporal blend keeps: 0.9 smooths the jitter's banding away without a visible
-	/// trail behind a moving camera.
-	const float VFogHistoryBlend = 0.9f;
 	/// How far the camera may move between frames and still reuse last frame's cells: further is a cut.
 	const float VFogHistoryCut = 5.0f;
+	/// The cells drawn by the last fog pass (x cells across, down and deep), and the local lights it scattered (the
+	/// profiler's counters; 0 when the fog did not run).
+	public static int32 VolumetricFogCells { get; private set; }
+	public static int32 VolumetricFogLights { get; private set; }
 
 	/// The Fog Volumes the fog takes density and colour from this frame.
 	List<FogVolume> mFogVolumes = new .() ~ delete _;
@@ -52,18 +70,32 @@ extension RenderView
 	bool mFogHistoryValid;
 
 	/// Whether this view draws volumetric fog this frame: the scene asks (the height fog or a Fog Volume has fog in
-	/// it), the device can run it, and the camera sees it in perspective (the grid's slices are view depths).
+	/// it), the quality setting allows it, the device can run it, and the camera sees it in perspective (the grid's
+	/// slices are view depths).
 	bool UsesVolumetricFog(CameraData camera, SceneEnvironment env)
 	{
-		return env.volumetricFog && (env.vfDensity > 0 || mFogVolumeCount > 0) && !camera.orthographic && !Capture && shading == .Rendered
-			&& VolumetricFogSupported();
+		return FogEnabled && env.volumetricFog && (env.vfDensity > 0 || mFogVolumeCount > 0) && !camera.orthographic
+			&& !Capture && shading == .Rendered && VolumetricFogSupported();
 	}
 
+	/// Whether this view draws the cheap fallback instead: the scene's height fog where the card cannot run the froxel
+	/// grid (OpenGL, the web, `--gpu-driven-caps-off`) or the quality setting turns it off (Low). Fog Volumes and local
+	/// lights are not drawn by the fallback.
+	bool UsesVolumetricFogFallback(CameraData camera, SceneEnvironment env)
+	{
+		return env.volumetricFog && env.vfDensity > 0 && !camera.orthographic && !Capture && shading == .Rendered
+			&& (!FogEnabled || !VolumetricFogSupported()) && RenderResources.VFogFallbackProgram.Valid;
+	}
+
+	/// Whether the device must draw the fallback even though it could run compute: `--gpu-driven-caps-off` pretends
+	/// compute shaders are missing (the same flag that turns the GPU-driven path off, since both need them).
+	static bool UseOnlyFallback() => GpuDriven.ForceUnavailable;
+
 	/// Whether volumetric fog can run here at all: Vulkan, Direct3D 11/12 or Metal, with compute shaders and the fog
-	/// shaders built for that backend. OpenGL and the web draw the distance fog instead.
+	/// shaders built for that backend. OpenGL and the web draw the fallback instead.
 	static bool VolumetricFogSupported()
 	{
-		if (!Compute.Supported || !RenderResources.VFogReady)
+		if (UseOnlyFallback() || !Compute.Supported || !RenderResources.VFogReady)
 			return false;
 		switch (bgfx.get_renderer_type())
 		{
@@ -132,24 +164,26 @@ extension RenderView
 	/// scene's size.
 	void EnsureVolumetricTargets()
 	{
-		let cellsX = Math.Max((mWidth + VFogTileSize - 1) / VFogTileSize, 1);
-		let cellsY = Math.Max((mHeight + VFogTileSize - 1) / VFogTileSize, 1);
-		if (mFogScatter[0].Valid && mFogIntegrated.Valid && cellsX == mFogCellsX && cellsY == mFogCellsY && VFogSlices == mFogSlices)
+		let tile = Math.Clamp(FogTileSize, 4, 32);
+		let slices = Math.Clamp(FogSlices, 16, 160);
+		let cellsX = Math.Max((mWidth + tile - 1) / tile, 1);
+		let cellsY = Math.Max((mHeight + tile - 1) / tile, 1);
+		if (mFogScatter[0].Valid && mFogIntegrated.Valid && cellsX == mFogCellsX && cellsY == mFogCellsY && slices == mFogSlices)
 			return;
 		ReleaseVolumetricTargets();
 		let flags = Gfx.TextureComputeWrite | Gfx.SamplerClamp;
 		for (int i < 2)
-			mFogScatter[i] = bgfx.create_texture_3d((uint16)cellsX, (uint16)cellsY, (uint16)VFogSlices, false, .RGBA16F, flags, null, 0);
-		mFogIntegrated = bgfx.create_texture_3d((uint16)cellsX, (uint16)cellsY, (uint16)VFogSlices, false, .RGBA16F, flags, null, 0);
+			mFogScatter[i] = bgfx.create_texture_3d((uint16)cellsX, (uint16)cellsY, (uint16)slices, false, .RGBA16F, flags, null, 0);
+		mFogIntegrated = bgfx.create_texture_3d((uint16)cellsX, (uint16)cellsY, (uint16)slices, false, .RGBA16F, flags, null, 0);
 		if (!mFogScatter[0].Valid || !mFogScatter[1].Valid || !mFogIntegrated.Valid)
 		{
-			Log.Warning(scope $"Volumetric fog: off (could not make a {cellsX}x{cellsY}x{VFogSlices} 3D texture)");
+			Log.Warning(scope $"Volumetric fog: off (could not make a {cellsX}x{cellsY}x{slices} 3D texture)");
 			ReleaseVolumetricTargets();
 			return;
 		}
 		mFogCellsX = cellsX;
 		mFogCellsY = cellsY;
-		mFogSlices = VFogSlices;
+		mFogSlices = slices;
 		mFogScatterIndex = 0;
 	}
 
@@ -183,7 +217,14 @@ extension RenderView
 		bgfx.set_uniform(RenderResources.uFogVolumeCount, &volumeCount, 1);
 		bgfx.set_uniform(RenderResources.uVFogTemporal, &mFogTemporal, 1);
 		bgfx.set_uniform(RenderResources.uVFogPrevViewProj, &mFogPrevViewProj, 1);
+		// The debug view (GpuDriven.DebugView.FogDensity / FogLight), with how much the cells' density or light is
+		// brightened to show it.
+		Vector4 debug = .(FogDebugMode, 8.0f, 4.0f, 0);
+		bgfx.set_uniform(RenderResources.uVFogDebug, &debug, 1);
 	}
+
+	/// Which froxel debug view is asked for: 0 the lit picture, 1 the cells' density, 2 the light they scatter.
+	static int32 FogDebugMode => GpuDriven.View == .FogDensity ? 1 : (GpuDriven.View == .FogLight ? 2 : 0);
 
 	/// The fog's own settings and the camera, for the see-through things and the water, which sample the sums
 	/// themselves instead of being laid over by the apply pass (bgfx clears a draw's uniforms after it is submitted).
@@ -206,10 +247,11 @@ extension RenderView
 		// same size); each frame samples the cells at a different depth so that averaging them smooths the banding.
 		let frame = Time.FrameCount;
 		let viewProj = camera.projection * camera.view;
-		mFogHistoryValid = FogTemporalEnabled && mFogLastFrame == frame - 1 && (camera.position - mFogLastEye).Length < VFogHistoryCut;
+		mFogHistoryValid = FogTemporalEnabled && FogTemporalAllowed && mFogLastFrame == frame - 1 && (camera.position - mFogLastEye).Length < VFogHistoryCut;
 		mFogPrevViewProj = mFogLastViewProj;
 		let jitter = mFogHistoryValid ? Halton((int32)(frame % 8) + 1, 2) : 0.5f;
-		mFogTemporal = .(jitter, mFogHistoryValid ? VFogHistoryBlend : 0, mFogHistoryValid ? 1 : 0, 0);
+		// w is the quality setting's most local lights a cell scatters (vfog_local.sh).
+		mFogTemporal = .(jitter, mFogHistoryValid ? FogHistoryBlend : 0, mFogHistoryValid ? 1 : 0, FogLocalLights);
 
 		// This frame's cells are written while last frame's are read, then they swap.
 		let write = mFogScatter[mFogScatterIndex];
@@ -246,13 +288,29 @@ extension RenderView
 		mFogLastViewProj = viewProj;
 		mFogLastEye = camera.position;
 		mFogLastFrame = frame;
+		VolumetricFogCells = mFogCellsX * mFogCellsY * mFogSlices;
+		VolumetricFogLights = Math.Min((int32)mLightCount.z, Math.Max(FogLocalLights, 0));
 	}
 
 	/// Lays the summed fog over the solid scene and the sky (after the decals, before the water), at each pixel's depth
-	/// from the depth pass.
+	/// from the depth pass. Where the card cannot run the grid, the fallback draws the height fog and its shafts.
 	void ApplyVolumetricFog(CameraData camera, SceneEnvironment env)
 	{
 		VolumetricFogDrawn = false;
+		if (mVolumetricFogFallback)
+		{
+			EnsureDepthPass(camera);
+			SetVolumetricFogUniforms(camera, env);
+			let view = (uint16)(ViewBase + VFogApplyView);
+			let name = "Volumetric fog apply (fallback)";
+			SetUpView(view, name, mSceneFb, 0, 0, mWidth, mHeight);
+			bgfx.set_view_mode(view, .Sequential);
+			bgfx.set_texture(0, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
+			// picture x transmittance + scattered light.
+			SubmitFullscreen(view, RenderResources.VFogFallbackProgram, Gfx.StateWriteRGB | Gfx.StateBlendOneSrcAlpha);
+			VolumetricFogDrawn = true;
+			return;
+		}
 		if (!mFogSums.Valid)
 			return;
 		EnsureDepthPass(camera);
@@ -263,8 +321,15 @@ extension RenderView
 		bgfx.set_view_mode(view, .Sequential);
 		bgfx.set_texture(0, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
 		bgfx.set_texture(1, RenderResources.sVFog, mFogSums, uint32.MaxValue);
-		// picture x transmittance + scattered light.
-		SubmitFullscreen(view, RenderResources.VFogApplyProgram, Gfx.StateWriteRGB | Gfx.StateBlendOneSrcAlpha);
+		if (FogDebugMode > 0)
+		{
+			// The cells themselves, at each pixel's own depth, instead of the lit picture.
+			bgfx.set_texture(2, RenderResources.sVFogCells, mFogScatter[mFogScatterIndex], uint32.MaxValue);
+			SubmitFullscreen(view, RenderResources.VFogApplyProgram, Gfx.StateWriteRGB | Gfx.StateWriteA);
+		}
+		else
+			// picture x transmittance + scattered light.
+			SubmitFullscreen(view, RenderResources.VFogApplyProgram, Gfx.StateWriteRGB | Gfx.StateBlendOneSrcAlpha);
 		VolumetricFogDrawn = true;
 	}
 

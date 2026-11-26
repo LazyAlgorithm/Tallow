@@ -50,6 +50,16 @@ static class CSharpEnvironment
 		case 30: values[0] = env.skyboxExposure;
 		case 31: values[0] = env.skyboxTint.r; values[1] = env.skyboxTint.g; values[2] = env.skyboxTint.b; values[3] = env.skyboxTint.a;
 		case 32: values[0] = env.skyboxBlend;
+		// Volumetric fog (RenderViewVolumetric.bf).
+		case 33: values[0] = env.volumetricFog ? 1 : 0;
+		case 34: values[0] = env.vfDensity;
+		case 35: values[0] = env.vfHeight;
+		case 36: values[0] = env.vfFalloff;
+		case 37: values[0] = env.vfAnisotropy;
+		case 38: values[0] = env.vfAlbedo.r; values[1] = env.vfAlbedo.g; values[2] = env.vfAlbedo.b; values[3] = env.vfAlbedo.a;
+		case 39: values[0] = env.vfSunScattering;
+		case 40: values[0] = env.vfAmbient;
+		case 41: values[0] = env.vfDistance;
 		default: return false;
 		}
 		return true;
@@ -96,6 +106,16 @@ static class CSharpEnvironment
 		case 30: env.skyboxExposure = Math.Clamp(x, -16, 16);
 		case 31: env.skyboxTint = .(x, y, z, w);
 		case 32: env.skyboxBlend = Math.Clamp(x, 0, 1);
+		// Volumetric fog (RenderViewVolumetric.bf).
+		case 33: env.volumetricFog = x != 0;
+		case 34: env.vfDensity = Math.Max(x, 0);
+		case 35: env.vfHeight = x;
+		case 36: env.vfFalloff = Math.Max(x, 0);
+		case 37: env.vfAnisotropy = Math.Clamp(x, -0.9f, 0.9f);
+		case 38: env.vfAlbedo = .(x, y, z, w);
+		case 39: env.vfSunScattering = Math.Max(x, 0);
+		case 40: env.vfAmbient = Math.Max(x, 0);
+		case 41: env.vfDistance = Math.Max(x, 1);
 		default: return false;
 		}
 		return true;

@@ -97,6 +97,10 @@ vec3 vfogLocalLights(vec3 wpos, vec3 view, float anisotropy)
 	vec2 list = vfogClusterList(wpos);
 	int first = int(list.x + 0.5);
 	int count = int(list.y + 0.5);
+	// The quality setting's budget: only the first lights in the cluster's list scatter (u_vfogTemporal.w).
+	int budget = int(max(u_vfogTemporal.w, 0.0) + 0.5);
+	if (budget < count)
+		count = budget;
 	for (int k = 0; k < count; k++)
 	{
 		int index = vfogClusterLight(first + k);

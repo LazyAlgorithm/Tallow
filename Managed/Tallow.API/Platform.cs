@@ -311,7 +311,11 @@ public enum GpuDebugView
     /// <summary>Green: clusters at the detail they ask for; orange: clusters whose finer group is not in memory yet.</summary>
     Residency,
     /// <summary>The mip level of the virtual texture each pixel shows: green is the level it needs, orange to red a coarser one.</summary>
-    VtPages
+    VtPages,
+    /// <summary>The volumetric fog's cells' density at each pixel's own depth, in grey. With fog off, the normal picture.</summary>
+    FogDensity,
+    /// <summary>The light the volumetric fog's cells scatter towards the camera.</summary>
+    FogLight
 }
 
 /// <summary>

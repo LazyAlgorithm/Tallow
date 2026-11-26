@@ -374,7 +374,8 @@ extension RenderView
 			let vt = GpuBinVt(first);
 			var program = vt != null ? VirtualTextures.LitProgram : GpuDriven.LitProgram;
 			var debugMode = 0.0f;
-			if (GpuDriven.DebugProgram.Valid && GpuDriven.View != .Off && GpuDriven.View != .Hzb)
+			if (GpuDriven.DebugProgram.Valid && GpuDriven.View != .Off && GpuDriven.View != .Hzb
+				&& GpuDriven.View != .FogDensity && GpuDriven.View != .FogLight)
 			{
 				program = GpuDriven.DebugProgram;
 				switch (GpuDriven.View)

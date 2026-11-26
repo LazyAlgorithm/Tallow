@@ -46,6 +46,12 @@ class VolumetricFogTestApp : Application
 		// history to compare against.
 		public int32 pair;
 		public bool checkVolume;
+		// The fallback (no compute): the analytic height fog and its screen-space sun shafts (--gpu-driven-caps-off).
+		public bool fallback;
+		public bool checkFallback;
+		// The froxel debug views (GpuDriven.DebugView.FogDensity / FogLight): 0 none, 1 density, 2 light.
+		public int32 debugView;
+		public bool checkDebug;
 	}
 
 	Scene mScene ~ delete _;
@@ -133,6 +139,13 @@ class VolumetricFogTestApp : Application
 		mPhases.Add(.() { name = "temporal-b", volumetric = true, settle = 1, pair = 2 });
 		mPhases.Add(.() { name = "temporal-moved", volumetric = true, cameraX = 0.6f, settle = 1, pair = 3 });
 		mPhases.Add(.() { name = "temporal-moved-off", volumetric = true, cameraX = 0.6f, temporal = false, settle = 1, pair = 4 });
+		// The froxel debug views: the cells' density and the light they scatter, instead of the lit picture.
+		mPhases.Add(.() { name = "debug-density", volumetric = true, sun = true, debugView = 1, checkDebug = true });
+		mPhases.Add(.() { name = "debug-light", volumetric = true, sun = true, debugView = 2, checkDebug = true });
+		// The fallback where the card cannot run the grid: the same height fog and its screen-space sun shafts
+		// (--gpu-driven-caps-off); the gap must still be a bright shaft.
+		mPhases.Add(.() { name = "fallback-off", sun = true, fallback = true });
+		mPhases.Add(.() { name = "fallback-on", volumetric = true, sun = true, fallback = true, checkFallback = true });
 
 		mScene = new Scene();
 		let cameraObject = mScene.CreateGameObject("Camera");
@@ -342,6 +355,9 @@ class VolumetricFogTestApp : Application
 			mVolume.enabled = phase.volume;
 			mPanelRenderer.enabled = phase.transparent;
 			mView.FogTemporalEnabled = phase.temporal;
+			// A fallback phase pretends compute is missing; a --gpu-driven-caps-off run keeps pretending throughout.
+			GpuDriven.ForceUnavailable = GpuDriven.ForceUnavailable || phase.fallback;
+			GpuDriven.View = phase.debugView == 1 ? .FogDensity : (phase.debugView == 2 ? .FogLight : .Off);
 			mCameraObject.Transform.Position = .(phase.cameraX, 2, 0);
 			for (int i < mPerfLights.Count)
 				mPerfLights[i].enabled = i < phase.lights;
@@ -374,7 +390,7 @@ class VolumetricFogTestApp : Application
 				mShadowOn = shadow;
 				mSkyOn = sky;
 			}
-			else if (!phase.volumetric)
+			else if (!phase.volumetric && !phase.fallback)
 			{
 				let gap = RegionMean(mShot.Pixels, 0.478f, 0.522f, 0.28f, 0.45f);
 				let shadow = RegionMean(mShot.Pixels, 0.25f, 0.35f, 0.28f, 0.45f);
@@ -412,6 +428,27 @@ class VolumetricFogTestApp : Application
 					mShadowOpen = shadow;
 					Console.WriteLine(scope $"vfog-test: spot shadow (no box) {shadow:F3}");
 				}
+			}
+			if (phase.checkDebug)
+			{
+				let mean = RegionMean(mShot.Pixels, 0, 1, 0, 1);
+				let changed = ChangedPixels(mOffPixels, mShot.Pixels);
+				Console.WriteLine(scope $"vfog-test: {phase.name}: mean {mean:F3}, {changed} of {ShotWidth * ShotHeight} pixels differ from the lit picture; {RenderView.VolumetricFogCells} cells, {RenderView.VolumetricFogLights} local lights");
+				Check(mView.VolumetricFogDrawn, scope $"{phase.name}: the fog's cells were drawn");
+				Check(RenderView.VolumetricFogCells > 0, scope $"{phase.name}: the cell counter is set");
+				Check(mean > 0.02f, scope $"{phase.name}: the cells are not black");
+				Check(changed > ShotWidth * ShotHeight / 2, scope $"{phase.name}: the debug view replaces the lit scene");
+			}
+			if (phase.checkFallback)
+			{
+				// The fallback's height fog and screen-space shafts: the gap must still line up with the sun.
+				let gap = RegionMean(mShot.Pixels, 0.478f, 0.522f, 0.28f, 0.45f);
+				let sky = RegionMean(mShot.Pixels, 0.40f, 0.60f, 0.02f, 0.12f);
+				Console.WriteLine(scope $"vfog-test: fallback gap off {mGapOff:F3} on {gap:F3}; sky off {mSkyOff:F3} on {sky:F3}");
+				Check(mView.VolumetricFogDrawn, "fallback: the height fog and its shafts were drawn");
+				Check(mView.VolumetricFogFallbackDrawn, "fallback: the compute grid was not used");
+				Check(gap > mGapOff + 0.03f, "fallback: the gap is brighter (a sun shaft)");
+				Check(sky > mSkyOff + 0.03f, "fallback: the fog scatters light");
 			}
 			if (phase.checkVolume)
 			{

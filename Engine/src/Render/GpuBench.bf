@@ -16,6 +16,7 @@ namespace Tallow;
 ///   3 closeup  one 2 million triangle mesh, the camera comes from far away to the surface
 ///   4 stream   a 2 million triangle mesh streamed through a geometry budget of a thirty-second of its size, flown in and along
 ///   5 tiny     16 meshes of a million triangles each, far away (a few pixels per triangle at most): the M7 gate scene
+///   6 fog      a colonnade in thick volumetric fog with a low sun behind it (light shafts), the camera flying down it
 ///
 /// Per run the JSON has: mean/p95/max of the CPU time of the render call and bgfx's frame CPU and GPU times (ms), the mean GPU
 /// time of each pass (cull phase 1, occluder draws, HZB + phase 2, main draw, shadows, VT feedback; the passes of the GPU path
@@ -51,7 +52,7 @@ class GpuBenchApp : Application
 		public List<double> renderMs = new .() ~ delete _;
 		public List<double> bgfxCpuMs = new .() ~ delete _;
 		public List<double> gpuMs = new .() ~ delete _;
-		public double cullMs, occluderMs, hzbMs, mainMs, shadowMs, vtMs;
+		public double cullMs, occluderMs, hzbMs, mainMs, shadowMs, vtMs, fogMs;
 		public double submittedTriangles, clusterTriangles, clusters, instances, draws, computes;
 		public int64 maxClusterTriangles, maxClusters, maxSwClusters, maxSwTriangles, maxHwClusters;
 		public double poolMB, residentGeoMB, residentTexMB, residentVtMB, peakPoolMB, peakResidentGeoMB;
@@ -133,8 +134,9 @@ class GpuBenchApp : Application
 		case "3", "closeup": mSceneId = 3; mSceneName.Set("closeup");
 		case "4", "stream": mSceneId = 4; mSceneName.Set("stream");
 		case "5", "tiny": mSceneId = 5; mSceneName.Set("tiny");
+		case "6", "fog": mSceneId = 6; mSceneName.Set("fog");
 		default:
-			Console.WriteLine(scope $"gpu-bench: unknown scene '{text}' (1 mixed, 2 crowd, 3 closeup, 4 stream, 5 tiny)");
+			Console.WriteLine(scope $"gpu-bench: unknown scene '{text}' (1 mixed, 2 crowd, 3 closeup, 4 stream, 5 tiny, 6 fog)");
 			Result = 1;
 			return false;
 		}
@@ -204,6 +206,43 @@ class GpuBenchApp : Application
 			let ball = AddMesh("bench-stream", 1400, 700);
 			Spawn(ball, .(0, 0, 0), 120, 2);
 			mSceneInfo.Set("one sphere of 1.96 M triangles, geometry budget 1/32 of the cooked size, fly in and along the surface");
+		case 6:
+			// A colonnade in thick fog, the sun low behind it (camera looking along +Z): light shafts between the pillars.
+			let ground = mScene.CreateGameObject("Ground");
+			ground.Transform.Position = .(0, 0, 90);
+			ground.Transform.LocalScale = .(400, 1, 400);
+			let groundRenderer = ground.AddComponent<MeshRenderer>();
+			groundRenderer.mesh.Set("builtin:plane");
+			groundRenderer.color = .(0.42f, 0.44f, 0.40f);
+			for (int i < 12)
+			{
+				for (int side = -1; side <= 1; side += 2)
+				{
+					let pillar = mScene.CreateGameObject("Pillar");
+					pillar.Transform.Position = .(side * 6.0f, 7, 8 + i * 11);
+					pillar.Transform.LocalScale = .(2.6f, 14, 2.6f);
+					let renderer = pillar.AddComponent<MeshRenderer>();
+					renderer.mesh.Set("builtin:cube");
+					renderer.color = .(0.58f, 0.54f, 0.48f);
+					mSceneInstances++;
+					mSceneTriangles += 12;
+				}
+			}
+			// The sun ahead of the camera and a little down, so shafts come towards it.
+			sun.Transform.Rotation = Quaternion.LookRotation(Vector3(0, -0.22f, -1).Normalized, .Up);
+			light.intensity = 2.2f;
+			let env = mScene.Environment;
+			env.volumetricFog = true;
+			env.vfDensity = 0.06f;
+			env.vfHeight = 0;
+			env.vfFalloff = 0.03f;
+			env.vfAnisotropy = 0.7f;
+			env.vfAlbedo = .(1, 1, 1);
+			env.vfSunScattering = 2;
+			env.vfAmbient = 0.1f;
+			env.vfDistance = 160;
+			env.shadowDistance = 120;
+			mSceneInfo.Set("a colonnade in thick volumetric fog with a low sun behind it (light shafts), camera flying down it");
 		default:
 			let ball = AddMesh("bench-tiny", 1000, 500);
 			for (int i < 16)
@@ -263,6 +302,10 @@ class GpuBenchApp : Application
 				position = .(0, Math.Sin(angle) * 66, -Math.Cos(angle) * 66);
 				angles = .(angle * 57.2958f, 0, 0);
 			}
+		case 6:
+			// Down the middle of the colonnade at eye height, towards the sun.
+			position = .(0, 3, -14 + t * 155);
+			angles = .(2, 0, 0);
 		default:
 			position = .(-12 + t * 24, 2, 0);
 			angles = .(0, 0, 0);
@@ -383,6 +426,7 @@ class GpuBenchApp : Application
 		run.mainMs += ProfilerModules.MainMs;
 		run.shadowMs += ProfilerModules.ShadowMs;
 		run.vtMs += ProfilerModules.VtMs;
+		run.fogMs += ProfilerModules.VolumetricFogMs;
 		double submitted = 0;
 		for (let count in stats.numPrims)
 			submitted += count;
@@ -493,7 +537,7 @@ class GpuBenchApp : Application
 			Stat(json, "cpuMsRender", run.renderMs);
 			Stat(json, "cpuMsBgfxFrame", run.bgfxCpuMs);
 			Stat(json, "gpuMsFrame", run.gpuMs);
-			json.AppendF($"      \"gpuMsPass\": {{ \"cullPhase1\": {run.cullMs / n:0.000}, \"occluderDraws\": {run.occluderMs / n:0.000}, \"hzbPhase2\": {run.hzbMs / n:0.000}, \"mainDraw\": {run.mainMs / n:0.000}, \"shadows\": {run.shadowMs / n:0.000}, \"vtFeedback\": {run.vtMs / n:0.000} }},\n");
+			json.AppendF($"      \"gpuMsPass\": {{ \"cullPhase1\": {run.cullMs / n:0.000}, \"occluderDraws\": {run.occluderMs / n:0.000}, \"hzbPhase2\": {run.hzbMs / n:0.000}, \"mainDraw\": {run.mainMs / n:0.000}, \"shadows\": {run.shadowMs / n:0.000}, \"vtFeedback\": {run.vtMs / n:0.000}, \"volumetricFog\": {run.fogMs / n:0.000} }},\n");
 			json.AppendF($"      \"trianglesSubmittedMean\": {run.submittedTriangles / n:0},\n      \"trianglesFromClustersMean\": {run.clusterTriangles / n:0},\n      \"trianglesFromClustersMax\": {run.maxClusterTriangles},\n");
 			json.AppendF($"      \"trianglesTotalMean\": {(run.submittedTriangles + run.clusterTriangles) / n:0},\n");
 			json.AppendF($"      \"clustersMean\": {run.clusters / n:0},\n      \"clustersMax\": {run.maxClusters},\n      \"swClustersMax\": {run.maxSwClusters},\n      \"swTrianglesMax\": {run.maxSwTriangles},\n      \"hwClustersMax\": {run.maxHwClusters},\n      \"instancesMean\": {run.instances / n:0},\n");

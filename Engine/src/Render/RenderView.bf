@@ -265,11 +265,16 @@ class RenderView
 	bgfx.TextureHandle mFogSums = .() { idx = uint16.MaxValue };
 	int32 mFogCellsX, mFogCellsY, mFogSlices;
 	bool mVolumetricFogActive;
+	/// The device cannot run the froxel grid (OpenGL, the web, `--gpu-driven-caps-off`): the fallback's height fog and
+	/// screen-space shafts are drawn instead (fs_vfog_fallback.sc).
+	bool mVolumetricFogFallback;
 	/// Draws the fog blended with last frame's (smoothed over the frame-to-frame jitter, so it does not flicker).
 	/// Off, each frame stands alone: steadier on a still camera, but more banded.
 	public bool FogTemporalEnabled = true;
 	/// Whether the last Render drew volumetric fog (the froxel passes and their apply).
 	public bool VolumetricFogDrawn { get; private set; }
+	/// Whether the last Render drew the fallback's height fog instead of the froxel grid.
+	public bool VolumetricFogFallbackDrawn { get; private set; }
 
 	List<RenderItem> mItems = new .() ~ delete _;
 	List<RenderItem> mShadowItems = new .() ~ delete _;
@@ -466,7 +471,11 @@ class RenderView
 		// fog and still want its volumes drawn).
 		GatherFogVolumes(scene, camera, frustum, env);
 		mVolumetricFogActive = UsesVolumetricFog(camera, env);
-		VolumetricFogDrawn = mVolumetricFogActive;
+		mVolumetricFogFallback = !mVolumetricFogActive && UsesVolumetricFogFallback(camera, env);
+		VolumetricFogDrawn = mVolumetricFogActive || mVolumetricFogFallback;
+		VolumetricFogFallbackDrawn = mVolumetricFogFallback;
+		VolumetricFogCells = 0;
+		VolumetricFogLights = 0;
 		if (!mVolumetricFogActive)
 			mFogSums.idx = uint16.MaxValue;
 		SetFrameConstants(camera, env);
@@ -530,8 +539,9 @@ class RenderView
 		mDepthAlbedo = UsesScreenSpaceGi(camera, env);
 		using (sDecalMarker.Sample())
 			DrawDecals(scene, camera, frustum);
-		// Over the solid scene and sky, before the water and see-through things (V3c fogs those too).
-		if (mVolumetricFogActive)
+		// Over the solid scene and sky, before the water and see-through things (V3c fogs those too). The fallback keeps
+		// the height fog and sun shafts there where the card cannot run the grid.
+		if (mVolumetricFogActive || mVolumetricFogFallback)
 			ApplyVolumetricFog(camera, env);
 		using (sWaterMarker.Sample())
 			DrawWater(scene, camera, frustum);
@@ -658,8 +668,8 @@ class RenderView
 		mAmbientGround = Linear(env.ambientGround, env.ambientIntensity);
 		let fog = Linear(env.fogColor);
 		// No fog through an orthographic camera: how far away it stands means nothing to what it shows. Volumetric fog
-		// replaces the distance fog while it is on (itself only).
-		let fogDensity = mVolumetricFogActive ? 0 : (camera.orthographic ? 0 : env.fogDensity);
+		// (or its fallback) replaces the distance fog while it is on (itself only).
+		let fogDensity = (mVolumetricFogActive || mVolumetricFogFallback) ? 0 : (camera.orthographic ? 0 : env.fogDensity);
 		mFogColor = .(fog.x, fog.y, fog.z, fogDensity);
 	}
 

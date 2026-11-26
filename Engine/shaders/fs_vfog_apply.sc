@@ -9,10 +9,13 @@ $input v_texcoord0, v_wpos
 uniform vec4 u_sunDir;
 uniform vec4 u_sunColor;
 uniform vec4 u_ambientSky;
+uniform vec4 u_vfogDebug; // x: 0 the lit picture, 1 the cells' density, 2 the light they scatter; yz: their scales
 SAMPLER3D(s_vfog, 1);
 #include "vfog.sh"
 
 SAMPLER2D(s_depth, 0);
+// The cells themselves, for the debug views (the density and light cs_vfog_inject.sc wrote).
+SAMPLER3D(s_vfogCells, 2);
 
 void main()
 {
@@ -35,6 +38,21 @@ void main()
 		vec3 p = viewPosition(uv, 1.0);
 		float stretch = u_postForward.w > 0.5 ? 1.0 : length(p);
 		depth = u_vfogSize.z / stretch;
+	}
+	if (u_vfogDebug.x > 0.5)
+	{
+		// The cell this pixel is in, shown instead of the picture: its density (grey) or the light it scatters.
+		float slice = clamp(floor(vfogDepthSlice(depth) - 0.5), 0.0, u_vfogGrid.z - 1.0);
+		vec4 cell = texture3DLod(s_vfogCells, vec3(uv, (slice + 0.5) / u_vfogGrid.z), 0.0);
+		if (u_vfogDebug.x < 1.5)
+			gl_FragColor = vec4(vec3_splat(clamp(cell.a * u_vfogDebug.y, 0.0, 1.0)), 1.0);
+		else
+		{
+			vec3 light = cell.rgb * u_vfogDebug.z;
+			float peak = max(max(light.r, light.g), max(light.b, 1.0));
+			gl_FragColor = vec4(light / peak, 1.0);
+		}
+		return;
 	}
 	gl_FragColor = vfogIntegratedAt(uv, depth);
 }
