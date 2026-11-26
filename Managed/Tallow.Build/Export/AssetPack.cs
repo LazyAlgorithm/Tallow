@@ -56,6 +56,30 @@ internal static class AssetPack
         return memory.ToArray();
     }
 
+    /// <summary>Files larger than this are streamed into the pack instead of being held in memory (and are not
+    /// deflated): a 2 GB asset is a normal thing in a high-poly project, and a byte array cannot hold it.</summary>
+    const long LargeFile = 64L * 1024 * 1024;
+    const int CopyBlock = 1024 * 1024;
+
+    /// <summary>Writes a file's bytes scrambled, a block at a time, without holding it all in memory.</summary>
+    static void CopyScrambled(string source, Stream output, uint seed, uint crc, long length)
+    {
+        byte[] block = MakeBlock(seed, crc);
+        var buffer = new byte[CopyBlock];
+        using var input = File.OpenRead(source);
+        long position = 0;
+        while (position < length)
+        {
+            int read = input.Read(buffer, 0, (int)Math.Min(buffer.Length, length - position));
+            if (read <= 0)
+                throw new InvalidDataException($"{source} ended {length - position} bytes before its length said it would.");
+            for (int i = 0; i < read; i++)
+                buffer[i] ^= block[(int)((position + i) % Block)];
+            output.Write(buffer, 0, read);
+            position += read;
+        }
+    }
+
     /// <summary>Writes a pack of (name inside the pack, path on disk) pairs; names use forward slashes.
     /// <paramref name="compress"/> false stores every file at its full size (still scrambled and checksummed).
     /// <paramref name="name"/> (the game's name) fixes the scrambling, so that a file that has not changed comes out
@@ -77,8 +101,34 @@ internal static class AssetPack
             Span<byte> number = stackalloc byte[8];
             foreach (var (entryName, source) in sorted)
             {
+                var info = new FileInfo(source);
+                if (info.Length > uint.MaxValue)
+                    throw new InvalidDataException($"{entryName} is {info.Length / (1024.0 * 1024 * 1024):0.0} GB; a pack entry holds less than 4 GB.");
+                byte[] encoded = Encoding.UTF8.GetBytes(entryName);
+                if (info.Length > LargeFile)
+                {
+                    // Too big for one byte array: checksum it first (the scramble uses the checksum), then copy it a
+                    // block at a time, stored as it is (deflating would mean holding the whole file).
+                    uint crc;
+                    using (var stream = File.OpenRead(source))
+                        crc = ExportUtil.Crc32(stream);
+                    BinaryPrimitives.WriteUInt16LittleEndian(number, (ushort)encoded.Length);
+                    index.Write(number[..2]);
+                    index.Write(encoded);
+                    BinaryPrimitives.WriteUInt64LittleEndian(number, (ulong)output.Position);
+                    index.Write(number);
+                    BinaryPrimitives.WriteUInt32LittleEndian(number, (uint)info.Length);
+                    index.Write(number[..4]);
+                    BinaryPrimitives.WriteUInt32LittleEndian(number, (uint)info.Length);
+                    index.Write(number[..4]);
+                    BinaryPrimitives.WriteUInt32LittleEndian(number, crc);
+                    index.Write(number[..4]);
+                    index.WriteByte(0);
+                    CopyScrambled(source, output, seed, crc, info.Length);
+                    continue;
+                }
                 byte[] plain = File.ReadAllBytes(source);
-                uint crc = ExportUtil.Crc32(plain);
+                uint checksum = ExportUtil.Crc32(plain);
                 byte[] stored = plain;
                 byte flags = 0;
                 if (compress && !Stored.Contains(Path.GetExtension(entryName).ToLowerInvariant()))
@@ -90,7 +140,6 @@ internal static class AssetPack
                         flags = 1;
                     }
                 }
-                byte[] encoded = Encoding.UTF8.GetBytes(entryName);
                 BinaryPrimitives.WriteUInt16LittleEndian(number, (ushort)encoded.Length);
                 index.Write(number[..2]);
                 index.Write(encoded);
@@ -100,11 +149,11 @@ internal static class AssetPack
                 index.Write(number[..4]);
                 BinaryPrimitives.WriteUInt32LittleEndian(number, (uint)plain.Length);
                 index.Write(number[..4]);
-                BinaryPrimitives.WriteUInt32LittleEndian(number, crc);
+                BinaryPrimitives.WriteUInt32LittleEndian(number, checksum);
                 index.Write(number[..4]);
                 index.WriteByte(flags);
                 byte[] scrambled = stored == plain ? (byte[])plain.Clone() : stored;
-                Scramble(scrambled, seed, crc);
+                Scramble(scrambled, seed, checksum);
                 output.Write(scrambled);
             }
             long indexOffset = output.Position;

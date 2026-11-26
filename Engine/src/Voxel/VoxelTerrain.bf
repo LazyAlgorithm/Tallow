@@ -187,6 +187,8 @@ class VoxelTerrain : Component
 		/// The level of detail wanted (0 full, 1 half, 2 quarter, 3 eighth) and the one the mesh has.
 		public int32 lod;
 		public int32 builtLod = -1;
+		/// Faces that meet a chunk with a different level of detail (bits in FaceOffset order).
+		public int skirtFaces;
 		/// The ground changed since the collision mesh was made.
 		public bool shapeChanged = true;
 		/// Set by the worker: whether this build made collision, and whether that is a mesh of its own.
@@ -545,7 +547,10 @@ class VoxelTerrain : Component
 			for (let chunk in mChunks.Values)
 			{
 				if (!mLodOn)
+				{
 					chunk.lod = 0;
+					chunk.skirtFaces = 0;
+				}
 				chunk.shapeChanged = true;
 				QueueRemesh(chunk);
 			}

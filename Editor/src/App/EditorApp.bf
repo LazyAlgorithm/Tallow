@@ -484,6 +484,8 @@ class EditorApp : Application
 	{
 		// A rig being made is kept (RigEditor.bf).
 		StopRig();
+		// Builds do not outlive the editor that started them (their threads are joined when the list is deleted).
+		BuildJobs.CancelAll();
 		AssetPreviews.Shutdown();
 		if (mCheckThread != null)
 			mCheckThread.Join();
@@ -534,6 +536,7 @@ class EditorApp : Application
 			StopPlay();
 		}
 		PollScriptReload();
+		UpdateBuildJobs(Time.DeltaTime);
 		// A successful managed compile is a brief status, not a persistent banner.
 		// Do not dismiss compiler failures or newer Play/compile messages.
 		if (mManagedCompileNoticePending)

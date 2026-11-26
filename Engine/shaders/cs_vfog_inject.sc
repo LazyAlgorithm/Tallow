@@ -9,8 +9,10 @@
 #include "vfog.sh"
 
 IMAGE3D_WO(i_scatter, rgba16f, 0);
-// Last frame's cells, the same light and density, for the temporal blend (only read when u_vfogTemporal.z is 1).
-IMAGE3D_RO(i_history, rgba16f, 4);
+// Last frame's cells, the same light and density, for the temporal blend (only read when u_vfogTemporal.z is 1). Read
+// through a sampler, so the cells are interpolated: a cell-by-cell copy would jump whole cells as the camera moves and
+// show the grid as squares.
+SAMPLER3D(s_vfogHistory, 4);
 // The sun's shadow cascades, read as plain depths (compute shaders cannot use comparison samplers everywhere).
 SAMPLER2D(s_shadowMap, 1);
 // The view's lights by cluster and the point and spot lights' shadow tiles (LightClusters.bf), as plain textures too.
@@ -110,18 +112,20 @@ void main()
 	vec3 scattered = (sun + ambient + local) * albedoDensity;
 	vec4 cell = vec4(scattered, density);
 	// Blend with what was in last frame's grid where this cell's middle was: each frame samples the cells at a
-	// different depth (above), and averaging those takes the banding between slices away.
+	// different depth (above), and averaging those takes the banding between slices away. Last frame's cells are
+	// interpolated (a sampler, not imageLoad): as the camera moves, the cell this frame lands in changes, and a
+	// nearest-cell copy would blend in a whole different cell at each grid line, which shows as squares.
 	if (u_vfogTemporal.z > 0.5)
 	{
 		vec4 clip = mul(u_vfogPrevViewProj, vec4(wpos, 1.0));
-		if (clip.w > 0.0)
+		if (clip.w > 0.0 && clip.w <= u_vfogGrid.y)
 		{
 			vec2 uvPrev = ndcToUv(clip.xy / clip.w);
 			if (uvPrev.x >= 0.0 && uvPrev.x <= 1.0 && uvPrev.y >= 0.0 && uvPrev.y <= 1.0)
 			{
-				ivec2 cellOld = ivec2(clamp(uvPrev * u_vfogSize.xy, vec2_splat(0.0), u_vfogSize.xy - vec2_splat(1.0)));
-				int sliceOld = int(clamp(vfogDepthSlice(clip.w), 0.0, u_vfogGrid.z - 1.0));
-				cell = mix(cell, imageLoad(i_history, ivec3(cellOld, sliceOld)), u_vfogTemporal.y);
+				float sliceOld = clamp(vfogDepthSlice(clip.w), 0.0, u_vfogGrid.z - 1.0);
+				vec3 coord = vec3(uvPrev, (sliceOld + 0.5) / u_vfogGrid.z);
+				cell = mix(cell, texture3DLod(s_vfogHistory, coord, 0.0), u_vfogTemporal.y);
 			}
 		}
 	}

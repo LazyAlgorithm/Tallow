@@ -201,7 +201,9 @@ class PackFile
 		for (let (name, data) in files)
 		{
 			let crc = Crc32(data);
-			let scrambled = scope uint8[Math.Max(data.Length, 1)];
+			// Heap, not scope: a scope allocation in a loop lives until the function ends and overflows the 1 MB Windows stack.
+			let scrambled = new uint8[Math.Max(data.Length, 1)];
+			defer delete scrambled;
 			Internal.MemCpy(scrambled.Ptr, data.Ptr, data.Length);
 			Scramble(.(scrambled.Ptr, data.Length), seed, crc);
 			if (data.Length > 0 && stream.TryWrite(.(scrambled.Ptr, data.Length)) case .Err)

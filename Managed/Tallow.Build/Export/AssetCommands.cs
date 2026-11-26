@@ -69,8 +69,8 @@ internal static class AssetCommands
             Console.Error.WriteLine("usage: compress-textures <folder> [--exclude 'UI/*;Fonts/*'] [--engine-root E]");
             return 2;
         }
-        var (made, skipped, errors) = Textures.CompressFolder(Path.GetFullPath(folder), Engine(args), Option(args, "--exclude") ?? Textures.DefaultExclude);
-        Console.WriteLine($"Compressed {made} pictures, left {skipped} alone" + (errors.Count > 0 ? $"; {errors.Count} failed" : ""));
+        var (made, reused, skipped, errors) = Textures.CompressFolder(Path.GetFullPath(folder), Engine(args), Option(args, "--exclude") ?? Textures.DefaultExclude);
+        Console.WriteLine($"Compressed {made} pictures, reused {reused}, left {skipped} alone" + (errors.Count > 0 ? $"; {errors.Count} failed" : ""));
         foreach (string error in errors)
             Console.WriteLine("  " + error);
         return errors.Count > 0 && made == 0 ? 1 : 0;

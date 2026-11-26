@@ -133,15 +133,17 @@ internal static class Textures
         return null;
     }
 
-    /// <summary>Compresses every picture under a folder. Returns (made, skipped, errors).</summary>
-    public static (int Made, int Skipped, List<string> Errors) CompressFolder(string folder, string engine, string exclude)
+    /// <summary>Compresses every picture under a folder. Returns (made, reused, skipped, errors). With
+    /// <paramref name="cacheFolder"/>, a picture whose compressed copy is already there and whose source has not
+    /// changed is hard-linked in instead of compressed again.</summary>
+    public static (int Made, int Reused, int Skipped, List<string> Errors) CompressFolder(string folder, string engine, string exclude, string? cacheFolder = null)
     {
         string? texturec = TexturecPath(engine);
         if (texturec == null)
-            return (0, 0, new List<string> { "texturec is not built (cmake --build build/native --target texturec); pictures are left uncompressed" });
+            return (0, 0, 0, new List<string> { "texturec is not built (cmake --build build/native --target texturec); pictures are left uncompressed" });
         var patterns = exclude.Split(';').Select(pattern => pattern.Trim()).Where(pattern => pattern.Length > 0).ToList();
         var (normal, data) = KindsFromMaterials(folder);
-        var jobs = new List<(string Picture, bool Linear)>();
+        var jobs = new List<(string Picture, bool Linear, string Cache, string Stamp)>();
         int skipped = 0;
         foreach (var (relative, picture) in ExportUtil.Files(folder))
         {
@@ -159,12 +161,37 @@ internal static class Textures
                 skipped++;
                 continue;
             }
-            jobs.Add((picture, data.Contains(relative)));
+            bool linear = data.Contains(relative);
+            string cache = cacheFolder != null ? Path.Combine(cacheFolder, relative + ".ktx") : "";
+            string stamp = cacheFolder != null
+                ? ExportCache.Hash(ExportCache.FileStamp(picture), ExportCache.FileStamp(picture + ".import"),
+                    ExportCache.FileStamp(texturec), linear ? "linear" : "srgb", name)
+                : "";
+            jobs.Add((picture, linear, cache, stamp));
         }
         var results = new string?[jobs.Count];
+        var reusedFlags = new bool[jobs.Count];
         Parallel.For(0, jobs.Count, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
-            i => results[i] = Compress(texturec, jobs[i].Picture, jobs[i].Linear));
+            i =>
+            {
+                var (picture, linear, cache, stamp) = jobs[i];
+                string output = picture + ".ktx";
+                if (cache.Length > 0 && File.Exists(cache) && File.Exists(cache + ".from") && ExportUtil.ReadText(cache + ".from").Trim() == stamp)
+                {
+                    ExportUtil.LinkFile(cache, output);
+                    reusedFlags[i] = true;
+                    return;
+                }
+                results[i] = Compress(texturec, picture, linear);
+                if (results[i] == null && cache.Length > 0)
+                {
+                    ExportUtil.LinkFile(output, cache);
+                    Directory.CreateDirectory(Path.GetDirectoryName(cache + ".from")!);
+                    File.WriteAllText(cache + ".from", stamp + "\n");
+                }
+            });
         var errors = results.Where(error => error != null).Select(error => error!).ToList();
-        return (jobs.Count - errors.Count, skipped, errors);
+        int reused = reusedFlags.Count(flag => flag);
+        return (jobs.Count - errors.Count - reused, reused, skipped, errors);
     }
 }

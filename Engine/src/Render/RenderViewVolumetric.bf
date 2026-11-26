@@ -267,7 +267,9 @@ extension RenderView
 
 		SetVolumetricFogUniforms(camera, env);
 		bgfx.set_image(0, write, 0, .Write, .RGBA16F);
-		bgfx.set_image(4, read, 0, .Read, .RGBA16F);
+		// Last frame's cells as a sampler (not an image): the inject interpolates them, so a moving camera does not
+		// blend a whole different cell in at each grid line (which shows as squares).
+		bgfx.set_texture(4, RenderResources.sVFogHistory, read, uint32.MaxValue);
 		// The cascades as plain depths (the compute shader compares itself): the atlas is a comparison sampler for the
 		// lit pass, but a normal sample still reads the stored depth.
 		bgfx.set_texture(1, RenderResources.sShadowMap, RenderResources.ShadowMap, uint32.MaxValue);

@@ -136,21 +136,81 @@ extension EditorApp
 		CompileStaleShaders();
 		let output = scope String();
 		BuildOutputFolder(output);
-		Log.Info(scope $"Building the game for {(mBuildTarget == .Web ? "the web" : mBuildTarget.ToString(.. scope .()))}...");
-		mBuildSucceeded = project.BuildPlayer(output, mBuildTarget, mIosSimulator);
-		if (mBuildSucceeded)
+		let error = scope String();
+		if (!BuildJobs.Start(project, output, mBuildTarget, mIosSimulator, error))
 		{
-			Log.Info(scope $"Game packaged at {output}");
-			mBuildMessage.Set(scope $"Built. The game is in {output}");
+			mBuildMessage.Set(error);
+			Log.Error(error);
+			return;
 		}
-		else
+		Log.Info(scope $"Building the game for {(mBuildTarget == .Web ? "the web" : mBuildTarget.ToString(.. scope .()))} in the background...");
+		mBuildMessage.Set("Building in the background; you can keep working. Progress is at the top of the editor.");
+	}
+
+	float mCancelTestTimer;
+
+	/// Each frame: notes builds that have ended (logs, message in the Build window).
+	void UpdateBuildJobs(float dt)
+	{
+		// Test switch: --build-cancel-after <seconds> cancels the builds that long after they start.
+		let after = scope String();
+		if (GetArg("--build-cancel-after", after) && BuildJobs.AnyRunning)
 		{
-			let log = scope String();
-			project.ReadBuildLog(log);
-			Log.Error(log);
-			// The last line of the log is the reason; the whole log is in the Console.
-			let lines = scope List<StringView>(log.Split('\n', .RemoveEmptyEntries));
-			mBuildMessage.Set(scope $"The build failed: {(lines.IsEmpty ? "see the Console." : lines.Back)}");
+			mCancelTestTimer += dt;
+			if (float.Parse(after) case .Ok(let seconds) && mCancelTestTimer >= seconds)
+			{
+				mCancelTestTimer = -1000000;
+				BuildJobs.CancelAll();
+			}
+		}
+		for (var job = BuildJobs.Poll(dt); job != null; job = BuildJobs.Poll(0))
+		{
+			let name = job.Target == .Web ? "web" : job.Target.ToString(.. scope .());
+			let selected = job.Target == mBuildTarget;
+			switch (job.Status)
+			{
+			case .Succeeded:
+				Log.Info(scope $"Game ({name}) packaged at {job.Output} in {(int)job.Seconds} s");
+				if (selected)
+				{
+					mBuildSucceeded = true;
+					mBuildMessage.Set(scope $"Built. The game is in {job.Output}");
+				}
+			case .Cancelled:
+				Log.Info(scope $"The {name} build was cancelled.");
+				if (selected)
+					mBuildMessage.Set("The build was cancelled.");
+			default:
+				let log = scope String();
+				BuildJobs.ReadLog(job, log);
+				Log.Error(log);
+				// The last line of the log is the reason; the whole log is in the Console.
+				let lines = scope List<StringView>(log.Split('\n', .RemoveEmptyEntries));
+				if (selected)
+				{
+					mBuildSucceeded = false;
+					mBuildMessage.Set(scope $"The {name} build failed: {(lines.IsEmpty ? "see the Console." : lines.Back)}");
+				}
+			}
+		}
+	}
+
+	/// The progress of each running build, with a Cancel button: shown only while one is running.
+	void DrawBuildProgress()
+	{
+		for (let job in BuildJobs.Jobs)
+		{
+			if (!job.Running)
+				continue;
+			ImGui.SameLine(0, 24);
+			let label = scope String();
+			label.AppendF("{} {}% {}", job.Target == .MacOS ? "macOS" : job.Target.ToString(.. scope .()), (int)(job.Progress * 100), job.Step);
+			ImGui.ProgressBar(job.Progress, .(220, 0), label);
+			ImGui.SameLine();
+			ImGui.PushID(scope $"cancel{(int)job.Target}");
+			if (ImGui.Button("Cancel"))
+				BuildJobs.Cancel(job);
+			ImGui.PopID();
 		}
 	}
 

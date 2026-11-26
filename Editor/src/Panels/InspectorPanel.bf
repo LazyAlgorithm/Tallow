@@ -336,8 +336,11 @@ extension EditorApp
 				ImGui.SetTooltip("Set by Day / Night's Auto Colours (turn it off to pick by hand).");
 			BeginProperty("Fog Density");
 			changed |= ImGui.DragFloat("##fd", ref env.fogDensity, 0.0002f, 0, 0.2f, "%.4f");
+			if (env.volumetricFog && ImGui.IsItemHovered())
+				ImGui.SetTooltip("Not used while Volumetric Fog is on: its fog replaces the distance fog.");
 			ImGui.EndTable();
 		}
+		changed |= DrawVolumetricFogSettings(env);
 		changed |= DrawDayNightSettings(env);
 		changed |= DrawScreenEffectsSettings(env);
 		changed |= DrawStreamingSettings(env);
@@ -1199,7 +1202,7 @@ extension EditorApp
 	static StringView ComponentCategory(StringView fullName, StringView name)
 	{
 		if (!fullName.StartsWith("Tallow.")) return "Scripts";
-		if (name == "Camera" || name == "Light" || name == "MeshRenderer" || name == "WorldText" || name == "Decal" || name == "LODGroup" || name == "ReflectionProbe" || name == "LightProbeVolume") return "Rendering";
+		if (name == "Camera" || name == "Light" || name == "MeshRenderer" || name == "WorldText" || name == "Decal" || name == "LODGroup" || name == "ReflectionProbe" || name == "LightProbeVolume" || name == "FogVolume") return "Rendering";
 		if (name == "Rigidbody" || name == "SoftBody" || name == "Rope" || name.EndsWith("Collider") || name == "CharacterController" || name == "Ragdoll" || name == "Vehicle" || name == "Water" || name == "Floater") return "Physics";
 		if (name == "SkinnedMeshRenderer" || name == "Animator" || name == "SequencePlayer") return "Animation";
 		if (name == "UIDocument") return "UI";
