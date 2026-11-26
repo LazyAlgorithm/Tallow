@@ -1,3 +1,5 @@
+using System;
+
 namespace Tallow;
 
 /// <summary>A player-made map file (.tmap) and what checking it found (tallowengine.com/docs/maps).</summary>
@@ -23,6 +25,29 @@ public sealed record MapFileInfo(string File, string Id, string Name, string Aut
     /// <summary>How many components of a type (its full name, "Tallow.SpawnPoint") the map's scene has, for a
     /// game's own checks.</summary>
     public int CountComponents(string typeName) => CSharpMaps.CountComponents(File, typeName ?? "");
+
+    /// <summary>The map's scene file as text, for a game's own checks (rings, gates, script components).</summary>
+    public string SceneText
+    {
+        get
+        {
+            byte[] buffer = new byte[4096];
+            int length = CSharpMaps.SceneText(File, buffer);
+            if (length < 0)
+                return "";
+            if (length > buffer.Length)
+            {
+                buffer = new byte[length];
+                length = Math.Min(length, CSharpMaps.SceneText(File, buffer));
+            }
+            return System.Text.Encoding.UTF8.GetString(buffer, 0, Math.Max(length, 0));
+        }
+    }
+
+    /// <summary>Replaces the map's scene text in its file, keeping the old file beside it under
+    /// <paramref name="backupSuffix"/> once. For migrating maps from an older build.</summary>
+    public bool RewriteScene(string sceneText, string backupSuffix = ".backup") =>
+        CSharpMaps.RewriteScene(File, sceneText ?? "", backupSuffix ?? "");
 
     /// <summary>The same map with one more problem (a game's own rule it breaks), so it is no longer Ok.</summary>
     public MapFileInfo WithProblem(string reason) => this with { Problems = [.. Problems, reason] };

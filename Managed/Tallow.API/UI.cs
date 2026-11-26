@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 
 namespace Tallow;
@@ -77,4 +78,49 @@ public readonly record struct UIElement(GameObject GameObject, string Id)
     /// <summary>Whether the element has that class.</summary>
     public bool HasClass(string name) =>
         CSharpUI.HasClass(GameObject.SceneId, GameObject.Id, Id, name ?? "");
+
+    /// <summary>Where the element was last drawn, in window pixels, and the document's screen scale.
+    /// Zero when it has not been drawn.</summary>
+    public (float X, float Y, float Width, float Height, float Scale) ScreenRect
+    {
+        get
+        {
+            Span<float> values = stackalloc float[5];
+            return CSharpUI.ElementRect(GameObject.SceneId, GameObject.Id, Id, values)
+                ? (values[0], values[1], values[2], values[3], values[4])
+                : (0, 0, 0, 0, 0);
+        }
+    }
+
+    /// <summary>Where the element was last drawn, in window pixels.</summary>
+    public float ScreenX => ScreenRect.X;
+    /// <summary>Where the element was last drawn, in window pixels.</summary>
+    public float ScreenY => ScreenRect.Y;
+    /// <summary>How wide the element was drawn, in window pixels.</summary>
+    public float ScreenWidth => ScreenRect.Width;
+    /// <summary>How tall the element was drawn, in window pixels.</summary>
+    public float ScreenHeight => ScreenRect.Height;
+    /// <summary>Window pixels per document unit when it was last drawn.</summary>
+    public float ScreenScale => ScreenRect.Scale;
+
+    /// <summary>An attribute of the element ("value", "caption", "action", "font-size"...); "" without one.</summary>
+    public string Attribute(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return "";
+        byte[] buffer = new byte[256];
+        int length = CSharpUI.CopyAttribute(GameObject.SceneId, GameObject.Id, Id, name, buffer);
+        if (length < 0)
+            return "";
+        if (length > buffer.Length)
+        {
+            buffer = new byte[length];
+            length = Math.Min(length, CSharpUI.CopyAttribute(GameObject.SceneId, GameObject.Id, Id, name, buffer));
+        }
+        return global::System.Text.Encoding.UTF8.GetString(buffer, 0, Math.Max(length, 0));
+    }
+
+    /// <summary>Sets an attribute of the element (a picture's "src", a control's "disabled"...).</summary>
+    public void SetAttribute(string name, string value) =>
+        CSharpUI.SetAttribute(GameObject.SceneId, GameObject.Id, Id, name ?? "", value ?? "");
 }

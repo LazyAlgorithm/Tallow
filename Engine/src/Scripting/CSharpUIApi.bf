@@ -71,4 +71,39 @@ static class CSharpUI
 	[CSharpExpose]
 	public static bool HasClass(uint64 session, uint64 entity, StringView id, StringView name) =>
 		Element(session, entity, id)?.HasClass(name) ?? false;
+
+	/// Where the element was last drawn: screenX, screenY, width, height and the screen scale. False without it.
+	[CSharpExpose]
+	public static bool ElementRect(uint64 session, uint64 entity, StringView id, Span<float> values)
+	{
+		let element = Element(session, entity, id);
+		if (element == null || values.Length < 5)
+			return false;
+		values[0] = element.screenX;
+		values[1] = element.screenY;
+		values[2] = element.screenWidth;
+		values[3] = element.screenHeight;
+		values[4] = element.screenScale;
+		return true;
+	}
+
+	/// An attribute of the element ("value", "caption", "action", "font-size"...), UTF-8 into buffer; its full
+	/// length, -1 without the element.
+	[CSharpExpose]
+	public static int32 CopyAttribute(uint64 session, uint64 entity, StringView id, StringView name, Span<uint8> buffer)
+	{
+		let element = Element(session, entity, id);
+		if (element == null)
+			return -1;
+		let value = element.attributes.Get(name);
+		let count = Math.Min(value.Length, buffer.Length);
+		for (int i < count)
+			buffer[i] = (uint8)value[i];
+		return (int32)value.Length;
+	}
+
+	/// Sets an attribute of the element (a picture's "src", a control's "disabled", "index" or "data").
+	[CSharpExpose]
+	public static void SetAttribute(uint64 session, uint64 entity, StringView id, StringView name, StringView value) =>
+		Element(session, entity, id)?.attributes.Set(name, value);
 }

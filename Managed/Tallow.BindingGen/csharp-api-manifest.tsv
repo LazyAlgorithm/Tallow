@@ -55,6 +55,13 @@ method	Tallow.CSharpAntiCheat	ViolationCount	int
 method	Tallow.CSharpAntiCheat	ViolationDetail	int	index:int	buffer:System.Span<byte>
 method	Tallow.CSharpAntiCheat	ViolationTime	float	index:int
 method	Tallow.CSharpAntiCheat	ViolationTotal	long
+method	Tallow.CSharpAssetFiles	AddMemoryFile	void	path:string	data:System.Span<byte>
+method	Tallow.CSharpAssetFiles	FilesIn	int	folder:string	buffer:System.Span<byte>
+method	Tallow.CSharpAssetFiles	ForgetAsset	void	prefix:string
+method	Tallow.CSharpAssetFiles	ProjectPath	int	buffer:System.Span<byte>
+method	Tallow.CSharpAssetFiles	ReadFile	int	path:string	buffer:System.Span<byte>
+method	Tallow.CSharpAssetFiles	RemoveMemoryFiles	int	folder:string
+method	Tallow.CSharpAssetFiles	ResolvePath	int	path:string	buffer:System.Span<byte>
 method	Tallow.CSharpAudio	GetGroupVolume	float	group:int
 method	Tallow.CSharpAudio	GetSetting	float	which:int
 method	Tallow.CSharpAudio	HasSource	bool	session:ulong	entity:ulong
@@ -81,6 +88,26 @@ method	Tallow.CSharpBehaviorNodes	BlackboardSetObject	bool	session:ulong	entity:
 method	Tallow.CSharpBehaviorNodes	BlackboardSetVector	bool	session:ulong	entity:ulong	key:string	value:System.Numerics.Vector3
 method	Tallow.CSharpBehaviorNodes	Register	void	key:string	category:string	title:string	condition:int	description:string	className:string	settings:string
 method	Tallow.CSharpBindingFixture	Average	float	a:float	b:float
+method	Tallow.CSharpCanvas	AnyItemActive	bool
+method	Tallow.CSharpCanvas	CameraViewProjection	bool	session:ulong	entity:ulong	aspect:float	values:System.Span<float>
+method	Tallow.CSharpCanvas	CaptureFlags	int
+method	Tallow.CSharpCanvas	DrawImage	void	path:string	minX:float	minY:float	maxX:float	maxY:float	tint:System.Numerics.Vector4	opaque:bool
+method	Tallow.CSharpCanvas	DrawImageRotated	void	path:string	centerX:float	centerY:float	width:float	height:float	angle:float
+method	Tallow.CSharpCanvas	DrawLine	void	ax:float	ay:float	bx:float	by:float	color:System.Numerics.Vector4	thickness:float
+method	Tallow.CSharpCanvas	DrawRect	void	minX:float	minY:float	maxX:float	maxY:float	color:System.Numerics.Vector4	rounding:float	thickness:float
+method	Tallow.CSharpCanvas	DrawRectFilled	void	minX:float	minY:float	maxX:float	maxY:float	color:System.Numerics.Vector4	rounding:float
+method	Tallow.CSharpCanvas	DrawText	void	x:float	y:float	color:System.Numerics.Vector4	text:string
+method	Tallow.CSharpCanvas	DrawTriangle	void	ax:float	ay:float	bx:float	by:float	cx:float	cy:float	color:System.Numerics.Vector4
+method	Tallow.CSharpCanvas	GizmoBegin	void	x:float	y:float	width:float	height:float	orthographic:bool
+method	Tallow.CSharpCanvas	GizmoManipulate	bool	data:System.Span<float>	operation:int	local:bool
+method	Tallow.CSharpCanvas	GizmoOver	bool
+method	Tallow.CSharpCanvas	GizmoUsing	bool
+method	Tallow.CSharpCanvas	PopClip	void
+method	Tallow.CSharpCanvas	PopFont	void
+method	Tallow.CSharpCanvas	PushClip	void	minX:float	minY:float	maxX:float	maxY:float
+method	Tallow.CSharpCanvas	PushFontSize	void	size:float
+method	Tallow.CSharpCanvas	ScreenRect	void	values:System.Span<float>
+method	Tallow.CSharpCanvas	TextSize	void	text:string	values:System.Span<float>
 method	Tallow.CSharpCommandLine	CopyArg	int	name:string	buffer:System.Span<byte>
 method	Tallow.CSharpCommandLine	HasArg	bool	name:string
 method	Tallow.CSharpComponentActions	BehaviorTreeEvent	bool	session:ulong	entity:ulong	name:string
@@ -225,6 +252,8 @@ method	Tallow.CSharpMaps	Offer	bool	file:string
 method	Tallow.CSharpMaps	Progress	float
 method	Tallow.CSharpMaps	Request	bool	session:ulong	id:string	hash:string
 method	Tallow.CSharpMaps	Reset	void
+method	Tallow.CSharpMaps	RewriteScene	bool	file:string	sceneText:string	backupSuffix:string
+method	Tallow.CSharpMaps	SceneText	int	file:string	buffer:System.Span<byte>
 method	Tallow.CSharpMaps	SetSharingFolder	void	folder:string
 method	Tallow.CSharpMaps	SharingText	int	which:int	buffer:System.Span<byte>
 method	Tallow.CSharpMaps	State	int
@@ -333,7 +362,6 @@ method	Tallow.CSharpPlatform	GamepadNameOf	int	pad:int	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	GamepadRumble	void	low:float	high:float	seconds:float	pad:int
 method	Tallow.CSharpPlatform	GpuVendorKind	int
 method	Tallow.CSharpPlatform	LookSensitivity	float
-method	Tallow.CSharpPlatform	SetLookSensitivity	void	value:float
 method	Tallow.CSharpPlatform	QualityCurrent	int
 method	Tallow.CSharpPlatform	QualityLightingLevel	int
 method	Tallow.CSharpPlatform	QualityRecommended	int
@@ -350,6 +378,7 @@ method	Tallow.CSharpPlatform	SaveSlots	int	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	SaveStart	int	slot:string	load:bool
 method	Tallow.CSharpPlatform	SetDecalsMax	void	count:int
 method	Tallow.CSharpPlatform	SetDialogueVariable	void	name:string	value:float
+method	Tallow.CSharpPlatform	SetLookSensitivity	void	value:float
 method	Tallow.CSharpPlatform	SetVoicePushToTalkAction	void	action:string
 method	Tallow.CSharpPlatform	SetVoiceSetting	void	which:int	value:float
 method	Tallow.CSharpPlatform	SetWindowFullscreen	void	on:bool
@@ -397,6 +426,12 @@ method	Tallow.CSharpRopes	RopeTie	bool	session:ulong	entity:ulong	end:int	target
 method	Tallow.CSharpRopes	SetSoftPoints	bool	session:ulong	entity:ulong	what:int	values:System.Span<float>
 method	Tallow.CSharpRopes	SoftPoints	int	session:ulong	entity:ulong	what:int	buffer:System.Span<float>
 method	Tallow.CSharpRopes	Touching	int	session:ulong	entity:ulong	buffer:System.Span<ulong>
+method	Tallow.CSharpSavedScenes	Instantiate	ulong	session:ulong	text:string
+method	Tallow.CSharpSavedScenes	MapProblems	int	sceneText:string	buffer:System.Span<byte>
+method	Tallow.CSharpSavedScenes	ParseFloat	float	text:string
+method	Tallow.CSharpSavedScenes	ParseInt	int	text:string
+method	Tallow.CSharpSavedScenes	SaveGroup	int	session:ulong	entity:ulong	name:string	buffer:System.Span<byte>
+method	Tallow.CSharpSavedScenes	SaveObjectTree	int	session:ulong	entity:ulong	buffer:System.Span<byte>
 method	Tallow.CSharpSaves	Delete	void	slot:string
 method	Tallow.CSharpSaves	Exists	bool	slot:string
 method	Tallow.CSharpSaves	FinishTask	bool	task:int	outcome:int	data:System.Span<byte>	error:string
@@ -439,6 +474,8 @@ method	Tallow.CSharpScenes	PreloadState	float	id:int	values:System.Span<float>
 method	Tallow.CSharpScenes	ReleasePreload	void	id:int
 method	Tallow.CSharpScenes	Start	int	session:ulong	path:string	additive:bool	environment:bool
 method	Tallow.CSharpScenes	State	int	id:int	values:System.Span<float>
+method	Tallow.CSharpSettings	Load	int	slot:string	buffer:System.Span<byte>
+method	Tallow.CSharpSettings	Save	bool	slot:string	text:string
 method	Tallow.CSharpSpawning	CopyLayerName	int	layer:int	buffer:System.Span<byte>
 method	Tallow.CSharpSpawning	CopyWorldStateName	int	state:int	buffer:System.Span<byte>
 method	Tallow.CSharpSpawning	Count	int	session:ulong	team:int
@@ -508,15 +545,18 @@ method	Tallow.CSharpTextures	KindOf	int	path:string
 method	Tallow.CSharpTextures	ReadImage	int	path:string	pixels:System.Span<byte>
 method	Tallow.CSharpTextures	Remove	bool	name:string
 method	Tallow.CSharpTextures	Upload	bool	name:string	width:int	height:int	kind:int	pixels:System.Span<byte>
+method	Tallow.CSharpUI	CopyAttribute	int	session:ulong	entity:ulong	id:string	name:string	buffer:System.Span<byte>
 method	Tallow.CSharpUI	CopyText	int	session:ulong	entity:ulong	id:string	buffer:System.Span<byte>
+method	Tallow.CSharpUI	ElementRect	bool	session:ulong	entity:ulong	id:string	values:System.Span<float>
 method	Tallow.CSharpUI	GetValue	float	session:ulong	entity:ulong	id:string
 method	Tallow.CSharpUI	GetVisible	bool	session:ulong	entity:ulong	id:string
+method	Tallow.CSharpUI	HasClass	bool	session:ulong	entity:ulong	id:string	name:string
 method	Tallow.CSharpUI	HasDocument	bool	session:ulong	entity:ulong
 method	Tallow.CSharpUI	HasElement	bool	session:ulong	entity:ulong	id:string
-method	Tallow.CSharpUI	SetText	void	session:ulong	entity:ulong	id:string	text:string
-method	Tallow.CSharpUI	SetClass	void	session:ulong	entity:ulong	id:string	name:string	on:bool
-method	Tallow.CSharpUI	HasClass	bool	session:ulong	entity:ulong	id:string	name:string
 method	Tallow.CSharpUI	ReloadDocument	void	session:ulong	entity:ulong
+method	Tallow.CSharpUI	SetAttribute	void	session:ulong	entity:ulong	id:string	name:string	value:string
+method	Tallow.CSharpUI	SetClass	void	session:ulong	entity:ulong	id:string	name:string	on:bool
+method	Tallow.CSharpUI	SetText	void	session:ulong	entity:ulong	id:string	text:string
 method	Tallow.CSharpUI	SetValue	void	session:ulong	entity:ulong	id:string	value:float
 method	Tallow.CSharpUI	SetVisible	void	session:ulong	entity:ulong	id:string	visible:bool
 method	Tallow.CSharpWorld	CarveVoxels	bool	session:ulong	entity:ulong	point:System.Numerics.Vector3	radius:float
@@ -598,7 +638,9 @@ method	Tallow.Physics	CharacterAirTime	float	session:ulong	entity:ulong
 method	Tallow.Physics	CharacterGround	System.Numerics.Vector3	session:ulong	entity:ulong	normal:bool
 method	Tallow.Physics	CheckShape	bool	session:ulong	shape:int	point1:System.Numerics.Vector3	point2:System.Numerics.Vector3	radius:float	size:System.Numerics.Vector3	orientation:System.Numerics.Quaternion	layerMask:uint	ignoreBody:uint
 method	Tallow.Physics	ConnectJoint	bool	session:ulong	a:ulong	b:ulong	anchor:System.Numerics.Vector3	axis:System.Numerics.Vector3	swingLimit:float
+method	Tallow.Physics	CopyRigidbodyState	int	session:ulong	entity:ulong	values:System.Span<float>
 method	Tallow.Physics	DeepestSoftBodyDent	float	session:ulong	entity:ulong
+method	Tallow.Physics	EnsureRigidbody	void	session:ulong	entity:ulong
 method	Tallow.Physics	FeatureBits	ulong	session:ulong
 method	Tallow.Physics	GetCharacterCrouchLift	float	session:ulong	entity:ulong
 method	Tallow.Physics	GetCharacterHeight	float	session:ulong	entity:ulong
@@ -611,6 +653,7 @@ method	Tallow.Physics	GetColliderCount	int	session:ulong	entity:ulong
 method	Tallow.Physics	GetColliderIsTrigger	int	session:ulong	entity:ulong	index:int
 method	Tallow.Physics	GetColliderKind	int	session:ulong	entity:ulong	index:int
 method	Tallow.Physics	GetColliderSphereRadius	float	session:ulong	entity:ulong	index:int
+method	Tallow.Physics	GetGravity	System.Numerics.Vector3	session:ulong
 method	Tallow.Physics	GetJointConnectedEntity	ulong	session:ulong	entity:ulong
 method	Tallow.Physics	GetJointSwingLimit	float	session:ulong	entity:ulong
 method	Tallow.Physics	GetRigidbodyAngularVelocity	System.Numerics.Vector3	session:ulong	entity:ulong
@@ -646,8 +689,12 @@ method	Tallow.Physics	RigidbodyBodyId	uint	session:ulong	entity:ulong
 method	Tallow.Physics	SetCharacterHeight	bool	session:ulong	entity:ulong	height:float	standingHeight:float
 method	Tallow.Physics	SetCharacterShape	bool	session:ulong	entity:ulong	asBox:bool	radius:float	height:float	size:System.Numerics.Vector3	edgeRadius:float	center:System.Numerics.Vector3
 method	Tallow.Physics	SetColliderIsTrigger	bool	session:ulong	entity:ulong	index:int	isTrigger:bool
+method	Tallow.Physics	SetGravity	void	session:ulong	gravity:System.Numerics.Vector3
 method	Tallow.Physics	SetJointSwingLimit	bool	session:ulong	entity:ulong	degrees:float
+method	Tallow.Physics	SetLengthScale	void	session:ulong	scale:float
+method	Tallow.Physics	SetMinimumShapeExtent	void	session:ulong	extent:float
 method	Tallow.Physics	SetRigidbodyAngularVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
+method	Tallow.Physics	SetRigidbodyState	bool	session:ulong	entity:ulong	values:System.Span<float>
 method	Tallow.Physics	SetRigidbodyVelocity	bool	session:ulong	entity:ulong	velocity:System.Numerics.Vector3
 method	Tallow.Physics	SetSoftBodyPressure	bool	session:ulong	entity:ulong	pressure:float
 method	Tallow.Physics	SetSoftBodyStiffness	bool	session:ulong	entity:ulong	stiffness:float

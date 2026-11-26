@@ -202,4 +202,20 @@ static class CSharpMaps
 
 	[CSharpExpose]
 	public static void SetSharingFolder(StringView folder) => MapSharing.Folder = folder;
+
+	/// The scene file's text inside a map file, for a game's own checks (rings, gates, script components).
+	[CSharpExpose]
+	public static int32 SceneText(StringView file, Span<uint8> buffer)
+	{
+		let map = MapFiles.Check(file);
+		if (map == null)
+			return -1;
+		defer delete map;
+		return Copy(map.SceneText, buffer);
+	}
+
+	/// Replaces a map file's scene text, keeping the old file beside it under backupSuffix (once).
+	[CSharpExpose]
+	public static bool RewriteScene(StringView file, StringView sceneText, StringView backupSuffix) =>
+		MapFiles.RewriteScene(file, sceneText, backupSuffix);
 }

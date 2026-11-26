@@ -445,6 +445,60 @@ public readonly partial record struct Rigidbody
         if (!Physics.RebuildRigidbody(GameObject.SceneId, GameObject.Id))
             throw ActionText.Missing(GameObject, "Rigidbody");
     }
+
+    /// <summary>Makes the physics body now, rather than at the next physics step: for reading its state or setting
+    /// its velocity as soon as the object is made.</summary>
+    public void EnsureBody() => Physics.EnsureRigidbody(GameObject.SceneId, GameObject.Id);
+
+    /// <summary>Where the body is, how it is turned and how it moves: what a reset or a network correction puts
+    /// back.</summary>
+    public bool TryGetState(out RigidBodyState state)
+    {
+        Span<float> values = stackalloc float[13];
+        if (Physics.CopyRigidbodyState(GameObject.SceneId, GameObject.Id, values) != 13)
+        {
+            state = default;
+            return false;
+        }
+        state = new RigidBodyState(
+            new Vector3(values[0], values[1], values[2]),
+            new Quaternion(values[3], values[4], values[5], values[6]),
+            new Vector3(values[7], values[8], values[9]),
+            new Vector3(values[10], values[11], values[12]));
+        return true;
+    }
+
+    /// <summary>Puts the body back at a saved state.</summary>
+    public bool SetState(RigidBodyState state)
+    {
+        Span<float> values = stackalloc float[13]
+        {
+            state.Position.X, state.Position.Y, state.Position.Z,
+            state.Rotation.X, state.Rotation.Y, state.Rotation.Z, state.Rotation.W,
+            state.LinearVelocity.X, state.LinearVelocity.Y, state.LinearVelocity.Z,
+            state.AngularVelocity.X, state.AngularVelocity.Y, state.AngularVelocity.Z
+        };
+        return Physics.SetRigidbodyState(GameObject.SceneId, GameObject.Id, values);
+    }
+}
+
+/// <summary>A Rigidbody's whole pose and motion, as a reset or a network correction keeps it.</summary>
+public readonly record struct RigidBodyState(
+    Vector3 Position, Quaternion Rotation, Vector3 LinearVelocity, Vector3 AngularVelocity);
+
+/// <summary>The scene's physics settings for a game whose units are not metres (the aircraft game's 500 units per
+/// metre): gravity, the smallest shape taken seriously and the game-unit length scale.</summary>
+public static class PhysicsSettings
+{
+    /// <summary>The scene's gravity.</summary>
+    public static Vector3 Gravity(Scene scene) => Physics.GetGravity(scene.SessionId);
+    /// <summary>Sets the scene's gravity.</summary>
+    public static void SetGravity(Scene scene, Vector3 gravity) => Physics.SetGravity(scene.SessionId, gravity);
+    /// <summary>How much smaller than a metre the game's unit is.</summary>
+    public static void SetLengthScale(Scene scene, float scale) => Physics.SetLengthScale(scene.SessionId, scale);
+    /// <summary>The smallest collider extent the physics world keeps, in the game's units.</summary>
+    public static void SetMinimumShapeExtent(Scene scene, float extent) =>
+        Physics.SetMinimumShapeExtent(scene.SessionId, extent);
 }
 
 public readonly partial record struct CompoundCollider

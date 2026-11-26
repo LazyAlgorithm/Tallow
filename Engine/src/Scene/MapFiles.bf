@@ -339,6 +339,53 @@ static class MapFiles
 		map.[Friend]SetMounted(false);
 	}
 
+	/// Replaces a map's scene text in its file, keeping the file as it was beside it under backupSuffix (unless one
+	/// is there already). For a game that migrates maps written for an older build. False when the file cannot be
+	/// read or written.
+	public static bool RewriteScene(StringView file, StringView sceneText, StringView backupSuffix)
+	{
+		let pack = scope PackFile();
+		if (pack.Open(file) case .Err)
+			return false;
+		let names = scope List<String>();
+		let contents = scope List<List<uint8>>();
+		defer
+		{
+			ClearAndDeleteItems!(names);
+			ClearAndDeleteItems!(contents);
+		}
+		bool readable = true;
+		for (let part in pack.Entries)
+		{
+			let data = new List<uint8>();
+			contents.Add(data);
+			names.Add(new String(part.name));
+			if (pack.Read(part, data) case .Err)
+			{
+				readable = false;
+				break;
+			}
+			if (part.name != SceneName)
+				continue;
+			data.Clear();
+			data.AddRange(Span<uint8>((uint8*)sceneText.Ptr, sceneText.Length));
+		}
+		if (!readable || names.IsEmpty)
+			return false;
+		if (!backupSuffix.IsEmpty)
+		{
+			let backup = scope $"{file}{backupSuffix}";
+			if (!File.Exists(backup) && (File.Copy(file, backup) case .Err))
+				return false;
+		}
+		let parts = scope List<(StringView name, Span<uint8> data)>();
+		for (int i < names.Count)
+			parts.Add((names[i], contents[i]));
+		if (PackFile.Write(file, parts) case .Err)
+			return false;
+		return true;
+	}
+
 	/// A file's hash as 16 hex digits (64-bit FNV-1a): quick to work out, and different for a changed file.
 	public static void Hash(Span<uint8> data, String hash)
 	{

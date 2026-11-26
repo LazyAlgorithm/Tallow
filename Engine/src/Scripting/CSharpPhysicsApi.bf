@@ -1100,4 +1100,79 @@ static class Physics
 		return scene.Physics.Raycast(origin, direction, maxDistance, out hit, layerMask) ?
 			hit.distance : -1;
 	}
+
+	/// The scene's gravity (metres a second squared), for games whose units are not the engine's metres.
+	[CSharpExpose]
+	public static Vector3 GetGravity(uint64 session)
+	{
+		let scene = LiveScene(session);
+		return scene?.Physics != null ? scene.Physics.Gravity : .(0, -9.81f, 0);
+	}
+
+	[CSharpExpose]
+	public static void SetGravity(uint64 session, Vector3 gravity)
+	{
+		let scene = LiveScene(session);
+		if (scene?.Physics != null)
+			scene.Physics.Gravity = gravity;
+	}
+
+	/// How much smaller than a metre this game's unit is: shape tolerances, sleep and damping scale with it.
+	[CSharpExpose]
+	public static void SetLengthScale(uint64 session, float scale)
+	{
+		let scene = LiveScene(session);
+		if (scene?.Physics != null)
+			scene.Physics.LengthScale = scale;
+	}
+
+	/// The smallest collider extent the physics world keeps (in the game's units).
+	[CSharpExpose]
+	public static void SetMinimumShapeExtent(uint64 session, float extent)
+	{
+		let scene = LiveScene(session);
+		if (scene?.Physics != null)
+			scene.Physics.MinimumShapeExtent = extent;
+	}
+
+	/// Makes the Rigidbody's physics body now, rather than at the next physics step.
+	[CSharpExpose]
+	public static void EnsureRigidbody(uint64 session, uint64 entity)
+	{
+		let body = LiveObject(session, entity)?.GetComponent<Rigidbody>();
+		body?.EnsureBody();
+	}
+
+	/// A Rigidbody's position (3), rotation (4), linear velocity (3) and angular velocity (3) into values.
+	[CSharpExpose]
+	public static int32 CopyRigidbodyState(uint64 session, uint64 entity, Span<float> values)
+	{
+		let body = LiveObject(session, entity)?.GetComponent<Rigidbody>();
+		if (body == null)
+			return -1;
+		if (values.Length < 13)
+			return 0;
+		let state = body.Value.State;
+		values[0] = state.position.x; values[1] = state.position.y; values[2] = state.position.z;
+		values[3] = state.rotation.x; values[4] = state.rotation.y; values[5] = state.rotation.z; values[6] = state.rotation.w;
+		values[7] = state.linearVelocity.x; values[8] = state.linearVelocity.y; values[9] = state.linearVelocity.z;
+		values[10] = state.angularVelocity.x; values[11] = state.angularVelocity.y; values[12] = state.angularVelocity.z;
+		return 13;
+	}
+
+	/// Puts a Rigidbody back at a saved state: position (3), rotation (4), linear velocity (3), angular velocity (3).
+	[CSharpExpose]
+	public static bool SetRigidbodyState(uint64 session, uint64 entity, Span<float> values)
+	{
+		let body = LiveObject(session, entity)?.GetComponent<Rigidbody>();
+		if (body == null || values.Length < 13)
+			return false;
+		BodyState state = default;
+		state.position = .(values[0], values[1], values[2]);
+		state.rotation = .(values[3], values[4], values[5], values[6]);
+		state.linearVelocity = .(values[7], values[8], values[9]);
+		state.angularVelocity = .(values[10], values[11], values[12]);
+		body.Value.SetState(state);
+		return true;
+	}
 }
