@@ -50,6 +50,46 @@ static class QualityTest
 		Check(RenderView.FogEnabled && RenderView.FogTileSize == 12 && RenderView.FogSlices == 64 && RenderView.FogLocalLights == 64
 			&& RenderView.FogTemporalAllowed && RenderView.FogHistoryBlend == 0.9f, "High: 12 px, 64 slices, 64 lights, temporal");
 
+		// A lighting preset changes only the lighting settings: the render scale and the chosen upscaler stay.
+		Quality.Current.renderScale = 0.75f;
+		Quality.Current.upscaler = .DLSS;
+		Quality.Apply();
+		Check(CSharpPlatform.QualitySetLighting((int32)QualityLevel.Low), "the C# lighting preset call applies Low");
+		Check(RenderView.RenderScale == 0.75f && Upscaling.Current == .DLSS, "lighting preset leaves render scale and upscaler");
+		Check(RenderView.FogTileSize == 16 && RenderView.FogSlices == 32 && RenderView.FogLocalLights == 0 && !RenderView.FogEnabled,
+			"lighting preset applies the Low fog grid");
+		Check(RenderView.ShadowDistanceScale == 0.5f && RenderView.MaxShadowedLights == 2, "lighting preset applies Low shadows");
+		Check(CSharpPlatform.QualityLightingLevel() == (int32)QualityLevel.Low, "the C# lighting level reports the preset");
+		Quality.SetLighting(.Ultra);
+		Check(RenderView.FogTileSize == 8 && RenderView.FogSlices == 128 && RenderView.FogLocalLights == 128
+			&& RenderView.FogHistoryBlend == 0.95f, "lighting preset applies the Ultra fog grid");
+		Check(RenderView.RenderScale == 0.75f && Upscaling.Current == .DLSS, "Ultra lighting leaves render scale and upscaler");
+		Check(Quality.LightingLevel == .Ultra, "lighting level follows the preset");
+		Check(!CSharpPlatform.QualitySetLightingValue("renderScale", "1", false), "a non-lighting setting is refused by the lighting setter");
+
+		// The string setter the C# Quality class uses changes one value and applies it.
+		Check(CSharpPlatform.QualitySetValue("shadowMapSize", "2048", false), "QualitySetValue changes a setting");
+		Check(Quality.Current.shadowMapSize == 2048 && RenderResources.ShadowAtlasSize == 2048, "QualitySetValue applies it");
+		Check(!CSharpPlatform.QualitySetValue("notASetting", "1", false), "QualitySetValue refuses an unknown name");
+
+		// A game's own fog values (its override) are saved, and come back as they are on the next start.
+		let folder = scope String();
+		folder.AppendF("{}tallow-quality-test/", Path.GetTempPath(.. scope .()));
+		Check(CSharpPlatform.QualitySetLightingValue("fogTileSize", "16", false), "a lighting setting changes by name");
+		Check(CSharpPlatform.QualitySetLightingValue("fogSlices", "32", false), "fog slices change by name");
+		Check(CSharpPlatform.QualitySetLightingValue("fogLocalLights", "4", false), "the local-light fog budget changes by name");
+		Check(CSharpPlatform.QualitySetLightingValue("fogTemporal", "0", false), "the fog temporal blend changes by name");
+		Check(Quality.LightingLevel == .Custom, "the changed fog grid is Custom");
+		Check(Quality.Save(folder), "the quality file is saved");
+		Quality.Set(.High);
+		Check(Quality.Load(folder), "the quality file is loaded");
+		Check(Quality.Current.fogTileSize == 16 && Quality.Current.fogSlices == 32 && Quality.Current.fogLocalLights == 4
+			&& !Quality.Current.fogTemporal, "the game's fog override survives a reload");
+		Check(RenderView.FogTileSize == 16 && RenderView.FogSlices == 32 && RenderView.FogLocalLights == 4
+			&& !RenderView.FogTemporalAllowed, "the loaded fog override is applied");
+		Check(Quality.Current.renderScale == 0.75f && Quality.Current.upscaler == .DLSS && Upscaling.Current == .DLSS,
+			"render scale and upscaler survive the reload");
+
 		// Round trip: a changed value comes back, and Custom is reported.
 		var v = Quality.Preset(.High);
 		v.pixelError = 1.5f;

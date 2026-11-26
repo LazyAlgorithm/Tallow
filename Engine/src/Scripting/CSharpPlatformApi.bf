@@ -138,6 +138,35 @@ static class CSharpPlatform
 		return true;
 	}
 
+	/// Applies one preset's lighting settings only (0 Low ... 3 Ultra): shadows, ambient occlusion, global illumination,
+	/// reflections and the volumetric fog grid. The render scale, upscaler and the other quality settings stay as they
+	/// are. False for Custom or out of range.
+	[CSharpExpose]
+	public static bool QualitySetLighting(int32 level)
+	{
+		if (level < 0 || level > (int32)QualityLevel.Ultra)
+			return false;
+		Quality.SetLighting((QualityLevel)level);
+		return true;
+	}
+
+	/// The preset whose lighting settings are in use (0 Low ... 3 Ultra), or 4 (Custom).
+	[CSharpExpose]
+	public static int32 QualityLightingLevel() => (int32)Quality.LightingLevel;
+
+	/// Changes one lighting setting (Quality.Write's names: shadows, shadowMapSize, ambientOcclusion, reflectionProbes,
+	/// volumetricFog, fogTileSize, fogSlices, fogTemporal or fogLocalLights) and applies only the lighting settings;
+	/// save: kept for the next start. False for a name a lighting preset does not change.
+	[CSharpExpose]
+	public static bool QualitySetLightingValue(StringView name, StringView value, bool save)
+	{
+		if (!Quality.SetLightingValue(name, value))
+			return false;
+		if (save)
+			Quality.Save();
+		return true;
+	}
+
 	/// Whether an upscaler (0 Off, 1 FSR 1, 2 FSR 2, 3 DLSS) can run on this machine: -1 when it can, else the length of
 	/// the reason it cannot (written to the buffer).
 	[CSharpExpose]

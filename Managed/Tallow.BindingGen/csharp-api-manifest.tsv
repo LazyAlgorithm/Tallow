@@ -331,8 +331,11 @@ method	Tallow.CSharpPlatform	GamepadNameOf	int	pad:int	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	GamepadRumble	void	low:float	high:float	seconds:float	pad:int
 method	Tallow.CSharpPlatform	GpuVendorKind	int
 method	Tallow.CSharpPlatform	QualityCurrent	int
+method	Tallow.CSharpPlatform	QualityLightingLevel	int
 method	Tallow.CSharpPlatform	QualityRecommended	int
 method	Tallow.CSharpPlatform	QualitySet	bool	level:int	save:bool
+method	Tallow.CSharpPlatform	QualitySetLighting	bool	level:int
+method	Tallow.CSharpPlatform	QualitySetLightingValue	bool	name:string	value:string	save:bool
 method	Tallow.CSharpPlatform	QualitySetValue	bool	name:string	value:string	save:bool
 method	Tallow.CSharpPlatform	QualityValueText	int	name:string	buffer:System.Span<byte>
 method	Tallow.CSharpPlatform	SaveDelete	void	slot:string

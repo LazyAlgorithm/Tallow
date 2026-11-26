@@ -209,6 +209,19 @@ public static class Quality
             throw new ArgumentOutOfRangeException(nameof(level), "Choose Low, Medium, High or Ultra.");
     }
 
+    /// <summary>The preset whose lighting settings are in use, or <see cref="QualityLevel.Custom"/> once one of them
+    /// was changed by itself.</summary>
+    public static QualityLevel LightingLevel => (QualityLevel)CSharpPlatform.QualityLightingLevel();
+
+    /// <summary>Applies only the lighting settings of a preset (shadows, ambient occlusion, global illumination,
+    /// reflections and the volumetric fog grid), leaving the render scale, the upscaler and every other quality setting
+    /// as they are. For a Lighting Quality option that is separate from the graphics preset.</summary>
+    public static void ApplyLightingPreset(QualityLevel level)
+    {
+        if (!CSharpPlatform.QualitySetLighting((int)level))
+            throw new ArgumentOutOfRangeException(nameof(level), "Choose Low, Medium, High or Ultra.");
+    }
+
     // One setting at a time, as a settings menu changes them: each applies at once and makes the level Custom (unless
     // the values then match a preset). Call Save() to keep them for the next start.
 
@@ -236,15 +249,15 @@ public static class Quality
         set => Change("upscaler", Text((int)value));
     }
     /// <summary>Whether anything casts shadows.</summary>
-    public static bool Shadows { get => Flag("shadows"); set => Change("shadows", value ? "1" : "0"); }
+    public static bool Shadows { get => Flag("shadows"); set => ChangeLighting("shadows", value ? "1" : "0"); }
     /// <summary>How many point and spot lights may cast shadows at once.</summary>
-    public static int ShadowedLights { get => (int)Number("shadowedLights"); set => Change("shadowedLights", Text(value)); }
+    public static int ShadowedLights { get => (int)Number("shadowedLights"); set => ChangeLighting("shadowedLights", Text(value)); }
     /// <summary>The sun's shadow map size in pixels (256-8192).</summary>
-    public static int ShadowMapSize { get => (int)Number("shadowMapSize"); set => Change("shadowMapSize", Text(value)); }
+    public static int ShadowMapSize { get => (int)Number("shadowMapSize"); set => ChangeLighting("shadowMapSize", Text(value)); }
     /// <summary>Multiplies how far shadows reach (0.05-4).</summary>
-    public static float ShadowDistance { get => Number("shadowDistance"); set => Change("shadowDistance", Text(value)); }
+    public static float ShadowDistance { get => Number("shadowDistance"); set => ChangeLighting("shadowDistance", Text(value)); }
     /// <summary>Darkens creases and corners (screen-space ambient occlusion).</summary>
-    public static bool AmbientOcclusion { get => Flag("ambientOcclusion"); set => Change("ambientOcclusion", value ? "1" : "0"); }
+    public static bool AmbientOcclusion { get => Flag("ambientOcclusion"); set => ChangeLighting("ambientOcclusion", value ? "1" : "0"); }
     /// <summary>Blurs what is out of the camera's focus.</summary>
     public static bool DepthOfField { get => Flag("depthOfField"); set => Change("depthOfField", value ? "1" : "0"); }
     /// <summary>Blurs what moves fast across the screen.</summary>
@@ -260,15 +273,52 @@ public static class Quality
     /// <summary>Keeps textures sharp at grazing angles (anisotropic filtering).</summary>
     public static bool Anisotropic { get => Flag("anisotropic"); set => Change("anisotropic", value ? "1" : "0"); }
     /// <summary>Whether reflection probes are used (off: the sky only).</summary>
-    public static bool ReflectionProbes { get => Flag("reflectionProbes"); set => Change("reflectionProbes", value ? "1" : "0"); }
+    public static bool ReflectionProbes { get => Flag("reflectionProbes"); set => ChangeLighting("reflectionProbes", value ? "1" : "0"); }
     /// <summary>Reflection probe resolution in pixels (32-512).</summary>
-    public static int ReflectionSize { get => (int)Number("reflectionSize"); set => Change("reflectionSize", Text(value)); }
+    public static int ReflectionSize { get => (int)Number("reflectionSize"); set => ChangeLighting("reflectionSize", Text(value)); }
     /// <summary>Draws big meshes from clusters picked on the graphics card, with the level of detail chosen per cluster
     /// (where the graphics card can: Vulkan and Metal; the setting has no effect elsewhere).</summary>
     public static bool GpuDriven { get => Flag("gpuDriven"); set => Change("gpuDriven", value ? "1" : "0"); }
     /// <summary>How many pixels of error the clusters of GPU-driven meshes may have on screen (0.25-16): lower is
     /// sharper and costs more.</summary>
     public static float PixelError { get => Number("pixelError"); set => Change("pixelError", Text(value)); }
+
+    /// <summary>Whether fog lit by the sun and local lights is drawn (the volumetric fog grid); off, scenes keep their
+    /// plain distance and height fog.</summary>
+    public static bool VolumetricFog
+    {
+        get => Flag("volumetricFog");
+        set => ChangeLighting("volumetricFog", value ? "1" : "0");
+    }
+
+    /// <summary>How many pixels across and down each fog cell covers: smaller is finer and costs more (4-32).</summary>
+    public static int FogTileSize
+    {
+        get => (int)Number("fogTileSize");
+        set => ChangeLighting("fogTileSize", Text(value));
+    }
+
+    /// <summary>How many cells deep the fog grid is: more is smoother and costs more (16-160).</summary>
+    public static int FogSlices
+    {
+        get => (int)Number("fogSlices");
+        set => ChangeLighting("fogSlices", Text(value));
+    }
+
+    /// <summary>Whether each frame's fog cells blend with last frame's, which hides the banding between depth
+    /// slices.</summary>
+    public static bool FogTemporal
+    {
+        get => Flag("fogTemporal");
+        set => ChangeLighting("fogTemporal", value ? "1" : "0");
+    }
+
+    /// <summary>How many point and spot lights may scatter into the fog in a view (0-256).</summary>
+    public static int FogLocalLights
+    {
+        get => (int)Number("fogLocalLights");
+        set => ChangeLighting("fogLocalLights", Text(value));
+    }
 
     /// <summary>Keeps the current settings for the next start.</summary>
     public static void Save()
@@ -292,6 +342,13 @@ public static class Quality
     {
         if (!CSharpPlatform.QualitySetValue(name, value, false))
             throw new InvalidOperationException($"{name} is not a quality setting.");
+    }
+
+    // Lighting settings apply only themselves, so the render scale and upscaler stay as they are.
+    private static void ChangeLighting(string name, string value)
+    {
+        if (!CSharpPlatform.QualitySetLightingValue(name, value, false))
+            throw new InvalidOperationException($"{name} is not a lighting quality setting.");
     }
 }
 

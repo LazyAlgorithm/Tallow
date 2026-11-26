@@ -88,9 +88,38 @@ struct QualityValues : IEquatable<QualityValues>
 	public static bool operator ==(QualityValues a, QualityValues b) => a.Equals(b);
 }
 
+/// The settings a lighting preset sets, and only those: shadows, ambient occlusion, global illumination, reflections
+/// and the volumetric fog grid. A game's Lighting Quality option changes these, so the render scale, the upscaler and
+/// the rest of the graphics quality stay as the player chose them.
+struct LightingValues : IEquatable<LightingValues>
+{
+	public bool shadows = true;
+	public int32 shadowedLights = 8;
+	public int32 shadowMapSize = 4096;
+	public float shadowDistance = 1;
+	public bool ambientOcclusion = true;
+	public GlobalIlluminationMode globalIllumination = .ProbeGrid;
+	public bool reflectionProbes = true;
+	public int32 reflectionSize = 128;
+	public bool volumetricFog = true;
+	public int32 fogTileSize = 12;
+	public int32 fogSlices = 64;
+	public bool fogTemporal = true;
+	public int32 fogLocalLights = 64;
+
+	public this()
+	{
+	}
+
+	public bool Equals(LightingValues other) => shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && globalIllumination == other.globalIllumination && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize && volumetricFog == other.volumetricFog && fogTileSize == other.fogTileSize && fogSlices == other.fogSlices && fogTemporal == other.fogTemporal && fogLocalLights == other.fogLocalLights;
+	public static bool operator ==(LightingValues a, LightingValues b) => a.Equals(b);
+}
+
 /// Graphics quality: four presets (Low, Medium, High, Ultra) and the settings each one sets, applied to the engine at
 /// once, remembered for the player between runs, and a recommendation for the machine. A game's options screen
-/// calls Quality.Set(.Medium) or changes Quality.Current and calls Apply; nothing else is needed. See tallowengine.com/docs/quality.
+/// calls Quality.Set(.Medium) or changes Quality.Current and calls Apply; nothing else is needed. A Lighting Quality
+/// option of its own uses SetLighting (a preset's lighting settings only, leaving the render scale and upscaler).
+/// See tallowengine.com/docs/quality.
 static class Quality
 {
 	/// What is in use now.
@@ -202,6 +231,123 @@ static class Quality
 		return .Custom;
 	}
 
+	// ---- lighting quality (shadows, ambient occlusion, global illumination, reflections and the volumetric fog grid)
+
+	/// The serialized names of the settings a lighting preset changes (Quality.Write's spelling).
+	public static StringView[13] LightingFieldNames = .("shadows", "shadowedLights", "shadowMapSize", "shadowDistance", "ambientOcclusion", "globalIllumination", "reflectionProbes", "reflectionSize", "volumetricFog", "fogTileSize", "fogSlices", "fogTemporal", "fogLocalLights");
+
+	/// Whether a setting is one a lighting preset changes.
+	public static bool IsLightingField(StringView name)
+	{
+		for (let field in LightingFieldNames)
+		{
+			if (field == name)
+				return true;
+		}
+		return false;
+	}
+
+	/// The lighting settings in use now.
+	public static LightingValues Lighting => LightingOf(Current);
+
+	/// The lighting settings of a preset.
+	public static LightingValues LightingPreset(QualityLevel level) => LightingOf(Preset(level));
+
+	/// Only the settings a lighting preset changes, from a full set of quality values.
+	public static LightingValues LightingOf(QualityValues values)
+	{
+		var v = LightingValues();
+		v.shadows = values.shadows;
+		v.shadowedLights = values.shadowedLights;
+		v.shadowMapSize = values.shadowMapSize;
+		v.shadowDistance = values.shadowDistance;
+		v.ambientOcclusion = values.ambientOcclusion;
+		v.globalIllumination = values.globalIllumination;
+		v.reflectionProbes = values.reflectionProbes;
+		v.reflectionSize = values.reflectionSize;
+		v.volumetricFog = values.volumetricFog;
+		v.fogTileSize = values.fogTileSize;
+		v.fogSlices = values.fogSlices;
+		v.fogTemporal = values.fogTemporal;
+		v.fogLocalLights = values.fogLocalLights;
+		return v;
+	}
+
+	/// The preset whose lighting settings are in use, or Custom.
+	public static QualityLevel LightingLevel
+	{
+		get
+		{
+			let lighting = LightingOf(Current);
+			for (int i < 4)
+			{
+				if (LightingOf(Preset((QualityLevel)i)) == lighting)
+					return (QualityLevel)i;
+			}
+			return .Custom;
+		}
+	}
+
+	/// Puts only the lighting settings in Current into the engine: shadows, ambient occlusion, global illumination,
+	/// reflections and the volumetric fog grid. The render scale, upscaler and every other setting stay as they are.
+	public static void ApplyLighting()
+	{
+		RenderView.ShadowsEnabled = Current.shadows;
+		RenderView.ShadowDistanceScale = Math.Max(Current.shadowDistance, 0.05f);
+		RenderView.MaxShadowedLights = Math.Clamp(Current.shadowedLights, 0, LightClusters.MaxTiles);
+		RenderResources.SetShadowAtlasSize(Current.shadowMapSize);
+		ScreenEffects.AmbientOcclusion = Current.ambientOcclusion;
+		ScreenEffects.WaterReflections = Current.reflectionProbes;
+		ScreenEffects.SurfaceReflections = Current.reflectionProbes;
+		ScreenEffects.GlobalIllumination = Current.globalIllumination;
+		Reflections.ProbesEnabled = Current.reflectionProbes;
+		Reflections.Resolution = Math.Clamp(Current.reflectionSize, 32, 512);
+		// Volumetric fog (RenderViewVolumetric.bf): whether a scene may use it at all, its grid, its temporal blend and
+		// how many local lights may scatter into it.
+		RenderView.FogEnabled = Current.volumetricFog;
+		RenderView.FogTileSize = Math.Clamp(Current.fogTileSize, 4, 32);
+		RenderView.FogSlices = Math.Clamp(Current.fogSlices, 16, 160);
+		RenderView.FogTemporalAllowed = Current.fogTemporal;
+		RenderView.FogLocalLights = Math.Clamp(Current.fogLocalLights, 0, 256);
+		RenderView.FogHistoryBlend = LightingLevel == .Ultra ? 0.95f : 0.9f;
+	}
+
+	/// Switches to a preset's lighting settings and applies only them; the rest of Current stays as it is. Custom does
+	/// nothing.
+	public static void SetLighting(QualityLevel level)
+	{
+		if (level == .Custom)
+			return;
+		let v = Preset(level);
+		Current.shadows = v.shadows;
+		Current.shadowedLights = v.shadowedLights;
+		Current.shadowMapSize = v.shadowMapSize;
+		Current.shadowDistance = v.shadowDistance;
+		Current.ambientOcclusion = v.ambientOcclusion;
+		Current.globalIllumination = v.globalIllumination;
+		Current.reflectionProbes = v.reflectionProbes;
+		Current.reflectionSize = v.reflectionSize;
+		Current.volumetricFog = v.volumetricFog;
+		Current.fogTileSize = v.fogTileSize;
+		Current.fogSlices = v.fogSlices;
+		Current.fogTemporal = v.fogTemporal;
+		Current.fogLocalLights = v.fogLocalLights;
+		ApplyLighting();
+		Level = LevelOf(Current);
+	}
+
+	/// Changes one lighting setting from text (Quality.Write's names) and applies only the lighting settings. False for
+	/// a name a lighting preset does not change.
+	public static bool SetLightingValue(StringView name, StringView value)
+	{
+		if (!IsLightingField(name))
+			return false;
+		Current = Read(scope $"{name}={value}", Current);
+		ApplyLighting();
+		Level = LevelOf(Current);
+		return true;
+	}
+
 	/// Puts Current into the engine: the renderer, shadows, screen effects, LOD, foliage, skinning, vsync and textures.
 	public static void Apply()
 	{
@@ -210,24 +356,14 @@ static class Quality
 		RenderView.AntialiasingMode = Current.antialiasMode;
 		Upscaling.Current = Current.upscaler;
 		Upscaling.Reset();
-		RenderView.ShadowsEnabled = Current.shadows;
-		RenderView.ShadowDistanceScale = Math.Max(Current.shadowDistance, 0.05f);
-		RenderView.MaxShadowedLights = Math.Clamp(Current.shadowedLights, 0, LightClusters.MaxTiles);
-		RenderResources.SetShadowAtlasSize(Current.shadowMapSize);
-		ScreenEffects.AmbientOcclusion = Current.ambientOcclusion;
-		ScreenEffects.WaterReflections = Current.reflectionProbes;
-		ScreenEffects.SurfaceReflections = Current.reflectionProbes;
 		ScreenEffects.DepthOfField = Current.depthOfField;
 		ScreenEffects.MotionBlur = Current.motionBlur;
-		ScreenEffects.GlobalIllumination = Current.globalIllumination;
 		LODGroup.Bias = Math.Max(Current.lodBias, 0.05f);
 		Foliage.DistanceScale = Math.Max(Current.foliageDistance, 0.05f);
 		GpuSkinning.Enabled = Current.gpuSkinning;
 		Gfx.SetVsync(Current.vsync);
 		Textures.SkipLevels = Math.Clamp(Current.textureDetail, 0, 3);
 		Gfx.SetAnisotropic(Current.anisotropic);
-		Reflections.ProbesEnabled = Current.reflectionProbes;
-		Reflections.Resolution = Math.Clamp(Current.reflectionSize, 32, 512);
 		GpuDriven.QualitySetting = Current.gpuDriven;
 		if (!GpuDriven.PixelErrorFromArgs)
 			GpuDriven.PixelError = Math.Clamp(Current.pixelError, 0.25f, 16);
@@ -237,14 +373,7 @@ static class Quality
 			GpuDriven.StreamGeometry = Current.streamGeometry;
 		StreamingCore.ApplyBudgetsMB(Current.geometryBudgetMB, Current.textureBudgetMB, Current.vtBudgetMB);
 		PhysicalSky.Quality = Math.Clamp(Current.skyQuality, 0, 2);
-		// Volumetric fog (RenderViewVolumetric.bf): whether a scene may use it at all, its grid, its temporal blend and
-		// how many local lights may scatter into it.
-		RenderView.FogEnabled = Current.volumetricFog;
-		RenderView.FogTileSize = Math.Clamp(Current.fogTileSize, 4, 32);
-		RenderView.FogSlices = Math.Clamp(Current.fogSlices, 16, 160);
-		RenderView.FogTemporalAllowed = Current.fogTemporal;
-		RenderView.FogLocalLights = Math.Clamp(Current.fogLocalLights, 0, 256);
-		RenderView.FogHistoryBlend = Level == .Ultra ? 0.95f : 0.9f;
+		ApplyLighting();
 	}
 
 	/// The preset suggested for this machine: Low on phones, Medium on integrated graphics and in a browser, High
