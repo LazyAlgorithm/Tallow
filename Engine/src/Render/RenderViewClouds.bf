@@ -72,9 +72,18 @@ extension RenderView
 	/// built for that backend. OpenGL and the web draw the 2D layer instead.
 	static bool VolumetricCloudsSupported()
 	{
-		if (GpuDriven.ForceUnavailable || !Compute.Supported || !RenderResources.CloudsReady)
+		return VolumetricCloudsAvailable(bgfx.get_renderer_type(), Compute.Supported, RenderResources.CloudsReady, GpuDriven.ForceUnavailable);
+	}
+
+	/// The backend rule behind VolumetricCloudsSupported, apart from the running device so `--cloud-test settings` can
+	/// check every backend with no window (C3b): Vulkan, Direct3D 11/12 and Metal can raymarch when compute and the
+	/// cs_clouds program are there; OpenGL, OpenGL ES (which is what a web page's WebGL reports) and everything else
+	/// cannot, and `--gpu-driven-caps-off` (forceUnavailable) turns it off everywhere.
+	public static bool VolumetricCloudsAvailable(bgfx.RendererType renderer, bool compute, bool program, bool forceUnavailable)
+	{
+		if (forceUnavailable || !compute || !program)
 			return false;
-		switch (bgfx.get_renderer_type())
+		switch (renderer)
 		{
 		case .Vulkan, .Metal, .Direct3D11, .Direct3D12:
 			return true;

@@ -49,9 +49,12 @@ internal static class ExportCache
         return Convert.ToHexString(hash.ComputeHash(Encoding.UTF8.GetBytes(string.Join('\n', parts)))).ToLowerInvariant();
     }
 
-    /// <summary>A file's path, size and timestamp; "missing" when there is none.</summary>
+    /// <summary>A file's path, size and timestamp; "missing" when there is none. Web, Android and iOS exports have no
+    /// player of their own (<see cref="Exporter"/> passes an empty path), which <see cref="FileInfo"/> rejects.</summary>
     public static string FileStamp(string path)
     {
+        if (string.IsNullOrEmpty(path))
+            return "missing";
         var info = new FileInfo(path);
         return info.Exists ? $"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}" : path + "|missing";
     }

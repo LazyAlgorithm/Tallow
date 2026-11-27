@@ -44,11 +44,13 @@ namespace Tallow;
 ///                                                      GPU-path and streaming values, check the quality file, exit 0 or 1
 ///   --cloud-test settings                              print the cloud settings with no window, check they save and reload
 ///                                                      through a scene file, exit 0 or 1
-///   --cloud-test sky|volume|lighting|temporal|integration|quality
+///   --cloud-test sky|volume|lighting|temporal|integration|quality|fallback
 ///                                                      draw the 2D backup / the raymarch / its lighting / the temporal
 ///                                                      blend and budget / the renderer integration (a building, the sun
 ///                                                      behind a deck, the reflection cube, the fog and a skybox) /
-///                                                      each preset's cloud budget and the debug view, and check them
+///                                                      each preset's cloud budget and the debug view / the 2D fallback
+///                                                      where the raymarch cannot run (GL/GLES/WebGL, caps off, Low),
+///                                                      and check them
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
 ///   --no-geometry-streaming                            load every page of a big mesh whole instead of streaming them
 ///   --no-texture-streaming                             load big textures whole instead of streaming their mip levels
@@ -433,6 +435,13 @@ class Application
 		if (GetArg("--cloud-test", cloudTest) && cloudTest == "quality" && !(this is CloudQualityTestApp))
 		{
 			let test = scope CloudQualityTestApp();
+			test.Run(args);
+			return test.Result;
+		}
+		// The fallback check draws the 2D backup with no raymarch on a backend that cannot march (C3b).
+		if (GetArg("--cloud-test", cloudTest) && cloudTest == "fallback" && !(this is CloudFallbackTestApp))
+		{
+			let test = scope CloudFallbackTestApp();
 			test.Run(args);
 			return test.Result;
 		}

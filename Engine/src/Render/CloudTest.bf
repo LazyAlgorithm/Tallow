@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
+using Bgfx;
 
 namespace Tallow;
 
@@ -109,6 +110,19 @@ static class CloudTest
 		let c = clamped.Environment;
 		Check(c.cloudMode == .TwoD && c.cloudCoverage == 1 && c.cloudAnisotropy == -0.9f && c.cloudDistance == 500 &&
 			c.cloudResolution == 1 && c.cloudThickness == 1, "cloud values are clamped on load");
+
+		// The backends that can raymarch, with no window (C3b): OpenGL, OpenGL ES (WebGL in a browser) and anything
+		// else take the 2D backup however much compute the device has, --gpu-driven-caps-off turns it off everywhere,
+		// and Vulkan/Direct3D/Metal need compute and the cs_clouds program.
+		Check(!RenderView.VolumetricCloudsAvailable(.OpenGL, true, true, false), "OpenGL never raymarches the clouds");
+		Check(!RenderView.VolumetricCloudsAvailable(.OpenGLES, true, true, false), "OpenGL ES / WebGL never raymarches the clouds");
+		Check(RenderView.VolumetricCloudsAvailable(.Vulkan, true, true, false), "Vulkan raymarches the clouds");
+		Check(RenderView.VolumetricCloudsAvailable(.Direct3D11, true, true, false), "Direct3D 11 raymarches the clouds");
+		Check(RenderView.VolumetricCloudsAvailable(.Direct3D12, true, true, false), "Direct3D 12 raymarches the clouds");
+		Check(RenderView.VolumetricCloudsAvailable(.Metal, true, true, false), "Metal raymarches the clouds");
+		Check(!RenderView.VolumetricCloudsAvailable(.Vulkan, false, true, false), "no compute shaders: the 2D backup");
+		Check(!RenderView.VolumetricCloudsAvailable(.Vulkan, true, false, false), "no cs_clouds program: the 2D backup");
+		Check(!RenderView.VolumetricCloudsAvailable(.Vulkan, true, true, true), "--gpu-driven-caps-off: the 2D backup");
 
 		Console.WriteLine(sFailed == 0 ? "CLOUD TEST PASS" : scope $"CLOUD TEST FAIL ({sFailed})");
 		return sFailed == 0 ? 0 : 1;
@@ -2192,6 +2206,271 @@ class CloudQualityTestApp : Application
 		GpuDriven.View = .Off;
 		Quality.Set(.High);
 		Console.WriteLine(Result == 0 ? "cloud-test quality: PASS" : "cloud-test quality: FAILED");
+		Close();
+	}
+}
+
+/// `--cloud-test fallback [--cloud-test-folder <dir>]`: the 2D procedural backup on a backend that cannot raymarch (C3b).
+/// OpenGL, OpenGL ES and WebGL (no compute, or no cs_clouds for WebGL) and `--gpu-driven-caps-off` reach this path; on a
+/// card that could raymarch the test pretends compute is missing (as that flag does) so it runs everywhere. A scene in
+/// Volumetric mode must then draw the 2D layer instead: no cloud target and no rays (RenderView.VolumetricCloudPixels and
+/// VolumetricCloudRays stay 0), the same picture as 2D mode, and coverage 0 pixel-identical to clouds off. The Low preset
+/// must select the 2D layer too, whatever the backend. Run it with `--renderer opengl`, `--renderer gles` (the WebGL
+/// path's runtime branch) and `--gpu-driven-caps-off`.
+class CloudFallbackTestApp : Application
+{
+	const int32 ShotWidth = 640;
+	const int32 ShotHeight = 360;
+	const int SettleFrames = 16;
+	/// The weather clock the shots are drawn at, so the wind does not drift between phases.
+	const double CloudTime = 3600.0;
+
+	public int32 Result;
+
+	struct Phase
+	{
+		public StringView name;
+		public bool clouds;
+		public CloudMode mode;
+		public QualityLevel level;
+		public float coverage;
+	}
+
+	Scene mScene ~ delete _;
+	RenderView mView ~ delete _;
+	Camera mCamera;
+	GameObject mCameraObject;
+	GameObject mSunObject;
+	String mDir = new .() ~ delete _;
+	List<Phase> mPhases = new .() ~ delete _;
+	int mPhase = -1;
+	int mFrame;
+	CompareShot mShot ~ delete _;
+	uint8[] mOff ~ delete _;
+	uint8[] mVolumetric ~ delete _;
+	uint8[] mLowOff ~ delete _;
+	/// The flag as it was before the test pretended compute was missing, so --gpu-driven-caps-off is not undone.
+	bool mForceWasSet;
+
+	protected override bool LoadsPlayerQuality => false;
+
+	public this()
+	{
+		Title.Set("Cloud fallback test");
+		Width = ShotWidth;
+		Height = ShotHeight;
+	}
+
+	void Check(bool ok, StringView what)
+	{
+		Console.WriteLine(scope $"cloud-test: {ok ? "ok" : "FAIL"} {what}");
+		if (!ok)
+			Result = 1;
+	}
+
+	protected override bool OnInit()
+	{
+		if (!GetArg("--cloud-test-folder", mDir) || mDir.IsEmpty || mDir.StartsWith("--"))
+			mDir.Set(scope $"{Path.GetTempPath(.. scope .())}tallow-cloud-fallback");
+		Directory.CreateDirectory(mDir);
+		Clouds.OverrideSeconds = CloudTime;
+		// The graphics resources are made by the first RenderView; make them now so the support check below reads the
+		// real programs (cs_clouds loads or not for this backend) rather than the not-yet-created ones.
+		RenderResources.EnsureCreated();
+		// The backend as it started: OpenGL/GLES/WebGL never raymarch (no compute, or no cs_clouds built for WebGL).
+		let nativeRunnable = RenderView.CloudsRunnable;
+		Console.WriteLine(scope $"cloud-test: renderer {(int32)bgfx.get_renderer_type()}, compute {Compute.Supported}, cs_clouds {RenderResources.CloudsReady}, volumetric clouds {(nativeRunnable ? "supported" : "not supported")}");
+		mForceWasSet = GpuDriven.ForceUnavailable;
+		if (nativeRunnable)
+		{
+			// This card could raymarch: pretend it cannot, so the phases draw the 2D backup (as --gpu-driven-caps-off).
+			GpuDriven.ForceUnavailable = true;
+			Console.WriteLine("cloud-test: the device can raymarch; pretending compute is missing (as --gpu-driven-caps-off)");
+		}
+		Check(!RenderView.CloudsRunnable, "the fallback is in effect: the volumetric cloud path cannot run");
+		Quality.Set(.High);
+		mPhases.Add(.() { name = "off", clouds = false, mode = .Volumetric, level = .High, coverage = 0.45f });
+		mPhases.Add(.() { name = "volumetric", clouds = true, mode = .Volumetric, level = .High, coverage = 0.45f });
+		mPhases.Add(.() { name = "two-d", clouds = true, mode = .TwoD, level = .High, coverage = 0.45f });
+		mPhases.Add(.() { name = "zero", clouds = true, mode = .Volumetric, level = .High, coverage = 0 });
+		mPhases.Add(.() { name = "low-off", clouds = false, mode = .Volumetric, level = .Low, coverage = 0.45f });
+		mPhases.Add(.() { name = "low", clouds = true, mode = .Volumetric, level = .Low, coverage = 0.45f });
+
+		mScene = new Scene();
+		let cameraObject = mScene.CreateGameObject("Camera");
+		mCameraObject = cameraObject;
+		mCamera = cameraObject.AddComponent<Camera>();
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mSunObject = mScene.CreateGameObject("Sun");
+		mSunObject.Transform.EulerAngles = .(20, -30, 0);
+		let light = mSunObject.AddComponent<Light>();
+		light.intensity = 1.5f;
+		let ground = mScene.CreateGameObject("Ground");
+		let renderer = ground.AddComponent<MeshRenderer>();
+		renderer.mesh.Set("builtin:plane");
+		renderer.color = .FromBytes(112, 158, 92);
+		ground.Transform.LocalScale = .(500, 1, 500);
+		mView = new RenderView(10);
+		mView.AllowPostAa = false;
+		ScreenEffects.GlobalIllumination = .Ambient;
+		mScene.StartPlay();
+		return true;
+	}
+
+	void StartPhase(Phase phase)
+	{
+		Quality.Set(phase.level);
+		let env = mScene.Environment;
+		env.Reset();
+		env.skyMode = .Physical;
+		env.dayNight = true;
+		env.dayNightPaused = true;
+		env.autoColors = true;
+		env.sunIntensity = Atmosphere.ReferenceSunIntensity;
+		env.sunLight = mSunObject.Id;
+		// No fog over the sky: the cloud layer is what this test draws.
+		env.volumetricFog = false;
+		env.clouds = phase.clouds;
+		env.cloudMode = phase.mode;
+		env.cloudCoverage = phase.coverage;
+		env.cloudResolution = 1.0f;
+		// The afternoon hour with the sun 45 degrees up (as --cloud-test volume).
+		float bestHour = 12;
+		float bestError = float.MaxValue;
+		for (float hour = 12; hour < 21; hour += 0.01f)
+		{
+			env.timeOfDay = hour;
+			let error = Math.Abs(DayNight.SunElevation(env) - 45);
+			if (error < bestError)
+			{
+				bestError = error;
+				bestHour = hour;
+			}
+		}
+		env.timeOfDay = bestHour;
+		let sun = DayNight.SunDirection(env);
+		var look = Vector3(sun.x, 0, sun.z).Normalized;
+		look.y = 0.35f;
+		look = look.Normalized;
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mCameraObject.Transform.Position = .(0, 200, 0);
+		mCameraObject.Transform.Rotation = Quaternion.LookRotation(look, .(0, 1, 0));
+		DayNight.Apply(mScene);
+	}
+
+	protected override void OnUpdate()
+	{
+		mScene.Update();
+		AssetLoader.Update();
+	}
+
+	protected override void OnRender()
+	{
+		if (mPhase < 0 || (mShot != null && mFrame < 0))
+		{
+			mPhase++;
+			if (mPhase >= mPhases.Count)
+			{
+				Finish();
+				return;
+			}
+			StartPhase(mPhases[mPhase]);
+			mFrame = 0;
+			DeleteAndNullify!(mShot);
+		}
+		mView.Resize(ShotWidth, ShotHeight);
+		mView.Render(mScene, mCamera.GetCameraData((float)ShotWidth / ShotHeight));
+		mFrame++;
+		if (mFrame < SettleFrames)
+			return;
+		if (mShot == null)
+			mShot = new CompareShot();
+		let path = scope $"{mDir}/{mPhases[mPhase].name}.png";
+		if (mShot.Step(mView, ShotWidth, ShotHeight, path))
+		{
+			let pixels = mShot.Pixels;
+			let copy = new uint8[pixels.Count];
+			Internal.MemCpy(copy.CArray(), pixels.CArray(), pixels.Count);
+			CheckShot(mPhases[mPhase], copy);
+			mFrame = -1;
+		}
+	}
+
+	void CheckShot(Phase phase, uint8[] pixels)
+	{
+		Console.WriteLine(scope $"cloud-test: {phase.name}: preset {Quality.Names[(int)phase.level]} mode {phase.mode} clouds {phase.clouds} coverage {phase.coverage}: allowed {RenderView.CloudsAllowed} steps {RenderView.CloudSteps} pixels {RenderView.VolumetricCloudPixels} rays {RenderView.VolumetricCloudRays}");
+		// Not black.
+		int64 sum = 0;
+		for (int y < ShotHeight / 2)
+			for (int x < ShotWidth)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				sum += pixels[i] + pixels[i + 1] + pixels[i + 2];
+			}
+		Check(sum > 0, scope $"{phase.name}: not black");
+		// The whole point of the fallback: nothing marches, but clouds still draw.
+		Check(!RenderView.CloudsRunnable, scope $"{phase.name}: the volumetric path cannot run");
+		Check(RenderView.VolumetricCloudPixels == 0 && RenderView.VolumetricCloudRays == 0, scope $"{phase.name}: no cloud target and no rays");
+		if (phase.name == "off")
+			mOff = pixels;
+		else if (phase.name == "volumetric")
+		{
+			Check(RenderView.CloudsAllowed, "volumetric: the High preset allows the raymarch (the backend falls back)");
+			let diff = Diff(mOff, pixels, 0, 0, ShotWidth, ShotHeight);
+			Console.WriteLine(scope $"cloud-test: the 2D backup changes the sky in Volumetric mode (diff {diff})");
+			Check(diff > 20000, scope $"volumetric: the 2D backup draws the clouds (diff {diff})");
+			mVolumetric = pixels;
+		}
+		else if (phase.name == "two-d")
+		{
+			let diff = Diff(mVolumetric, pixels, 0, 0, ShotWidth, ShotHeight);
+			Console.WriteLine(scope $"cloud-test: Volumetric's fallback against 2D mode (diff {diff})");
+			Check(diff == 0, scope $"two-d: the fallback draws the same layer as 2D mode (diff {diff})");
+		}
+		else if (phase.name == "zero")
+		{
+			// Coverage 0 draws no layer at all: the sky is the clouds-off picture (a pixel's dithering aside, the
+			// sky's bodies are drawn at a slightly different time).
+			let diff = Diff(mOff, pixels, 0, 0, ShotWidth, ShotHeight);
+			Check(diff <= 16, scope $"zero: coverage 0 is pixel-identical to clouds off (diff {diff})");
+		}
+		else if (phase.name == "low-off")
+		{
+			Check(!RenderView.CloudsAllowed && RenderView.CloudSteps == 0, "low-off: Low has no cloud raymarch");
+			mLowOff = pixels;
+		}
+		else if (phase.name == "low")
+		{
+			Check(!RenderView.CloudsAllowed && RenderView.CloudSteps == 0, "low: Low selects the 2D backup (no raymarch)");
+			let diff = Diff(mLowOff, pixels, 0, 0, ShotWidth, ShotHeight);
+			Console.WriteLine(scope $"cloud-test: Low's 2D backup changes the sky (diff {diff})");
+			Check(diff > 20000, scope $"low: the Low preset draws the 2D clouds (diff {diff})");
+		}
+	}
+
+	static int64 Diff(uint8[] a, uint8[] b, int32 x0, int32 y0, int32 x1, int32 y1)
+	{
+		if (a == null || b == null || a.Count != b.Count)
+			return int64.MaxValue;
+		int64 sum = 0;
+		for (int32 y = y0; y < y1; y++)
+			for (int32 x = x0; x < x1; x++)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				for (int32 c < 3)
+					sum += Math.Abs((int32)a[i + c] - (int32)b[i + c]);
+			}
+		return sum;
+	}
+
+	void Finish()
+	{
+		GpuDriven.View = .Off;
+		Quality.Set(.High);
+		GpuDriven.ForceUnavailable = mForceWasSet;
+		Console.WriteLine(Result == 0 ? "cloud-test fallback: PASS" : "cloud-test fallback: FAILED");
 		Close();
 	}
 }
