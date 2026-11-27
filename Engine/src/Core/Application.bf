@@ -44,6 +44,9 @@ namespace Tallow;
 ///                                                      GPU-path and streaming values, check the quality file, exit 0 or 1
 ///   --cloud-test settings                              print the cloud settings with no window, check they save and reload
 ///                                                      through a scene file, exit 0 or 1
+///   --cloud-test network                               play a networked host and clients on loopback with no window and
+///                                                      check the clouds are the same on every peer with no cloud
+///                                                      network state, exit 0 or 1
 ///   --cloud-test sky|volume|lighting|temporal|integration|quality|fallback
 ///                                                      draw the 2D backup / the raymarch / its lighting / the temporal
 ///                                                      blend and budget / the renderer integration (a building, the sun
@@ -396,6 +399,9 @@ class Application
 		let cloudTest = scope String();
 		if (GetArg("--cloud-test", cloudTest) && cloudTest == "settings")
 			return CloudTest.RunSettings();
+		// The cloud network check plays a host, a client and a late joiner on loopback with no window (C3c).
+		if (GetArg("--cloud-test", cloudTest) && cloudTest == "network")
+			return CloudNetworkTest.Run();
 		// The cloud screenshot check draws the 2D backup on the physical sky (C1c) and needs a window.
 		if (GetArg("--cloud-test", cloudTest) && cloudTest == "sky" && !(this is CloudTestApp))
 		{

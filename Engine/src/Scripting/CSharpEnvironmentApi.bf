@@ -9,6 +9,9 @@ namespace Tallow;
 static class CSharpEnvironment
 {
 	/// Reads a setting into values (one float, or four for a colour). False without a scene or for an unknown one.
+	/// Clouds are 46-59 (C3c): 46 on, 47 mode (0 Volumetric, 1 2D), 48 coverage, 49 density, 50 altitude, 51
+	/// thickness, 52 wind speed, 53 wind direction, 54 wind seed, 55 anisotropy, 56 ambient, 57 tint, 58 distance,
+	/// 59 resolution.
 	[CSharpExpose]
 	public static bool Get(uint64 session, int32 which, Span<float> values)
 	{
@@ -65,6 +68,22 @@ static class CSharpEnvironment
 		case 43: values[0] = env.starBrightness;
 		case 44: values[0] = env.autoColors ? 1 : 0;
 		case 45: values[0] = env.sunIntensity;
+		// Clouds (C3c): the layer's shape and the wind + seed that pick the weather. The renderer turns these and the
+		// shared day / night clock into a world offset (Clouds.bf), so peers need no cloud network state.
+		case 46: values[0] = env.clouds ? 1 : 0;
+		case 47: values[0] = (int32)env.cloudMode;
+		case 48: values[0] = env.cloudCoverage;
+		case 49: values[0] = env.cloudDensity;
+		case 50: values[0] = env.cloudHeight;
+		case 51: values[0] = env.cloudThickness;
+		case 52: values[0] = env.cloudWindSpeed;
+		case 53: values[0] = env.cloudWindDirection;
+		case 54: values[0] = (float)env.cloudSeed;
+		case 55: values[0] = env.cloudAnisotropy;
+		case 56: values[0] = env.cloudAmbient;
+		case 57: values[0] = env.cloudTint.r; values[1] = env.cloudTint.g; values[2] = env.cloudTint.b; values[3] = env.cloudTint.a;
+		case 58: values[0] = env.cloudDistance;
+		case 59: values[0] = env.cloudResolution;
 		default: return false;
 		}
 		return true;
@@ -126,6 +145,22 @@ static class CSharpEnvironment
 		case 43: env.starBrightness = Math.Max(x, 0);
 		case 44: env.autoColors = x != 0;
 		case 45: env.sunIntensity = Math.Max(x, 0);
+		// Clouds (C3c). The clamps are the scene file's (SceneSerializer), so a script cannot save a value the loader
+		// would change.
+		case 46: env.clouds = x != 0;
+		case 47: env.cloudMode = (CloudMode)(int32)Math.Clamp(x, 0, 1);
+		case 48: env.cloudCoverage = Math.Clamp(x, 0, 1);
+		case 49: env.cloudDensity = Math.Max(x, 0);
+		case 50: env.cloudHeight = x;
+		case 51: env.cloudThickness = Math.Max(x, 1);
+		case 52: env.cloudWindSpeed = Math.Max(x, 0);
+		case 53: env.cloudWindDirection = x;
+		case 54: env.cloudSeed = (int32)x;
+		case 55: env.cloudAnisotropy = Math.Clamp(x, -0.9f, 0.9f);
+		case 56: env.cloudAmbient = Math.Clamp(x, 0, 1);
+		case 57: env.cloudTint = .(x, y, z, w);
+		case 58: env.cloudDistance = Math.Clamp(x, 500, 100000);
+		case 59: env.cloudResolution = Math.Clamp(x, 0.25f, 1);
 		default: return false;
 		}
 		return true;

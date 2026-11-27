@@ -327,6 +327,135 @@ public readonly record struct SceneEnvironment(ulong SessionId)
         get => Float(45);
         set => Set(45, value, 0, 0, 0);
     }
+    /// <summary>The clouds in the physical sky: whether they are on, what draws them, the shape of the layer, the wind
+    /// and the seed that pick the weather, and how they are lit. Change them while playing; the scene file keeps what
+    /// the editor set.</summary>
+    public CloudSettings Clouds => new(SessionId);
+
+    private float Float(int which)
+    {
+        Span<float> values = stackalloc float[4];
+        return CSharpEnvironment.Get(SessionId, which, values) ? values[0] : 0;
+    }
+
+    private Color Color(int which)
+    {
+        Span<float> values = stackalloc float[4];
+        return CSharpEnvironment.Get(SessionId, which, values) ? new Color(values[0], values[1], values[2], values[3]) : default;
+    }
+
+    private void Set(int which, float x, float y, float z, float w)
+    {
+        if (!CSharpEnvironment.Set(SessionId, which, x, y, z, w))
+            throw new InvalidOperationException("The scene's environment cannot be changed (no scene, or a number that is not finite).");
+    }
+}
+
+/// <summary>
+/// The clouds in the scene's physical sky (<see cref="SceneEnvironment.Clouds"/>): whether they are on, what draws
+/// them (<see cref="CloudMode"/>), the slab of air they fill, the wind that drifts them and the seed that picks the
+/// weather, and how they are lit. The 2D backup draws the same weather as the cheap layer on every backend; the
+/// Graphics Quality setting can choose it too (Low).
+/// </summary>
+/// <remarks>
+/// The weather is one pure function of these settings and the shared clock: the layer samples its noise at the wind's
+/// drift (from the server's tick in a network session) plus a whole number of metres from <see cref="Seed"/>. Peers
+/// with the same scene and seed therefore draw the same clouds with no cloud network messages; only the Day / Night
+/// clock is networked (<see cref="DayNight"/>). The weather keeps drifting while that clock is paused.
+/// </remarks>
+public readonly record struct CloudSettings(ulong SessionId)
+{
+    /// <summary>Clouds on in the physical sky. Off leaves the sky clear (Gradient and full Custom skyboxes never show
+    /// clouds).</summary>
+    public bool Enabled
+    {
+        get => Float(46) != 0;
+        set => Set(46, value ? 1 : 0, 0, 0, 0);
+    }
+    /// <summary>How the clouds are drawn: <see cref="CloudMode.Volumetric"/> raymarched where the hardware allows,
+    /// <see cref="CloudMode.TwoD"/> always.</summary>
+    public CloudMode Mode
+    {
+        get => (CloudMode)(int)Float(47);
+        set => Set(47, (int)value, 0, 0, 0);
+    }
+    /// <summary>The share of the sky the weather map fills: 0 is clear, 1 overcast. 0.45 by default.</summary>
+    public float Coverage
+    {
+        get => Float(48);
+        set => Set(48, value, 0, 0, 0);
+    }
+    /// <summary>How thick the inside of a full cloud is, per metre (0.04 fades out over about 25 m).</summary>
+    public float Density
+    {
+        get => Float(49);
+        set => Set(49, value, 0, 0, 0);
+    }
+    /// <summary>The bottom of the cloud layer, in metres above the world (1500 by default).</summary>
+    public float Altitude
+    {
+        get => Float(50);
+        set => Set(50, value, 0, 0, 0);
+    }
+    /// <summary>How deep the cloud layer is, in metres: its top is <see cref="Altitude"/> + this.</summary>
+    public float Thickness
+    {
+        get => Float(51);
+        set => Set(51, value, 0, 0, 0);
+    }
+    /// <summary>How fast the weather drifts, in metres a second. 0 freezes it (the seed still picks the shape).</summary>
+    public float WindSpeed
+    {
+        get => Float(52);
+        set => Set(52, value, 0, 0, 0);
+    }
+    /// <summary>The direction the weather drifts, in degrees clockwise from +Z (north).</summary>
+    public float WindDirection
+    {
+        get => Float(53);
+        set => Set(53, value, 0, 0, 0);
+    }
+    /// <summary>The wind seed: it picks the weather map. Peers with the same seed, wind and clock agree on the clouds
+    /// with no network messages. A whole number from 0 to 16,777,216 (a float carries it exactly); larger values are
+    /// rounded.</summary>
+    public int Seed
+    {
+        get => (int)Float(54);
+        set => Set(54, value, 0, 0, 0);
+    }
+    /// <summary>How much light goes on forward through a cloud, -0.9 to 0.9: higher makes a bright silver lining when
+    /// looking towards the sun; 0 scatters every way the same.</summary>
+    public float Anisotropy
+    {
+        get => Float(55);
+        set => Set(55, value, 0, 0, 0);
+    }
+    /// <summary>How much of the sky and ground ambient light the clouds scatter: 0 none, 1 all.</summary>
+    public float Ambient
+    {
+        get => Float(56);
+        set => Set(56, value, 0, 0, 0);
+    }
+    /// <summary>The colour clouds scatter back (their albedo; white leaves the light as it is).</summary>
+    public Color Tint
+    {
+        get => Color(57);
+        set => Set(57, value.R, value.G, value.B, value.A);
+    }
+    /// <summary>How far the volumetric march and the 2D layer reach, in metres. The Graphics Quality setting may cap
+    /// it.</summary>
+    public float Distance
+    {
+        get => Float(58);
+        set => Set(58, value, 0, 0, 0);
+    }
+    /// <summary>The volumetric march's share of the picture's resolution: 0.5 is half (for speed), 1 full. The
+    /// Graphics Quality setting may cap it.</summary>
+    public float Resolution
+    {
+        get => Float(59);
+        set => Set(59, value, 0, 0, 0);
+    }
 
     private float Float(int which)
     {
@@ -362,6 +491,16 @@ public enum SkyMode
     Physical,
     /// <summary>A skybox picture (<see cref="SceneEnvironment.Skybox"/>).</summary>
     Custom,
+}
+
+/// <summary>How the physical sky's clouds are drawn (<see cref="CloudSettings.Mode"/>).</summary>
+public enum CloudMode
+{
+    /// <summary>Raymarched through a slab of air: Vulkan, Direct3D and Metal. Other backends and Low quality draw
+    /// <see cref="TwoD"/> instead.</summary>
+    Volumetric,
+    /// <summary>The cheap 2D procedural cloud drawn in the sky shader: every backend.</summary>
+    TwoD,
 }
 
 /// <summary>How light bounced off surfaces onto others (global illumination) is worked out, cheapest first. Each
