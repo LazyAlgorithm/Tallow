@@ -200,9 +200,10 @@ static class PhysicalSky
 	}
 
 	/// Sets the sky shader's uniforms and textures for this environment, before a sky draw: the gradient sky's (fs_sky,
-	/// fs_env_sky) for mode 0, else the physical sky's (fs_sky_physical, fs_env_sky_physical).
+	/// fs_env_sky) for mode 0, else the physical sky's (fs_sky_physical, fs_env_sky_physical). scene is the cloud
+	/// clock's (Clouds.Seconds); it may be null in a test with no scene.
 	/// sunDir and sunColor are the scene's main light (the gradient sky's sun).
-	public static void SetUniforms(SceneEnvironment env, Vector4 sunDir, Vector4 sunColor)
+	public static void SetUniforms(Scene scene, SceneEnvironment env, Vector4 sunDir, Vector4 sunColor)
 	{
 		var zenith = Linear(env.skyZenith);
 		var horizon = Linear(env.skyHorizon);
@@ -254,6 +255,7 @@ static class PhysicalSky
 		bgfx.set_uniform(uMoonDir, &moon, 1);
 		Vector4 moonParams = .(12, 0, brightness, 0);
 		bgfx.set_uniform(uMoonParams, &moonParams, 1);
+		SetCloudUniforms(scene, env, sun, color, moon);
 		Vector4[3] rows = default;
 		if (env.dayNight)
 		{
@@ -271,6 +273,48 @@ static class PhysicalSky
 		let hasTables = mode == 1;
 		bgfx.set_texture(0, sAtmoTransmittance, hasTables ? sTransmittance : sDummy, uint32.MaxValue);
 		bgfx.set_texture(1, sAtmoSkyView, hasTables ? sSkyView : sDummy, uint32.MaxValue);
+	}
+
+	/// The shared cloud uniform block (include/clouds.sh) from the scene's cloud settings. The 2D sky layer reads it
+	/// now; the volumetric march (C2) reads the same block. This is the only place SceneEnvironment's clouds reach a
+	/// shader, so the screen sky and the reflection cube always agree.
+	static void SetCloudUniforms(Scene scene, SceneEnvironment env, Vector3 sun, Vector4 sunColor, Vector4 moon)
+	{
+		let seconds = Clouds.Seconds(scene);
+		let offset = Clouds.Offset(env, seconds);
+		Vector4 shape = .(env.cloudHeight, Math.Max(env.cloudThickness, 1), Math.Clamp(env.cloudCoverage, 0, 1), Math.Max(env.cloudDensity, 0));
+		// 0.12 is the weather map's soft edge (spec 2.2); w carries the time the volume's detail drift will use.
+		Vector4 wind = .(offset.x, offset.y, 0.12f, (float)(seconds % 1000.0));
+		Vector4 light = .(Math.Clamp(env.cloudAnisotropy, -0.9f, 0.9f), Math.Max(env.cloudAmbient, 0), 0, 1);
+		Vector4 view = .(Math.Max(env.cloudDistance, 1), env.clouds ? 1.0f : 0.0f, env.cloudMode == .TwoD ? 1.0f : 2.0f, 0.0f);
+		var tint = Linear(env.cloudTint);
+		tint.w = 1;
+		Vector4 cloudSunDir = .(sun.x, sun.y, sun.z, 1);
+		Vector4 cloudSun = .(sunColor.x, sunColor.y, sunColor.z, 1);
+		Vector4 cloudMoonDir = .(moon.x, moon.y, moon.z, moon.w > 0 ? 1.0f : 0.0f);
+		Vector4 cloudMoon = .(0, 0, 0, 0);
+		if (moon.w > 0)
+		{
+			let intensity = DayNight.MoonLight(env, var moonTint);
+			let c = Linear(moonTint);
+			// The moon's disc is bright, its scene light dim; lift it a touch so a moonlit deck reads at night
+			// without turning the whole overcast grey.
+			let k = intensity * 1.5f;
+			cloudMoon = .(c.x * k, c.y * k, c.z * k, 1);
+		}
+		let skyAmbient = Linear(env.ambientSky);
+		let ambient = Math.Max(env.ambientIntensity, 0);
+		Vector4 cloudAmbient = .(skyAmbient.x * ambient, skyAmbient.y * ambient, skyAmbient.z * ambient, 0.35f);
+		bgfx.set_uniform(RenderResources.uCloudShape, &shape, 1);
+		bgfx.set_uniform(RenderResources.uCloudWind, &wind, 1);
+		bgfx.set_uniform(RenderResources.uCloudLight, &light, 1);
+		bgfx.set_uniform(RenderResources.uCloudView, &view, 1);
+		bgfx.set_uniform(RenderResources.uCloudTint, &tint, 1);
+		bgfx.set_uniform(RenderResources.uCloudSunDir, &cloudSunDir, 1);
+		bgfx.set_uniform(RenderResources.uCloudSunColor, &cloudSun, 1);
+		bgfx.set_uniform(RenderResources.uCloudMoonDir, &cloudMoonDir, 1);
+		bgfx.set_uniform(RenderResources.uCloudMoonColor, &cloudMoon, 1);
+		bgfx.set_uniform(RenderResources.uCloudAmbient, &cloudAmbient, 1);
 	}
 
 	static Vector4 Linear(Color c) => .(Math.Pow(Math.Max(c.r, 0), 2.2f), Math.Pow(Math.Max(c.g, 0), 2.2f), Math.Pow(Math.Max(c.b, 0), 2.2f), c.a);

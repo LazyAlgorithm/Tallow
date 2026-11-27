@@ -9,5 +9,6 @@ uniform vec4 u_envFace; // x: the face, 0 to 5
 
 void main()
 {
-	gl_FragColor = vec4(skyColor(cubeDirection(u_envFace.x, v_texcoord0), 0.0), 1.0);
+	// The cube is drawn from the world's origin, so the cloud deck keeps a steady shape across its faces.
+	gl_FragColor = vec4(skyColor(cubeDirection(u_envFace.x, v_texcoord0), 0.0, vec3_splat(0.0)), 1.0);
 }

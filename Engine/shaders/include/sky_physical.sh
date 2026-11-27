@@ -7,6 +7,7 @@
 #define TALLOW_SKY_PHYSICAL_SH
 
 #include "atmosphere.sh"
+#include "clouds.sh"
 
 uniform vec4 u_sunDir;
 uniform vec4 u_sunColor;
@@ -147,16 +148,17 @@ vec3 skyBodies(vec3 dir, float sunDisc)
 	return color;
 }
 
-// The sky's colour in direction dir (unit length), linear HDR. sunDisc 0 leaves out the sun's bright disc, the moon
-// and the stars (reflections get the sun's highlight from the sun itself, as a light).
-vec3 skyColor(vec3 dir, float sunDisc)
+// The sky's colour in direction dir (unit length), linear HDR, seen from origin (the camera, or the sky's cube's
+// centre). sunDisc 0 leaves out the sun's bright disc, the moon and the stars (reflections get the sun's highlight from
+// the sun itself, as a light). The clouds go over the bodies, so a thick cloud hides the sun, moon and stars.
+vec3 skyColor(vec3 dir, float sunDisc, vec3 origin)
 {
 	vec3 sky = u_skyMode.x < 1.5 ? lutSky(dir) : preethamSky(dir);
 	// Airglow: the night sky is never quite black.
 	sky += vec3(0.0008, 0.001, 0.0016) * u_skyMode.w;
 	if (dir.y > atmoHorizonElevation(u_atmoParams.y))
 		sky += skyBodies(dir, sunDisc);
-	return sky;
+	return applyProceduralClouds(sky, dir, origin);
 }
 
 #endif

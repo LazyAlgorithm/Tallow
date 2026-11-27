@@ -70,6 +70,9 @@ static class RenderResources
 	public static bgfx.UniformHandle sLightData, uLightCount, uClusterViewProj, uClusterForward, uClusterParams;
 	public static bgfx.UniformHandle uShadowMtx, uCascadeSplits, uShadowParams, uShadowViewProj;
 	public static bgfx.UniformHandle uSkyZenith, uSkyHorizon, uSkyGround, uPostParams;
+	// The cloud layer (PhysicalSky.SetUniforms; include/clouds.sh). The volumetric march (C2) shares this block.
+	public static bgfx.UniformHandle uCloudShape, uCloudWind, uCloudLight, uCloudView, uCloudTint;
+	public static bgfx.UniformHandle uCloudSunDir, uCloudSunColor, uCloudMoonDir, uCloudMoonColor, uCloudAmbient;
 
 	public static bgfx.TextureHandle ShadowMap;
 	public static bgfx.FrameBufferHandle ShadowFrameBuffer;
@@ -222,6 +225,16 @@ static class RenderResources
 		uSkyHorizon = bgfx.create_uniform("u_skyHorizon", .Vec4, 1);
 		uSkyGround = bgfx.create_uniform("u_skyGround", .Vec4, 1);
 		uPostParams = bgfx.create_uniform("u_postParams", .Vec4, 1);
+		uCloudShape = bgfx.create_uniform("u_cloudShape", .Vec4, 1);
+		uCloudWind = bgfx.create_uniform("u_cloudWind", .Vec4, 1);
+		uCloudLight = bgfx.create_uniform("u_cloudLight", .Vec4, 1);
+		uCloudView = bgfx.create_uniform("u_cloudView", .Vec4, 1);
+		uCloudTint = bgfx.create_uniform("u_cloudTint", .Vec4, 1);
+		uCloudSunDir = bgfx.create_uniform("u_cloudSunDir", .Vec4, 1);
+		uCloudSunColor = bgfx.create_uniform("u_cloudSunColor", .Vec4, 1);
+		uCloudMoonDir = bgfx.create_uniform("u_cloudMoonDir", .Vec4, 1);
+		uCloudMoonColor = bgfx.create_uniform("u_cloudMoonColor", .Vec4, 1);
+		uCloudAmbient = bgfx.create_uniform("u_cloudAmbient", .Vec4, 1);
 		VFogInjectProgram = LoadCompute("cs_vfog_inject");
 		VFogIntegrateProgram = LoadCompute("cs_vfog_integrate");
 		VFogApplyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_vfog_apply");
@@ -377,6 +390,16 @@ static class RenderResources
 		bgfx.destroy_uniform(uFogVolumes);
 		bgfx.destroy_uniform(uFogVolumeCount);
 		VFogReady = false;
+		bgfx.destroy_uniform(uCloudShape);
+		bgfx.destroy_uniform(uCloudWind);
+		bgfx.destroy_uniform(uCloudLight);
+		bgfx.destroy_uniform(uCloudView);
+		bgfx.destroy_uniform(uCloudTint);
+		bgfx.destroy_uniform(uCloudSunDir);
+		bgfx.destroy_uniform(uCloudSunColor);
+		bgfx.destroy_uniform(uCloudMoonDir);
+		bgfx.destroy_uniform(uCloudMoonColor);
+		bgfx.destroy_uniform(uCloudAmbient);
 		bgfx.destroy_program(DecalProgram);
 		bgfx.destroy_program(WaterProgram);
 		bgfx.destroy_program(MirrorProgram);

@@ -18,7 +18,7 @@ void main()
 	vec3 dir = cubeDirection(u_envFace.x, v_texcoord0);
 	vec3 color = skyboxColor(dir);
 #ifdef TW_SKY_BLEND
-	color += skyColor(dir, 0.0) * u_skyboxTint.w;
+	color += skyColor(dir, 0.0, vec3_splat(0.0)) * u_skyboxTint.w;
 #endif
 	gl_FragColor = vec4(color, 1.0);
 }

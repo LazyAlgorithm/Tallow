@@ -418,7 +418,7 @@ static class Reflections
 	/// The fewest frames between two sky rebuilds while the clock moves, so the work stays spread out.
 	public const int32 SkyMinimumFrames = 30;
 
-	static int64 SkyState(SceneEnvironment env, Vector4 sunDir, Vector4 sunColor)
+	static int64 SkyState(Scene scene, SceneEnvironment env, Vector4 sunDir, Vector4 sunColor)
 	{
 		int64 hash = 17;
 		for (let color in Color[?](env.skyZenith, env.skyHorizon, env.skyGround))
@@ -435,6 +435,7 @@ static class Reflections
 			Mix(ref hash, .(env.moonIntensity, env.skyMode != .Gradient ? env.skyBrightness : 0, env.skyMode != .Gradient ? env.turbidity : 0));
 			let state = PhysicalSky.State(env);
 			hash = hash * 1099511628211 ^ (state >= 4 ? 4 + state % 4 : state);
+			MixClouds(ref hash, scene, env);
 			return hash;
 		}
 		Mix(ref hash, .(sunDir.x, sunDir.y, sunDir.z));
@@ -446,7 +447,23 @@ static class Reflections
 			Mix(ref hash, .(env.skyBrightness, env.turbidity, 0));
 			Mix(ref hash, .(env.timeOfDay, env.latitude, env.dayOfYear));
 		}
+		MixClouds(ref hash, scene, env);
 		return hash;
+	}
+
+	/// The reflection cube shows the same cloud deck as the screen sky, so a change to the clouds (or their drift) is a
+	/// new cube. The wind is quantised: a drifting sky would otherwise rebuild the cube every frame.
+	static void MixClouds(ref int64 hash, Scene scene, SceneEnvironment env)
+	{
+		if (!env.clouds || env.skyMode == .Gradient)
+			return;
+		Mix(ref hash, .((float)env.cloudMode, env.cloudCoverage, env.cloudDensity));
+		Mix(ref hash, .(env.cloudHeight, env.cloudThickness, env.cloudWindSpeed));
+		Mix(ref hash, .(env.cloudWindDirection, env.cloudAnisotropy, env.cloudAmbient));
+		Mix(ref hash, .(env.cloudTint.r, env.cloudTint.g, env.cloudTint.b));
+		Mix(ref hash, .(env.cloudDistance, (float)env.cloudSeed, 0));
+		let offset = Clouds.Offset(env, Clouds.Seconds(scene));
+		Mix(ref hash, .(Math.Round(offset.x / 128.0f), Math.Round(offset.y / 128.0f), 0));
 	}
 
 	/// Adds a vector to a running hash.
@@ -458,7 +475,7 @@ static class Reflections
 
 	static void StartNext(Scene scene, Vector4 sunDir, Vector4 sunColor)
 	{
-		let skyState = SkyState(scene.Environment, sunDir, sunColor);
+		let skyState = SkyState(scene, scene.Environment, sunDir, sunColor);
 		// While the clock moves, at least SkyMinimumFrames between rebuilds (probes may capture meanwhile).
 		let tooSoon = scene.Environment.dayNight && sSkyCube.Valid && sSkyReady && Time.FrameCount - sSkyStartFrame < SkyMinimumFrames;
 		if ((skyState != sSkyState && !tooSoon) || !sSkyCube.Valid)
@@ -544,10 +561,10 @@ static class Reflections
 					// A custom skybox that loads is the sky's cube (and so the ambient light); otherwise the sky drawn.
 					var program = Skybox.BindReflection(env, sJobSize);
 					if (program.Valid && Skybox.ShowsPhysical(env))
-						PhysicalSky.SetUniforms(env, sunDir, sunColor);
+						PhysicalSky.SetUniforms(scene, env, sunDir, sunColor);
 					if (!program.Valid)
 					{
-						PhysicalSky.SetUniforms(env, sunDir, sunColor);
+						PhysicalSky.SetUniforms(scene, env, sunDir, sunColor);
 						program = PhysicalSky.Mode(env) == 0 ? sSkyProgram : sSkyPhysicalProgram;
 					}
 					SubmitFullscreen(view, program);

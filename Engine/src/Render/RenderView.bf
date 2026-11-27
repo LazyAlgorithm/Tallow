@@ -1192,7 +1192,7 @@ class RenderView
 		SetUpView(view, "Scene", mSceneFb, 0, 0, mWidth, mHeight, Gfx.ClearColor | Gfx.ClearDepth, SceneClearColor);
 		bgfx.set_view_transform(view, &viewMatrix, &projMatrix);
 		bgfx.touch(view);
-		SubmitSky(view, env);
+		SubmitSky(view, scene, env);
 		SubmitMeshes(view, mItems);
 		GpuCullScene(camera);
 		if (ViewBase == 10)
@@ -1718,7 +1718,7 @@ class RenderView
 		LightProbes.Bind(mProbeGrid);
 	}
 
-	void SubmitSky(uint16 view, SceneEnvironment env)
+	void SubmitSky(uint16 view, Scene scene, SceneEnvironment env)
 	{
 		bgfx.set_uniform(RenderResources.uCamPos, &mCamPos, 1);
 		// A Custom sky with a skybox that loads draws the skybox (over the physical sky with Skybox Blend); without one,
@@ -1727,11 +1727,11 @@ class RenderView
 		if (skybox.Valid)
 		{
 			if (Skybox.ShowsPhysical(env))
-				PhysicalSky.SetUniforms(env, mSunDir, mSunColor);
+				PhysicalSky.SetUniforms(scene, env, mSunDir, mSunColor);
 			SubmitFullscreen(view, skybox, Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateDepthLequal | Gfx.StateMsaa);
 			return;
 		}
-		PhysicalSky.SetUniforms(env, mSunDir, mSunColor);
+		PhysicalSky.SetUniforms(scene, env, mSunDir, mSunColor);
 		SubmitFullscreen(view, PhysicalSky.Mode(env) == 0 ? RenderResources.SkyProgram : RenderResources.SkyPhysicalProgram, Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateDepthLequal | Gfx.StateMsaa);
 	}
 

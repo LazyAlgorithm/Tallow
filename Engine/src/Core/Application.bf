@@ -388,6 +388,13 @@ class Application
 		let cloudTest = scope String();
 		if (GetArg("--cloud-test", cloudTest) && cloudTest == "settings")
 			return CloudTest.RunSettings();
+		// The cloud screenshot check draws the 2D backup on the physical sky (C1c) and needs a window.
+		if (GetArg("--cloud-test", cloudTest) && cloudTest == "sky" && !(this is CloudTestApp))
+		{
+			let test = scope CloudTestApp();
+			test.Run(args);
+			return test.Result;
+		}
 		// --full-day plays a whole day in a window (D1e); without it the check needs no window.
 		if (HasArg("--daynight-test") && HasArg("--full-day") && !(this is FullDayTestApp))
 		{
