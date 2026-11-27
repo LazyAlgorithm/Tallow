@@ -473,6 +473,6 @@ class GpuDrivenView
 		bgfx.set_compute_dynamic_vertex_buffer(8, GpuDriven.Pool, .Read, 0, uint32.MaxValue);
 		bgfx.set_compute_dynamic_vertex_buffer(9, mInstances, .Read, 0, uint32.MaxValue);
 		bgfx.set_compute_dynamic_vertex_buffer(10, pass.visible, .Read, 0, uint32.MaxValue);
-		bgfx.submit_indirect(view, program, pass.indirect, (uint32)(1 + bin), 1, 0, 0xff);
+		bgfx.submit_indirect(view, program, pass.indirect, (uint32)bin + 1U, 1, 0, 0xff);
 	}
 }

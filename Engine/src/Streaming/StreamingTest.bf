@@ -23,7 +23,7 @@ static class StreamingTest
 
 	static void Fill(List<uint8> page, int index, int size)
 	{
-		var state = (uint32)(index * 2654435761U + 12345);
+		var state = (uint32)index * 2654435761U + 12345U;
 		for (int j < size)
 		{
 			if (j < size / 2)

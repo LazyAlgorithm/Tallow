@@ -137,13 +137,13 @@ static class ClusterMeshTest
 				Fail(scope $"cluster {i} has {c.triangleCount} triangles");
 			if (c.vertexCount == 0 || c.vertexCount > 64)
 				Fail(scope $"cluster {i} has {c.vertexCount} vertices");
-			if (c.triangleOffset % 4 != 0 || c.triangleOffset + c.triangleCount * 3 > cm.TriangleBytes.Count)
+			if (c.triangleOffset % 4 != 0 || c.triangleOffset + c.triangleCount * 3 > (uint32)cm.TriangleBytes.Count)
 				Fail(scope $"cluster {i} triangle bytes out of range");
 			else
 			{
 				for (uint32 b = 0; b < c.triangleCount * 3; b++)
 				{
-					if (cm.TriangleBytes[c.triangleOffset + b] >= c.vertexCount)
+					if (cm.TriangleBytes[(int)(c.triangleOffset + b)] >= c.vertexCount)
 					{
 						Fail(scope $"cluster {i} has a local index out of range");
 						break;
@@ -156,7 +156,7 @@ static class ClusterMeshTest
 			{
 				for (uint32 v = 0; v < c.vertexCount; v++)
 				{
-					if (cm.Vertices[c.vertexOffset + v] >= (uint32)mesh.Vertices.Count)
+					if (cm.Vertices[(int)(c.vertexOffset + v)] >= (uint32)mesh.Vertices.Count)
 					{
 						Fail(scope $"cluster {i} refers to a vertex that is not in the mesh");
 						break;
@@ -170,7 +170,7 @@ static class ClusterMeshTest
 			else
 			{
 				let group = cm.Groups[c.groupIndex];
-				if (group.error != c.parentError || i < group.clusterOffset || i >= group.clusterOffset + group.clusterCount)
+				if (group.error != c.parentError || (uint32)i < group.clusterOffset || (uint32)i >= group.clusterOffset + group.clusterCount)
 					Fail(scope $"cluster {i} does not match its group");
 				if (c.refinedGroup >= 0)
 				{

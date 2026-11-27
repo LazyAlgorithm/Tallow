@@ -277,7 +277,7 @@ class ClusterMesh
 		for (let cluster in Clusters)
 		{
 			if (cluster.selfError <= threshold && threshold < cluster.parentError)
-				total += cluster.triangleCount;
+				total += (int)cluster.triangleCount;
 		}
 		return total;
 	}
