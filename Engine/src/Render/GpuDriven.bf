@@ -912,8 +912,9 @@ static class GpuDriven
 	static int sFeedbackState;
 	static int64 sFeedbackFrame;
 	static int64 sFeedbackLast = -1000;
-	/// How often the feedback is read back, in frames.
+	/// Frames from processing one read to requesting the next.
 	public static int32 FeedbackInterval = 3;
+	static ProfilerMarker sFeedbackReadMarker = .("Queue GPU geometry feedback readback", .Rendering);
 
 	/// The feedback buffer the culling writes: a bitmap of the groups drawn, then a bitmap of the groups wanted but missing.
 	/// Always valid once drawing is available (the culling binds it).
@@ -944,8 +945,8 @@ static class GpuDriven
 		bgfx.update_dynamic_vertex_buffer(sFeedback, 0, bgfx.copy(zeros.CArray(), (uint32)(zeros.Count * 4)));
 	}
 
-	/// Every few frames reads back what the culling drew and wanted (a few frames late: the read never waits for this
-	/// frame), keeps the pages in use warm and asks for the pages that are missing, parents first.
+	/// Reads what culling used and wanted, keeps pages warm, and requests missing pages parents first.
+	/// Queueing is cheap, but backends that synchronously read the buffer may wait during presentation.
 	static void PollFeedback()
 	{
 		if (!sAvailable)
@@ -961,7 +962,8 @@ static class GpuDriven
 			bgfx.BufferRegion region = default;
 			bgfx.BufferHandle handle = .() { idx = sFeedback.idx, type = 1 };
 			bgfx.buffer_region_init_buffer(&region, handle, 0, (uint32)(sFeedbackWords * 2 * 4));
-			bgfx.read_buffer(&region, sFeedbackData.CArray());
+			using (sFeedbackReadMarker.Sample())
+				bgfx.read_buffer(&region, sFeedbackData.CArray());
 			sFeedbackState = 1;
 			sFeedbackFrame = frame;
 		}

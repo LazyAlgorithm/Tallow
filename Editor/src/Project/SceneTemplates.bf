@@ -15,7 +15,11 @@ static class SceneTemplates
 		camera.Transform.Position = cameraPosition;
 		camera.Transform.EulerAngles = cameraEuler;
 
-		let sun = scene.CreateGameObject("Directional Light");
+		// The sun and moon live in a folder, as lights usually do.
+		let lighting = scene.CreateGameObject("Lighting");
+		lighting.IsFolder = true;
+
+		let sun = scene.CreateGameObject("Sun");
 		let light = sun.AddComponent<Light>();
 		light.intensity = 1.5f;
 		sun.Transform.Position = .(0, 6, 0);
@@ -25,8 +29,30 @@ static class SceneTemplates
 		scene.Environment.timeOfDay = 10;
 		scene.Environment.sunIntensity = Atmosphere.ReferenceSunIntensity;
 		scene.Environment.autoColors = true;
+		// A date with a nearly full moon: the moon's phase follows the day of the year, and the default date's phase
+		// (28% lit) gives too little light to see.
+		scene.Environment.dayOfYear = 162;
+		// A moon for the Day / Night clock: the clock aims it and sets its colour and brightness (Moon Intensity),
+		// and it casts the shadows at night once the sun is down (Moon Shadows). It needs no placing: a Directional
+		// light shines the same from anywhere, and the clock turns it.
+		let moon = scene.CreateGameObject("Moon");
+		let moonLight = moon.AddComponent<Light>();
+		moonLight.color = .(0.62f, 0.72f, 1.0f);
+		moonLight.intensity = 0.2f;
+		moonLight.castShadows = true;
+		moonLight.shadowStrength = 0.6f;
+		moon.Transform.Position = .(0, 6, 0);
+		moon.Transform.EulerAngles = .(40, 150, 0);
+		sun.Transform.SetParent(lighting.Transform, false);
+		moon.Transform.SetParent(lighting.Transform, false);
+		scene.Environment.moonLight = moon.Id;
+		scene.Environment.moonIntensity = 0.2f;
+		scene.Environment.moonShadows = true;
 		// The physical sky follows the sun (older scenes keep the gradient sky: the class default).
 		scene.Environment.skyMode = .Physical;
+		// Volumetric fog is on in new scenes, with a light haze (older scenes keep it off: the class default).
+		scene.Environment.volumetricFog = true;
+		scene.Environment.vfDensity = 0.01f;
 	}
 
 	/// Sun, camera and a floor; with withPlayer (a new project's first scene), the first-person character too if

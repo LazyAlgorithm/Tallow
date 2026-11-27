@@ -1,25 +1,22 @@
 $input v_texcoord0, v_wpos
 
-// Screen-space global illumination, first step (at half size): a few cosine-weighted rays from each surface point,
-// marched through the depth pass; where one meets a surface, that surface's light from the last frame (its lit picture,
-// moved to where the camera has since gone: s_ssgiLit) is what reaches this point. The result is blended with the
-// last frame's (s_ssgiHistory, moved the same way and kept only where it saw the same surface), so the few rays a frame
-// add up over frames. Alpha holds the point's depth, for the blur and the upsample in fs_ssgi_apply.sc.
+// Screen-space diffuse bounce from a few cosine-weighted rays per surface point. Hits read this frame's scene color
+// and add the reprojected indirect light at the hit for secondary bounces. The receiver also blends with its history.
+// Alpha holds the receiver's depth for reprojection and the depth-aware filter in fs_ssgi_apply.sc.
 #include <bgfx_shader.sh>
 #include "post.sh"
 
 SAMPLER2D(s_depth, 0);
 SAMPLER2D(s_color, 1);
-SAMPLER2D(s_ssgiLit, 2);
+SAMPLER2D(s_albedoBuffer, 2);
 SAMPLER2D(s_ssgiHistory, 3);
 
 uniform mat4 u_prevViewProj;
-uniform vec4 u_ssgiParams;  // x frame number, y the rays' reach (metres), z 1 when last frame's pictures are usable, w rays a pixel (up to 6)
+uniform vec4 u_ssgiParams;  // x frame number, y ray reach in metres, z bounce strength (-1 without history), w rays per pixel
 uniform vec4 u_ssgiParams2; // xy one depth texel, zw one texel of this pass's target
 
 #define MAX_RAYS 6
 #define STEPS 12
-#define HISTORY_WEIGHT 0.94
 #define MAX_RADIANCE 12.0
 
 float depthAt(vec2 uv)
@@ -52,6 +49,26 @@ vec3 surfaceNormal(vec2 uv, vec3 p)
 	vec3 dy = abs(pu.z - p.z) < abs(p.z - pd.z) ? pu - p : p - pd;
 	vec3 n = normalize(cross(dx, dy));
 	return dot(n, p) > 0.0 ? -n : n;
+}
+
+bool sampleHistory(vec2 uv, float depth, out vec4 history, out vec2 previousUv)
+{
+	history = vec4_splat(0.0);
+	previousUv = uv;
+	if (u_ssgiParams.z < 0.0)
+		return false;
+
+	vec4 clip = mul(u_prevViewProj, vec4(worldPosition(uv, depth), 1.0));
+	if (clip.w <= 0.0001)
+		return false;
+	previousUv = ndcToUv(clip.xy / clip.w);
+	if (previousUv.x <= 0.0 || previousUv.x >= 1.0 || previousUv.y <= 0.0 || previousUv.y >= 1.0)
+		return false;
+
+	history = texture2DLod(s_ssgiHistory, previousUv, 0.0);
+	float previousDepth = u_postForward.w > 0.5 ? depth : clip.w;
+	return !isSky(history.a) && !isViewmodel(history.a)
+		&& abs(history.a - previousDepth) < 0.04 * previousDepth + 0.08;
 }
 
 void main()
@@ -117,15 +134,12 @@ void main()
 				float facing = clamp(dot(hn, -dir) * 2.0, 0.0, 1.0);
 				float fade = 1.0 - smoothstep(0.6 * reach, reach, t);
 				vec3 radiance = texture2DLod(s_color, suv, 0.0).rgb;
-				if (u_ssgiParams.z > 0.5)
+				vec4 hitHistory;
+				vec2 previousHitUv;
+				if (sampleHistory(suv, sd, hitHistory, previousHitUv))
 				{
-					vec4 clip = mul(u_prevViewProj, vec4(worldPosition(suv, sd), 1.0));
-					if (clip.w > 0.0001)
-					{
-						vec2 puv = ndcToUv(clip.xy / clip.w);
-						if (puv.x > 0.0 && puv.x < 1.0 && puv.y > 0.0 && puv.y < 1.0)
-							radiance = texture2DLod(s_ssgiLit, puv, 0.0).rgb;
-					}
+					vec3 albedo = pow(texture2DLod(s_albedoBuffer, suv, 0.0).rgb, vec3_splat(2.2));
+					radiance += hitHistory.rgb * albedo * u_ssgiParams.z;
 				}
 				float peak = max(radiance.r, max(radiance.g, radiance.b));
 				radiance *= min(1.0, MAX_RADIANCE / max(peak, 0.0001));
@@ -137,30 +151,14 @@ void main()
 	light /= rays;
 
 	// Last frame's result, where this surface was on the screen then and was still the one in view.
-	float weight = 0.0;
-	vec3 history = vec3_splat(0.0);
-	if (u_ssgiParams.z > 0.5)
+	vec4 history;
+	vec2 previousUv;
+	if (sampleHistory(uv, d, history, previousUv))
 	{
-		vec4 clip = mul(u_prevViewProj, vec4(worldPosition(uv, d), 1.0));
-		if (clip.w > 0.0001)
-		{
-			vec2 puv = ndcToUv(clip.xy / clip.w);
-			if (puv.x > 0.0 && puv.x < 1.0 && puv.y > 0.0 && puv.y < 1.0)
-			{
-				vec4 h = texture2DLod(s_ssgiHistory, puv, 0.0);
-				bool same = u_postForward.w > 0.5 || abs(h.a - clip.w) < 0.04 * clip.w + 0.08;
-				if (same)
-				{
-					history = h.rgb;
-					// Less of the past while the view moves (it smears), and a stray bright ray does not get far above it.
-					float moved = length((puv - uv) / u_ssgiParams2.xy);
-					weight = HISTORY_WEIGHT * (1.0 - 0.5 * clamp(moved / 6.0, 0.0, 1.0));
-					float limit = 3.0 * max(history.r, max(history.g, history.b)) + 0.4;
-					float peak = max(light.r, max(light.g, light.b));
-					light *= min(1.0, limit / max(peak, 0.0001));
-				}
-			}
-		}
+		// Give current light more weight with a steady camera, and retain enough valid history to stabilize motion.
+		float moved = length((previousUv - uv) / u_ssgiParams2.xy);
+		float weight = mix(0.86, 0.58, clamp(moved / 6.0, 0.0, 1.0));
+		light = mix(light, history.rgb, weight);
 	}
-	gl_FragColor = vec4(mix(light, history, weight), d);
+	gl_FragColor = vec4(light, d);
 }

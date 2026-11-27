@@ -22,9 +22,11 @@ namespace Tallow;
 ///   --gpu-debug-view <name> [--gpu-debug-mip N]       show clusters, lod, triangles, hzb, residency or vt instead of the lit picture
 ///   --gpu-occlusion on|off                             leave out what is hidden behind other things in the GPU-driven
 ///                                                      path (on by default, with the camera's occlusion culling)
+///   --gi-history-scale N                               multiplier for probe lighting history (0 to 1)
 ///   --gpu-no-local-shadows                             draw point and spot light shadows the usual way
 ///   --gpu-pixel-error PX                               how many pixels of error a cluster level may have before a finer one
 ///                                                      is used (1; lower = more triangles, fewer holes)
+///   --gpu-feedback-interval N                       frames between processing geometry feedback and requesting another read
 ///   --gpu-driven-caps-off                              act as if compute shaders / indirect draws were missing (fallback test)
 ///   --gpu-driven-min-triangles N                       the fewest triangles a mesh needs to be drawn that way (2000)
 ///   --cook-streaming <staging> [--cook-kinds <file>]  the export's cooking step: .tmips/.tvt beside pictures, .tclod/.tclodp
@@ -308,6 +310,25 @@ class Application
 		{
 			GpuDriven.PixelError = Math.Clamp(pixels, 0.0f, 16);
 			GpuDriven.PixelErrorFromArgs = true;
+		}
+		let feedbackInterval = scope String();
+		if (GetArg("--gpu-feedback-interval", feedbackInterval))
+		{
+			if (int32.Parse(feedbackInterval) case .Ok(let interval) && interval > 0)
+			{
+				GpuDriven.FeedbackInterval = interval;
+				Log.Info(scope $"GPU geometry feedback interval set to {interval} frames");
+			}
+			else
+				Log.Warning("--gpu-feedback-interval expects a positive frame count");
+		}
+		let giHistory = scope String();
+		if (GetArg("--gi-history-scale", giHistory))
+		{
+			if (float.Parse(giHistory) case .Ok(let scale) && scale >= 0 && scale <= 1)
+				DynamicGI.RadianceHistoryScale = scale;
+			else
+				Log.Warning("--gi-history-scale expects a number from 0 to 1");
 		}
 		// --gpu-sw-raster off|classify|on [--gpu-sw-edge px]: the hybrid software raster for tiny triangles (classify counts only).
 		let swRaster = scope String();

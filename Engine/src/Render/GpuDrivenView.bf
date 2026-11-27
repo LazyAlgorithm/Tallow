@@ -353,6 +353,7 @@ class GpuDrivenView
 
 	/// The sizes of the statistics: where each number is in the stats buffer (cs_clod_stats.sc).
 	const int StatWords = 24;
+	static ProfilerMarker sStatsReadMarker = .("Queue GPU culling stats readback", .Rendering);
 	uint32[StatWords] mStatValues;
 	bgfx.DynamicVertexBufferHandle mStats = .() { idx = uint16.MaxValue };
 	int64 mStatsFrame = -1000;
@@ -403,7 +404,8 @@ class GpuDrivenView
 			bgfx.BufferRegion region = default;
 			bgfx.BufferHandle handle = .() { idx = mStats.idx, type = 1 };
 			bgfx.buffer_region_init_buffer(&region, handle, 0, StatWords * 4);
-			bgfx.read_buffer(&region, &mStatValues);
+			using (sStatsReadMarker.Sample())
+				bgfx.read_buffer(&region, &mStatValues);
 			mStatsState = 2;
 			mStatsStateFrame = Time.FrameCount;
 		}

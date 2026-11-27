@@ -35,15 +35,11 @@ extension RenderView
 		}
 		Release(ref mDepthAlbedoFb);
 		Release(ref mDepthAlbedoVelFb);
-		Release(ref mGiApplyFb[0]);
-		Release(ref mGiApplyFb[1]);
 		Release(ref mGiHistoryFb[0]);
 		Release(ref mGiHistoryFb[1]);
 		if (mAlbedoColor.Valid)
 			bgfx.destroy_texture(mAlbedoColor);
-		if (mGiLit.Valid)
-			bgfx.destroy_texture(mGiLit);
-		mAlbedoColor.idx = mGiLit.idx = uint16.MaxValue;
+		mAlbedoColor.idx = uint16.MaxValue;
 		mGiWasOn = false;
 		mGiIdle = 0;
 	}
@@ -89,8 +85,7 @@ extension RenderView
 	}
 
 	/// The targets of screen-space global illumination, made the first time it is used: the surfaces' base colour (a
-	/// second target of the depth pass), the light at half size (this frame's and last frame's, with the depth in alpha)
-	/// and last frame's lit picture, which the rays read.
+	/// second target of the depth pass) and the light at half or full size (this frame's and last frame's, with depth in alpha).
 	void EnsureGiTargets()
 	{
 		EnsureEffectTargets();
@@ -112,15 +107,8 @@ extension RenderView
 		mDepthAlbedoFb = bgfx.create_frame_buffer_from_handles(3, &attachments, false);
 		for (int i < 2)
 		{
-			mGiHistory[i] = bgfx.create_texture_2d((uint16)mGiWidth, (uint16)mGiHeight, false, 1, .RGBA16F, rt | clamp, null, 0);
+			mGiHistory[i] = bgfx.create_texture_2d((uint16)mGiWidth, (uint16)mGiHeight, false, 1, .RGBA16F, rt | clamp | Gfx.SamplerPoint, null, 0);
 			mGiHistoryFb[i] = bgfx.create_frame_buffer_from_handles(1, &mGiHistory[i], true);
-		}
-		let litFormat = bgfx.is_texture_valid(0, false, 1, .RG11B10F, rt | clamp) ? bgfx.TextureFormat.RG11B10F : bgfx.TextureFormat.RGBA16F;
-		mGiLit = bgfx.create_texture_2d((uint16)mWidth, (uint16)mHeight, false, 1, litFormat, rt | clamp, null, 0);
-		for (int i < 2)
-		{
-			bgfx.TextureHandle[2] outputs = .(mPostColor[i], mGiLit);
-			mGiApplyFb[i] = bgfx.create_frame_buffer_from_handles(2, &outputs, false);
 		}
 		mGiWasOn = false;
 	}
@@ -185,7 +173,7 @@ extension RenderView
 	void DrawGlobalIllumination(CameraData camera, SceneEnvironment env, Matrix4 worldViewProj, bgfx.TextureHandle picture, int target)
 	{
 		EnsureGiTargets();
-		// Last frame's pictures are good when the effect ran then and the camera did not jump (as for motion blur).
+		// History is usable when the effect ran last frame and the camera did not jump.
 		let moved = (camera.position - mPrevPosition).Length;
 		let usable = mHasPrev && mGiWasOn && moved < MotionBlurCutDistance;
 		var previous = usable ? mPrevViewProj : worldViewProj;
@@ -198,7 +186,8 @@ extension RenderView
 		if (withProbes)
 			strength *= 0.6f;
 		let reach = withProbes ? GiReach * 0.5f : GiReach;
-		Vector4 giParams = .((float)(mGiFrame++ & 0xffff), reach, usable ? 1 : 0, mGiFull ? 4.0f : 6.0f);
+		let bounceStrength = usable ? Math.Min(strength, 1.0f) : -1.0f;
+		Vector4 giParams = .((float)(mGiFrame++ & 0xffff), reach, bounceStrength, mGiFull ? 4.0f : 6.0f);
 		Vector4 applyParams = giParams;
 		applyParams.w = strength;
 		Vector4 giParams2 = .(1.0f / mWidth, 1.0f / mHeight, 1.0f / mGiWidth, 1.0f / mGiHeight);
@@ -209,7 +198,7 @@ extension RenderView
 		bgfx.set_uniform(RenderResources.uPrevViewProj, &previous, 1);
 		bgfx.set_texture(0, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
 		bgfx.set_texture(1, RenderResources.sColor, picture, uint32.MaxValue);
-		bgfx.set_texture(2, RenderResources.sSsgiLit, usable ? mGiLit : picture, uint32.MaxValue);
+		bgfx.set_texture(2, RenderResources.sAlbedoBuffer, mAlbedoColor, uint32.MaxValue);
 		bgfx.set_texture(3, RenderResources.sSsgiHistory, mGiHistory[read], uint32.MaxValue);
 		EffectPass((uint16)(ViewBase + GiView), "Global illumination", mGiHistoryFb[write], mGiWidth, mGiHeight, RenderResources.SsgiGatherProgram);
 
@@ -220,7 +209,7 @@ extension RenderView
 		bgfx.set_texture(1, RenderResources.sDepth, mDepthColor, uint32.MaxValue);
 		bgfx.set_texture(2, RenderResources.sAlbedoBuffer, mAlbedoColor, uint32.MaxValue);
 		bgfx.set_texture(3, RenderResources.sSsgi, mGiHistory[write], uint32.MaxValue);
-		EffectPass((uint16)(ViewBase + GiApplyView), "Global illumination apply", mGiApplyFb[target], mWidth, mHeight, RenderResources.SsgiApplyProgram);
+		EffectPass((uint16)(ViewBase + GiApplyView), "Global illumination apply", mPostFb[target], mWidth, mHeight, RenderResources.SsgiApplyProgram);
 		mGiCurrent = read;
 	}
 

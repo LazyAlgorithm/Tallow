@@ -223,18 +223,40 @@ extension VoxelTerrain
 	/// Level of detail by distance, with a little give so that a chunk at a boundary does not flicker between two.
 	void UpdateLevelsOfDetail(List<Vector2> viewers)
 	{
-		for (let chunk in mChunks.Values)
+		List<Chunk> remesh = scope .();
+		// A worker taking a job reads the LOD and skirt faces together.
+		using (mMonitor.Enter())
 		{
-			let distance = NearestViewer(viewers, chunk.coord);
-			let wanted = LodFor(distance);
-			if (wanted == chunk.lod)
-				continue;
-			if (wanted > chunk.lod ? LodFor(distance - 0.5f) <= chunk.lod : LodFor(distance + 0.5f) >= chunk.lod)
-				continue;
-			chunk.lod = wanted;
-			if (chunk.state == .Uploaded)
-				QueueRemesh(chunk);
+			for (let chunk in mChunks.Values)
+			{
+				let distance = NearestViewer(viewers, chunk.coord);
+				let wanted = LodFor(distance);
+				if (wanted == chunk.lod)
+					continue;
+				if (wanted > chunk.lod ? LodFor(distance - 0.5f) <= chunk.lod : LodFor(distance + 0.5f) >= chunk.lod)
+					continue;
+				chunk.lod = wanted;
+			}
+
+			// Set skirts after every chunk has its wanted LOD. Same-detail meshes meet directly, and a
+			// missing neighbour has no LOD gap to cover.
+			for (let chunk in mChunks.Values)
+			{
+				int faces = 0;
+				for (int face < 6)
+				{
+					if (mChunks.TryGetValue(chunk.coord + FaceOffset(face), let other) && other.lod != chunk.lod)
+						faces |= 1 << face;
+				}
+				let lodChanged = chunk.state == .Uploaded && chunk.lod != chunk.builtLod;
+				if (faces == chunk.skirtFaces && !lodChanged)
+					continue;
+				chunk.skirtFaces = faces;
+				remesh.Add(chunk);
+			}
 		}
+		for (let chunk in remesh)
+			QueueRemesh(chunk);
 	}
 
 	public override void OnFrame()

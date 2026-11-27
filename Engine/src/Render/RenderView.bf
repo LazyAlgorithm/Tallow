@@ -238,15 +238,13 @@ class RenderView
 	bool mHasPrev;
 	// Screen-space global illumination (RenderViewEffects.bf): the depth pass also writes the surfaces' base colour into
 	// mAlbedoColor (the depth framebuffer with it is mDepthAlbedoFb); the gathered light is blended over frames in
-	// mGiHistory (half size, depth in alpha); mGiLit is last frame's lit picture, which the rays read at what they hit.
+	// mGiHistory (depth in alpha).
 	bool mDepthAlbedo;
 	bgfx.TextureHandle mAlbedoColor = .() { idx = uint16.MaxValue };
 	bgfx.TextureHandle mDepthZ = .() { idx = uint16.MaxValue };
 	bgfx.FrameBufferHandle mDepthAlbedoFb = .() { idx = uint16.MaxValue };
 	bgfx.TextureHandle[2] mGiHistory = .(.() { idx = uint16.MaxValue }, .() { idx = uint16.MaxValue });
 	bgfx.FrameBufferHandle[2] mGiHistoryFb = .(.() { idx = uint16.MaxValue }, .() { idx = uint16.MaxValue });
-	bgfx.TextureHandle mGiLit = .() { idx = uint16.MaxValue };
-	bgfx.FrameBufferHandle[2] mGiApplyFb = .(.() { idx = uint16.MaxValue }, .() { idx = uint16.MaxValue });
 	int mGiCurrent;
 	int32 mGiWidth, mGiHeight, mGiIdle;
 	bool mGiFull;

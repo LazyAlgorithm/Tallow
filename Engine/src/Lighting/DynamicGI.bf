@@ -77,7 +77,7 @@ class GiWorker
 	public readonly int32 nx, ny, nz;
 	public readonly float spacing;
 	readonly int32 mRays, mBudget;
-	readonly float mHysteresis;
+	readonly float mHysteresis, mRadianceHistoryScale;
 	readonly int32 mPeriodMs;
 	int32 N => nx * ny * nz;
 
@@ -141,7 +141,7 @@ class GiWorker
 
 	static ProfilerMarker sStepMarker = .("DynamicGI worker step", .Rendering);
 
-	public this(int32 nx, int32 ny, int32 nz, float spacing, int32 rays, int32 budget, float hysteresis, int32 periodMs)
+	public this(int32 nx, int32 ny, int32 nz, float spacing, int32 rays, int32 budget, float hysteresis, float radianceHistoryScale, int32 periodMs)
 	{
 		this.nx = nx;
 		this.ny = ny;
@@ -150,6 +150,7 @@ class GiWorker
 		mRays = rays;
 		mBudget = budget;
 		mHysteresis = hysteresis;
+		mRadianceHistoryScale = radianceHistoryScale;
 		mPeriodMs = periodMs;
 		let count = N;
 		mCell = new .[count];
@@ -671,9 +672,10 @@ class GiWorker
 			if (change > 0.25f)
 				hysteresis = Math.Max(hysteresis - 0.35f, 0.3f);
 		}
+		let radianceHistory = hysteresis * mRadianceHistoryScale;
 		for (int i < 12)
 		{
-			mSh[slot * 12 + i] = mSh[slot * 12 + i] * hysteresis + sh[i] * (1 - hysteresis);
+			mSh[slot * 12 + i] = mSh[slot * 12 + i] * radianceHistory + sh[i] * (1 - radianceHistory);
 			// A hit pulls the distances faster than they relax (a wall appearing counts at once).
 			mVis[slot * 12 + i] = mVis[slot * 12 + i] * hysteresis + vis[i] * (1 - hysteresis);
 		}
@@ -772,6 +774,8 @@ static class DynamicGI
 	public static int32 RaysPerProbe = 96;
 	public static int32 ProbesPerStep = 192;
 	public static float Hysteresis = 0.92f;
+	/// Scales how much previous lighting is kept. The probe visibility filter uses Hysteresis directly.
+	public static float RadianceHistoryScale = 0.7f;
 	/// The worker's pause between steps, in milliseconds.
 	public static int32 StepPeriod = 20;
 	/// Triangles the traced scene may hold (the rest is left out).
@@ -867,7 +871,7 @@ static class DynamicGI
 		period = Math.Max(period, 50);
 		spacing = Math.Max(spacing, 3);
 #endif
-		sWorker = new GiWorker(Math.Max(nx, 2), Math.Max(ny, 2), Math.Max(nz, 2), Math.Max(spacing, 0.5f), Math.Max(rays, 16), Math.Max(budget, 8), Math.Clamp(Hysteresis, 0, 0.99f), period);
+		sWorker = new GiWorker(Math.Max(nx, 2), Math.Max(ny, 2), Math.Max(nz, 2), Math.Max(spacing, 0.5f), Math.Max(rays, 16), Math.Max(budget, 8), Math.Clamp(Hysteresis, 0, 0.99f), Math.Clamp(RadianceHistoryScale, 0, 1), period);
 		sWorker.Start();
 		sUploaded = -1;
 		sReady = false;
@@ -947,7 +951,7 @@ static class DynamicGI
 
 	static Dictionary<uint64, Track> sTracks = new .() ~ DeleteDictionaryAndValues!(_);
 	static List<MeshRenderer> sGatherList = new .() ~ delete _;
-	static int32 sGatherIndex;
+	static int32 sGatherIndex, sGatherPart, sGatherTriangle;
 	static GiGeometry sBuilding;
 	static bool sGathering;
 	static double sNextCheck;
@@ -976,7 +980,7 @@ static class DynamicGI
 	}
 
 	/// Every second or so looks for changes to the scene's static renderers, and then gathers their triangles over
-	/// a few frames (never more than a millisecond or two each) before handing them over.
+	/// multiple frames before handing them over.
 	static void MaintainGeometry(Scene scene, ref GiGeometry finished)
 	{
 		double now = Time.RealTime;
@@ -1044,6 +1048,8 @@ static class DynamicGI
 		// Something changed: gather again.
 		sGatherSignature = signature;
 		sGatherIndex = 0;
+	sGatherPart = 0;
+	sGatherTriangle = 0;
 		delete sBuilding;
 		sBuilding = new GiGeometry();
 		sGathering = true;
@@ -1055,13 +1061,25 @@ static class DynamicGI
 
 	static void GatherSome(ref GiGeometry finished)
 	{
-		let start = Stopwatch.StartNew();
+		let start = scope Stopwatch(true);
 		while (sGatherIndex < sGatherList.Count)
 		{
-			let renderer = sGatherList[sGatherIndex++];
-			if (renderer.GameObject.IsDestroyed)
-				continue;
-			AddRenderer(renderer);
+			let renderer = sGatherList[sGatherIndex];
+			if (!renderer.GameObject.IsDestroyed && !GatherRenderer(renderer, start))
+				return;
+			sGatherIndex++;
+			sGatherPart = 0;
+			sGatherTriangle = 0;
+			if (sBuilding.TriangleCount >= MaxTriangles)
+			{
+				if (!sWarnedTriangles)
+				{
+					sWarnedTriangles = true;
+					Log.Warning(scope $"Dynamic GI: reached the {MaxTriangles} static triangle limit; additional triangles do not bounce light");
+				}
+				sGatherIndex = (int32)sGatherList.Count;
+				break;
+			}
 			if (start.Elapsed.TotalMilliseconds > 1.5)
 				break;
 		}
@@ -1076,23 +1094,18 @@ static class DynamicGI
 		}
 	}
 
-	static void AddRenderer(MeshRenderer renderer)
+	/// Returns false when the frame's gather budget runs out inside a mesh.
+	static bool GatherRenderer(MeshRenderer renderer, Stopwatch start)
 	{
-		if (sBuilding.TriangleCount >= MaxTriangles)
-		{
-			if (!sWarnedTriangles)
-			{
-				sWarnedTriangles = true;
-				Log.Warning(scope $"Dynamic GI: the scene has more than {MaxTriangles} static triangles; the rest do not bounce light");
-			}
-			return;
-		}
 		let world = renderer.RenderMatrix;
 		let mirrored = RenderView.Mirrored(world);
 		let parts = renderer.DrawnParts;
 		let partCount = (parts != null && parts.Count > 0) ? parts.Count : 1;
-		for (int p < partCount)
+		for (; sGatherPart < partCount; sGatherPart++)
 		{
+			let p = sGatherPart;
+			let firstTriangle = sGatherTriangle;
+			sGatherTriangle = 0;
 			Mesh mesh;
 			if (parts != null && parts.Count > 0)
 			{
@@ -1105,8 +1118,15 @@ static class DynamicGI
 			if (mesh == null || mesh.IsDynamic || mesh.VertexSource != null || mesh.Indices.Count < 3)
 				continue;
 			LightBaker.PartColors(renderer, parts, p, let albedo, let emission, let flat);
-			for (int t < mesh.Indices.Count / 3)
+			for (int32 t = firstTriangle; t < mesh.Indices.Count / 3; t++)
 			{
+				if (sBuilding.TriangleCount >= MaxTriangles)
+					return true;
+				if ((t & 127) == 0 && start.Elapsed.TotalMilliseconds > 1.5)
+				{
+					sGatherTriangle = t;
+					return false;
+				}
 				var ia = mesh.Indices[t * 3], ib = mesh.Indices[t * 3 + 1], ic = mesh.Indices[t * 3 + 2];
 				if (mirrored)
 					Swap!(ib, ic);
@@ -1123,6 +1143,7 @@ static class DynamicGI
 				sBuilding.emission.Add(emission.x); sBuilding.emission.Add(emission.y); sBuilding.emission.Add(emission.z);
 			}
 		}
+		return true;
 	}
 
 	// ---- the texture ----

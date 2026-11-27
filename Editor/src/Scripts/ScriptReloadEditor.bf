@@ -154,8 +154,9 @@ extension EditorApp
 		// never enter the old Beef library reload pipeline.
 		if (mManagedGameplay)
 		{
-			// Check for changes before publishing results from a build that just finished.
-			if (mScriptPollClock.ElapsedMilliseconds >= 500 || (mCheckRunning && Interlocked.Load(ref mCheckFinished)))
+			// Defer periodic disk scans during Play. Explicit compiles still check the sources before publishing.
+			if ((mPlay == .Edit && mScriptPollClock.ElapsedMilliseconds >= 500) ||
+				(mCheckRunning && Interlocked.Load(ref mCheckFinished)))
 			{
 				mScriptPollClock.Restart();
 				if (mScriptMonitor.Poll(Assets.ProjectPath))

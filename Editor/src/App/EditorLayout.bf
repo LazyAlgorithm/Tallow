@@ -670,6 +670,7 @@ extension EditorApp
 		if (ImGui.IsItemHovered())
 			ImGui.SetTooltip("Let the game keep the mouse inside the Game view while you play (games ask with Input.LockCursor). Esc frees it.");
 
+		DrawBuildProgress();
 		if (!mStatus.IsEmpty)
 		{
 			ImGui.SameLine(0, 24);

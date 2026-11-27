@@ -1,8 +1,7 @@
 $input v_texcoord0, v_wpos
 
-// Screen-space global illumination, second step (at full size): blurs the half-size light without letting it cross from
-// one surface to another, and adds it to the picture, coloured by the surface's own base colour (the depth pass's second
-// target). Also writes the picture to a second target: the next frame's rays read it for the light they meet.
+// Filter and, when necessary, upsample the gathered light using the receiver's surface plane.
+// Add the result to the picture, coloured by the receiver's base colour from the depth pass.
 #include <bgfx_shader.sh>
 #include "post.sh"
 
@@ -14,8 +13,6 @@ SAMPLER2D(s_ssgi, 3);
 uniform vec4 u_ssgiParams;  // w: strength
 uniform vec4 u_ssgiParams2; // xy one texel of the picture, zw one texel of the light
 
-#define MAX_LIT 64.0
-
 void main()
 {
 	vec2 uv = v_texcoord0;
@@ -23,8 +20,7 @@ void main()
 	float d = texture2DLod(s_depth, uv, 0.0).x;
 	if (isViewmodel(d) || isSky(d))
 	{
-		gl_FragData[0] = vec4(color, 1.0);
-		gl_FragData[1] = vec4(min(color, vec3_splat(MAX_LIT)), 1.0);
+		gl_FragColor = vec4(color, 1.0);
 		return;
 	}
 	vec2 halfSize = 1.0 / u_ssgiParams2.zw;
@@ -51,11 +47,18 @@ void main()
 		for (int x = -1; x <= 2; x++)
 		{
 			vec2 cell = base + vec2(float(x), float(y));
-			vec4 tap = texture2DLod(s_ssgi, (cell + 0.5) * u_ssgiParams2.zw, 0.0);
+			vec2 tapUv = (cell + 0.5) * u_ssgiParams2.zw;
+			if (tapUv.x <= 0.0 || tapUv.x >= 1.0 || tapUv.y <= 0.0 || tapUv.y >= 1.0)
+				continue;
+			vec4 tap = texture2DLod(s_ssgi, tapUv, 0.0);
+			if (isSky(tap.a) || isViewmodel(tap.a))
+				continue;
+			// The gather stored depth from the full-resolution texel containing this tap.
+			vec2 depthUv = (floor(tapUv / u_ssgiParams2.xy) + 0.5) * u_ssgiParams2.xy;
 			vec2 delta = cell - hp;
 			float dist2 = dot(delta, delta);
-			float plane = abs(dot(n, viewPosition((cell + 0.5) * u_ssgiParams2.zw, tap.a) - p));
-			float w = exp(-dist2 * 0.7) * max(1.0 - plane / tolerance, 0.0);
+			float plane = abs(dot(n, viewPosition(depthUv, tap.a) - p));
+			float w = exp(-dist2 * 0.5) * max(1.0 - plane / tolerance, 0.0);
 			sum += tap.rgb * w;
 			weights += w;
 			float away = plane * 4.0 + dist2;
@@ -70,7 +73,5 @@ void main()
 	// The base colour is kept as it is shown: to linear, as the lit pass does.
 	vec3 albedo = pow(texture2DLod(s_albedoBuffer, uv, 0.0).rgb, vec3_splat(2.2));
 	float strength = u_ssgiParams.w;
-	gl_FragData[0] = vec4(color + gi * albedo * strength, 1.0);
-	// What the rays see next frame: the bounce counts once at most, so it cannot build on itself without end.
-	gl_FragData[1] = vec4(min(color + gi * albedo * min(strength, 1.0), vec3_splat(MAX_LIT)), 1.0);
+	gl_FragColor = vec4(color + gi * albedo * strength, 1.0);
 }

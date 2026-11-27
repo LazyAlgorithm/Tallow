@@ -113,6 +113,52 @@ internal static class ExportUtil
         }
     }
 
+    /// <summary>Puts <paramref name="source"/> at <paramref name="destination"/>, as a hard link when the two are on
+    /// the same filesystem (no extra space and no reading: a build's staging folder links the project's assets, which
+    /// it only ever reads), else as a copy. A file already there is replaced.</summary>
+    public static void LinkFile(string source, string destination, bool executable = false)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        if (File.Exists(destination) || Directory.Exists(destination))
+            DeleteFileOrFolder(destination);
+        try
+        {
+            File.CreateHardLink(destination, source);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            File.Copy(source, destination, true);
+        }
+        if (executable)
+            MakeExecutable(destination);
+    }
+
+    /// <summary><see cref="CopyTree"/> with every file hard-linked where it can be.</summary>
+    public static void LinkTree(string source, string target, Func<string, bool>? skip = null)
+    {
+        Directory.CreateDirectory(target);
+        foreach (string file in Directory.EnumerateFiles(source))
+        {
+            string name = Path.GetFileName(file);
+            if (skip == null || !skip(name))
+                LinkFile(file, Path.Combine(target, name));
+        }
+        foreach (string folder in Directory.EnumerateDirectories(source))
+        {
+            string name = Path.GetFileName(folder);
+            if (skip == null || !skip(name))
+                LinkTree(folder, Path.Combine(target, name), skip);
+        }
+    }
+
+    static void DeleteFileOrFolder(string path)
+    {
+        if (Directory.Exists(path))
+            Directory.Delete(path, true);
+        else
+            File.Delete(path);
+    }
+
     /// <summary>Every file under a folder, as (path relative to it with forward slashes, full path), in name order.</summary>
     public static List<(string Relative, string Full)> Files(string folder)
     {
@@ -238,6 +284,18 @@ internal static class ExportUtil
         uint crc = 0xFFFFFFFFu;
         foreach (byte b in data)
             crc = CrcTable[(crc ^ b) & 0xFF] ^ (crc >> 8);
+        return crc ^ 0xFFFFFFFFu;
+    }
+
+    /// <summary>The same checksum for a file read a block at a time (for assets too big to hold in memory).</summary>
+    public static uint Crc32(Stream stream)
+    {
+        uint crc = 0xFFFFFFFFu;
+        var buffer = new byte[1 << 20];
+        int read;
+        while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+            for (int i = 0; i < read; i++)
+                crc = CrcTable[(crc ^ buffer[i]) & 0xFF] ^ (crc >> 8);
         return crc ^ 0xFFFFFFFFu;
     }
 

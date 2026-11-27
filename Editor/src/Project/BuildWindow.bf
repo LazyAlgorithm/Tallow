@@ -507,18 +507,26 @@ extension EditorApp
 	/// Build, and once a build has worked, Show Folder (and for the web, Play in Browser); then what happened.
 	void DrawBuildButtons(bool ready, StringView output)
 	{
-		let building = mWantBuildGame;
+		let job = BuildJobs.Find(mBuildTarget);
+		let building = mWantBuildGame || (job != null && job.Running);
 		ImGui.Spacing();
 		ImGui.BeginDisabled(!ready || building || mBuildFolder.IsEmpty);
 		if (ImGui.Button(building ? "Building..." : "Build", .(140, 0)))
 		{
 			File.WriteAllText(BuildChoicePath(.. scope .()), scope $"{mBuildTarget.ToString(.. scope .())..ToLower()}\n{mBuildFolder}\n").IgnoreError();
-			mBuildMessage.Set("Building. This takes a minute; the editor does not respond until it is done.");
+			mBuildMessage.Set("Starting the build...");
 			mBuildSucceeded = false;
 			mWantBuildGame = true;
 			mBusyFrames = 3;
 		}
 		ImGui.EndDisabled();
+		if (job != null && job.Running)
+		{
+			ImGui.SameLine();
+			if (ImGui.Button("Cancel", .(100, 0)))
+				BuildJobs.Cancel(job);
+			ImGui.ProgressBar(job.Progress, .(-1, 0), scope $"{(int)(job.Progress * 100)}%  {job.Step}  ({(int)job.Seconds} s)");
+		}
 		if (mBuildSucceeded)
 		{
 			ImGui.SameLine();

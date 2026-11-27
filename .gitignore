@@ -27,3 +27,18 @@ Player/build/
 # Rapier prebuilt archives: built per platform by tools/build_rapier.py or attached to a release.
 third_party/rapier/prebuilt/*/librapier*
 third_party/rapier/prebuilt/*/rapier3d_ffi.lib
+
+# Build output and asset files
+bin/
+obj/
+.vs/
+.idea/
+*.spv
+*.dxil
+*.obj
+*.gltf
+*.glb
+*.fbx
+*.png
+*.dds
+*.ktx2

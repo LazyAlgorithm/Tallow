@@ -398,8 +398,15 @@ class Project
 	/// and its assets. outputPath is the game's own folder; an earlier build of a game found there is replaced.
 	public bool BuildPlayer(StringView outputPath, BuildTarget target, bool iosSimulator = false)
 	{
-		Directory.CreateDirectory(scope $"{Path}/build").IgnoreError();
 		let command = scope String();
+		BuildPlayerCommand(outputPath, target, iosSimulator, scope $"{Path}/build/build.log", command);
+		return Terminal.Run(command) == 0;
+	}
+
+	/// The command line of an export, its output going to logPath.
+	public void BuildPlayerCommand(StringView outputPath, BuildTarget target, bool iosSimulator, StringView logPath, String command)
+	{
+		Directory.CreateDirectory(scope $"{Path}/build").IgnoreError();
 		Terminal.AppendBuildTool(EngineRoot, command);
 		command.Append(" export ");
 		Terminal.Quote(Path, command);
@@ -422,9 +429,8 @@ class Project
 		else if (target != .Web)
 			command.Append(NativeAot && EditorApp.NativeAotAvailable(target) ? " --csharp-runtime native" : " --csharp-runtime jit");
 		command.Append(" > ");
-		Terminal.Quote(scope $"{Path}/build/build.log" , command);
+		Terminal.Quote(logPath, command);
 		command.Append(" 2>&1");
-		return Terminal.Run(command) == 0;
 	}
 
 	/// Puts a copy of Tallow itself (launcher, editor, engine) for Linux, Windows or macOS in outputPath.

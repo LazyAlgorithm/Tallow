@@ -43,12 +43,16 @@ extension EditorApp
 	ScriptComponentCatalog mScriptCatalog = new .() ~ delete _;
 	Stopwatch mFolderScanClock = new .(true) ~ delete _;
 	bool mModelsScanned;
+	static ProfilerMarker sProjectFolderScanMarker = .("Editor.PollProjectFolders", .Editor);
 
 	void PollProjectFolders()
 	{
 		ModelImport.Update();
-		if (mFolderScanClock.ElapsedMilliseconds < 1000) return;
+		// Catch up when Play stops, using the snapshot from before Play.
+		if (mPlay != .Edit || mFolderScanClock.ElapsedMilliseconds < 1000) return;
 		mFolderScanClock.Restart();
+		sProjectFolderScanMarker.Begin();
+		defer Tallow.Profiler.End();
 		// FBX, OBJ, ... converted to glTF when first seen and whenever they change (tallowengine.com/docs/model-import).
 		if (!mModelsScanned)
 		{

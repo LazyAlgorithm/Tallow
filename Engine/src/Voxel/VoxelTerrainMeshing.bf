@@ -27,12 +27,15 @@ extension VoxelTerrain
 		public int8[] padded = new int8[PaddedSide * PaddedSide * PaddedSide] ~ delete _;
 		public bool[] paddedMissing = new bool[PaddedSide * PaddedSide * PaddedSide] ~ delete _;
 		public int32[] cellVertex = new int32[(ChunkCells + 1) * (ChunkCells + 1) * (ChunkCells + 1)] ~ delete _;
+		/// For each contoured vertex, the chunk faces along which its cell can form a rim edge.
+		public uint8[] vertexFaces = new uint8[SampleCount] ~ delete _;
 		public int32 farDistance = 1;
 		public bool masked;
 		public Snapshot snap;
 		public Vector3 origin;
 		public float size = 1;
 		public int32 lod;
+		public int skirtFaces;
 		public bool collision;
 
 		/// A sample, which may be just outside the chunk on one axis.
@@ -112,6 +115,11 @@ extension VoxelTerrain
 		default: return .(0, 0, 1);
 		}
 	}
+
+	// Bits for the chunk faces in FaceOffset order.
+	const int MinXFace = 1 << 0, MaxXFace = 1 << 1;
+	const int MinYFace = 1 << 2, MaxYFace = 1 << 3;
+	const int MinZFace = 1 << 4, MaxZFace = 1 << 5;
 
 	/// The sample `distance` steps beyond a face, at (a, b) across it, in this chunk's sample coordinates.
 	static void BeyondFace(int face, int distance, int a, int b, out int x, out int y, out int z)
@@ -234,6 +242,7 @@ extension VoxelTerrain
 	{
 		work.snap = mSnap;
 		work.lod = chunk.lod;
+		work.skirtFaces = chunk.skirtFaces;
 		work.collision = chunk.shapeChanged;
 		chunk.shapeChanged = false;
 	}
@@ -244,7 +253,10 @@ extension VoxelTerrain
 		if (!chunk.generated)
 			GenerateDensity(chunk, snap);
 		if (!mLodOn)
+		{
 			work.lod = 0;
+			work.skirtFaces = 0;
+		}
 		let step = (int32)1 << Math.Clamp(work.lod, 0, 3);
 		using (mMonitor.Enter())
 		{
@@ -277,42 +289,36 @@ extension VoxelTerrain
 			BuildBlocky(chunk, work);
 			chunk.builtLod = 0;
 		}
-		else if (mStyle == .Contoured)
-		{
-			BuildContoured(chunk, work, step, chunk.vertices, chunk.indices);
-			if (separate && work.collision)
-			{
-				chunk.collisionVertices.Clear();
-				chunk.collisionIndices.Clear();
-				if (step == 1)
-				{
-					chunk.collisionVertices.AddRange(chunk.vertices);
-					chunk.collisionIndices.AddRange(chunk.indices);
-				}
-				else
-					BuildContoured(chunk, work, 1, chunk.collisionVertices, chunk.collisionIndices);
-			}
-			if (mLodOn)
-				AddOpenEdgeSkirts((2 * step + 1) * work.size, chunk.vertices, chunk.indices);
-			chunk.builtLod = work.lod;
-		}
 		else
 		{
-			BuildSmooth(chunk, work, step, chunk.vertices, chunk.indices);
+			let contoured = mStyle == .Contoured;
+			void BuildSurface(int32 detailStep, List<MeshVertex> vertices, List<uint32> indices)
+			{
+				if (contoured)
+					BuildContoured(chunk, work, detailStep, vertices, indices);
+				else
+					BuildSmooth(chunk, work, detailStep, vertices, indices);
+			}
 			if (separate && work.collision)
 			{
 				chunk.collisionVertices.Clear();
 				chunk.collisionIndices.Clear();
-				if (step == 1)
-				{
-					chunk.collisionVertices.AddRange(chunk.vertices);
-					chunk.collisionIndices.AddRange(chunk.indices);
-				}
-				else
-					BuildSmooth(chunk, work, 1, chunk.collisionVertices, chunk.collisionIndices);
+				if (step > 1)
+					BuildSurface(1, chunk.collisionVertices, chunk.collisionIndices);
 			}
-			if (mLodOn)
-				AddSkirts(work, step, chunk.vertices, chunk.indices);
+			BuildSurface(step, chunk.vertices, chunk.indices);
+			if (separate && work.collision && step == 1)
+			{
+				chunk.collisionVertices.AddRange(chunk.vertices);
+				chunk.collisionIndices.AddRange(chunk.indices);
+			}
+			if (work.skirtFaces != 0)
+			{
+				if (contoured)
+					AddOpenEdgeSkirts(work, step, chunk.vertices, chunk.indices);
+				else
+					AddSkirts(work, step, chunk.vertices, chunk.indices);
+			}
 			chunk.builtLod = work.lod;
 		}
 		chunk.separateCollision = separate;
@@ -692,6 +698,14 @@ extension VoxelTerrain
 						if (layer != 0)
 							color = LayerColor(layer);
 					}
+					if (work.skirtFaces != 0)
+					{
+						// Rim vertices can lie on either side of the actual chunk plane. Test their cells.
+						int faces = (cx == -1 ? MinXFace : 0) | (cx == n - 1 ? MaxXFace : 0)
+							| (cy == -1 ? MinYFace : 0) | (cy == n - 1 ? MaxYFace : 0)
+							| (cz == -1 ? MinZFace : 0) | (cz == n - 1 ? MaxZFace : 0);
+						work.vertexFaces[vertices.Count] = (uint8)faces;
+					}
 					work.cellVertex[(cx + 1) + (cy + 1) * cellSide + (cz + 1) * cellSide * cellSide] = (int32)vertices.Count;
 					vertices.Add(.(position, normal, color.ToABGR(), .(position.x, position.z)));
 				}
@@ -796,17 +810,20 @@ extension VoxelTerrain
 		AddTriangle(indices, ia, a2, b2);
 	}
 
-	/// Skirts for contoured chunks: a strip down into the ground from every edge of the mesh that only one triangle
-	/// uses, which is its rim. Chunks at different detail then meet without gaps showing.
-	static void AddOpenEdgeSkirts(float depth, List<MeshVertex> vertices, List<uint32> indices)
+	/// Skirts for contoured chunks: only open rim edges along the faces that need a detail transition.
+	static void AddOpenEdgeSkirts(MeshWork work, int32 step, List<MeshVertex> vertices, List<uint32> indices)
 	{
 		Dictionary<uint64, int32> uses = scope .();
 		let triangles = indices.Count / 3;
+		let depth = (2 * step + 1) * work.size;
 		for (int t < triangles)
 		{
 			for (int e < 3)
 			{
-				let key = EdgeKey(indices[t * 3 + e], indices[t * 3 + (e + 1) % 3]);
+				let ia = indices[t * 3 + e], ib = indices[t * 3 + (e + 1) % 3];
+				if ((work.vertexFaces[(int)ia] & work.vertexFaces[(int)ib] & work.skirtFaces) == 0)
+					continue;
+				let key = EdgeKey(ia, ib);
 				if (uses.TryGetValue(key, let count))
 					uses[key] = count + 1;
 				else
@@ -818,7 +835,7 @@ extension VoxelTerrain
 			for (int e < 3)
 			{
 				let ia = indices[t * 3 + e], ib = indices[t * 3 + (e + 1) % 3];
-				if (uses[EdgeKey(ia, ib)] == 1)
+				if (uses.TryGetValue(EdgeKey(ia, ib), let count) && count == 1)
 					AddSkirt(vertices, indices, ia, ib, depth);
 			}
 		}
@@ -832,19 +849,23 @@ extension VoxelTerrain
 		let depth = (2 * step + 1) * size;
 		let limit = ChunkCells * size;
 		let epsilon = size * 0.001f;
-		// Which of the chunk's four sides (bits: -X, +X, -Z, +Z) a vertex lies on.
+		// Which chunk faces a vertex lies on.
 		int Sides(Vector3 position)
 		{
 			let p = position - work.origin;
 			int sides = 0;
 			if (Math.Abs(p.x) < epsilon)
-				sides |= 1;
+				sides |= MinXFace;
 			if (Math.Abs(p.x - limit) < epsilon)
-				sides |= 2;
+				sides |= MaxXFace;
+			if (Math.Abs(p.y) < epsilon)
+				sides |= MinYFace;
+			if (Math.Abs(p.y - limit) < epsilon)
+				sides |= MaxYFace;
 			if (Math.Abs(p.z) < epsilon)
-				sides |= 4;
+				sides |= MinZFace;
 			if (Math.Abs(p.z - limit) < epsilon)
-				sides |= 8;
+				sides |= MaxZFace;
 			return sides;
 		}
 		let triangles = indices.Count / 3;
@@ -854,7 +875,7 @@ extension VoxelTerrain
 			{
 				let ia = indices[t * 3 + e];
 				let ib = indices[t * 3 + (e + 1) % 3];
-				if ((Sides(vertices[(int)ia].position) & Sides(vertices[(int)ib].position)) != 0)
+				if ((Sides(vertices[(int)ia].position) & Sides(vertices[(int)ib].position) & work.skirtFaces) != 0)
 					AddSkirt(vertices, indices, ia, ib, depth);
 			}
 		}

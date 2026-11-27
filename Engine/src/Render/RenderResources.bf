@@ -35,7 +35,7 @@ static class RenderResources
 	// Temporal antialiasing and motion vectors (RenderViewTemporal.bf).
 	public static bgfx.ProgramHandle DepthVelProgram, DepthAlbedoVelProgram, SkyVelProgram, SkyVelAlbedoProgram, TaaProgram, VelocityViewProgram;
 	public static bgfx.UniformHandle uVelCur, uVelPrev, uVelParams, uTaaParams, uTaaParams2, sVelocity, sHistory;
-	public static bgfx.UniformHandle sSsgi, sSsgiHistory, sSsgiLit, sAlbedoBuffer, uSsgiParams, uSsgiParams2;
+	public static bgfx.UniformHandle sSsgi, sSsgiHistory, sAlbedoBuffer, uSsgiParams, uSsgiParams2;
 	// Volumetric fog (tallowengine.com/docs/day-night; RenderViewVolumetric.bf): the froxel inject and integrate compute
 	// shaders, the fullscreen apply, and the see-through things' and water's variants that sample the sums themselves.
 	// The fallback (OpenGL, the web, --gpu-driven-caps-off) draws the height fog and its shafts instead.
@@ -43,7 +43,7 @@ static class RenderResources
 	public static bgfx.ProgramHandle MeshVFogProgram, WaterVFogProgram;
 	/// The most Fog Volumes one view draws (the rest are left out).
 	public const int32 FogVolumeMax = 32;
-	public static bgfx.UniformHandle uVFogMedium, uVFogLight, uVFogGrid, uVFogSize, sVFog, sVFogCells;
+	public static bgfx.UniformHandle uVFogMedium, uVFogLight, uVFogGrid, uVFogSize, sVFog, sVFogCells, sVFogHistory;
 	public static bgfx.UniformHandle uVFogTemporal, uVFogPrevViewProj, uVFogDebug, uFogVolumes, uFogVolumeCount;
 	public static bool VFogReady;
 	public static bgfx.ProgramHandle LineProgram;
@@ -126,7 +126,6 @@ static class RenderResources
 		SsgiApplyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_ssgi_apply");
 		sSsgi = bgfx.create_uniform("s_ssgi", .Sampler, 1);
 		sSsgiHistory = bgfx.create_uniform("s_ssgiHistory", .Sampler, 1);
-		sSsgiLit = bgfx.create_uniform("s_ssgiLit", .Sampler, 1);
 		sAlbedoBuffer = bgfx.create_uniform("s_albedoBuffer", .Sampler, 1);
 		uSsgiParams = bgfx.create_uniform("u_ssgiParams", .Vec4, 1);
 		uSsgiParams2 = bgfx.create_uniform("u_ssgiParams2", .Vec4, 1);
@@ -235,6 +234,7 @@ static class RenderResources
 		uVFogSize = bgfx.create_uniform("u_vfogSize", .Vec4, 1);
 		sVFog = bgfx.create_uniform("s_vfog", .Sampler, 1);
 		sVFogCells = bgfx.create_uniform("s_vfogCells", .Sampler, 1);
+		sVFogHistory = bgfx.create_uniform("s_vfogHistory", .Sampler, 1);
 		uVFogTemporal = bgfx.create_uniform("u_vfogTemporal", .Vec4, 1);
 		uVFogPrevViewProj = bgfx.create_uniform("u_vfogPrevViewProj", .Mat4, 1);
 		uVFogDebug = bgfx.create_uniform("u_vfogDebug", .Vec4, 1);
@@ -370,6 +370,7 @@ static class RenderResources
 		bgfx.destroy_uniform(uVFogSize);
 		bgfx.destroy_uniform(sVFog);
 		bgfx.destroy_uniform(sVFogCells);
+		bgfx.destroy_uniform(sVFogHistory);
 		bgfx.destroy_uniform(uVFogTemporal);
 		bgfx.destroy_uniform(uVFogPrevViewProj);
 		bgfx.destroy_uniform(uVFogDebug);
