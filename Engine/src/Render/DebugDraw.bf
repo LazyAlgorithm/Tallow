@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using Bgfx;
 
 namespace Tallow;
 
@@ -8,6 +9,39 @@ class LineBatch
 {
 	/// Two vertices for each line (three for each triangle in a batch of triangles).
 	public List<LineVertex> Vertices = new .() ~ delete _;
+
+	/// The graphics card's own copy, for a batch too big for a frame's transient vertex buffer.
+	bgfx.DynamicVertexBufferHandle mDynamicBuffer = .() { idx = uint16.MaxValue };
+	int32 mDynamicCount;
+
+	public ~this()
+	{
+		if (mDynamicBuffer.Valid && Gfx.Initialized)
+			bgfx.destroy_dynamic_vertex_buffer(mDynamicBuffer);
+	}
+
+	/// The graphics card's copy after UploadDynamic.
+	public bgfx.DynamicVertexBufferHandle DynamicBuffer => mDynamicBuffer;
+
+	/// Sends the whole batch to its own vertex buffer. A batch bigger than the frame's transient buffer would be cut
+	/// short there (a dense model's rig preview is millions of vertices); this holds all of it. False when there is
+	/// nothing to send or the buffer could not be made, so that the caller draws what the transient buffer holds.
+	public bool UploadDynamic()
+	{
+		if (Vertices.IsEmpty || !Gfx.Initialized)
+			return false;
+		if (!mDynamicBuffer.Valid || mDynamicCount != Vertices.Count)
+		{
+			if (mDynamicBuffer.Valid)
+				bgfx.destroy_dynamic_vertex_buffer(mDynamicBuffer);
+			mDynamicBuffer = bgfx.create_dynamic_vertex_buffer((uint32)Vertices.Count, &Gfx.LineLayout, 0);
+			if (!mDynamicBuffer.Valid)
+				return false;
+			mDynamicCount = (int32)Vertices.Count;
+		}
+		bgfx.update_dynamic_vertex_buffer(mDynamicBuffer, 0, bgfx.copy(Vertices.Ptr, (uint32)(Vertices.Count * sizeof(LineVertex))));
+		return true;
+	}
 
 	/// Removes everything.
 	public void Clear() => Vertices.Clear();

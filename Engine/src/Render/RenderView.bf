@@ -1777,8 +1777,21 @@ class RenderView
 		let count = (uint32)batch.Vertices.Count;
 		if (count == 0)
 			return;
+		let state = Gfx.StateWriteRGB | Gfx.StateWriteA | (onTop ? 0 : Gfx.StateDepthLequal) | (triangles ? 0 : Gfx.StateLines) | Gfx.StateMsaa | Gfx.StateBlendAlpha;
 		var available = bgfx.get_avail_transient_vertex_buffer(count, &Gfx.LineLayout);
 		available -= available % (triangles ? 3 : 2);
+		if (available < count)
+		{
+			// Too big for this frame's transient buffer (a dense model's rig preview is millions of vertices): its own
+			// buffer holds the whole batch, instead of drawing only the part that fits.
+			if (batch.UploadDynamic())
+			{
+				bgfx.set_dynamic_vertex_buffer(0, batch.DynamicBuffer, 0, count);
+				bgfx.set_state(state, 0);
+				bgfx.submit(view, RenderResources.LineProgram, 0, 0xff);
+				return;
+			}
+		}
 		if (available == 0)
 			return;
 		bgfx.TransientVertexBuffer buffer = default;
@@ -1791,7 +1804,7 @@ class RenderView
 			return;
 		Internal.MemCpy(buffer.data, batch.Vertices.Ptr, (int)available * sizeof(LineVertex));
 		bgfx.set_transient_vertex_buffer(0, &buffer, 0, available);
-		bgfx.set_state(Gfx.StateWriteRGB | Gfx.StateWriteA | (onTop ? 0 : Gfx.StateDepthLequal) | (triangles ? 0 : Gfx.StateLines) | Gfx.StateMsaa | Gfx.StateBlendAlpha, 0);
+		bgfx.set_state(state, 0);
 		bgfx.submit(view, RenderResources.LineProgram, 0, 0xff);
 	}
 }

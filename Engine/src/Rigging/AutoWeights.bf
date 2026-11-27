@@ -129,15 +129,20 @@ static class AutoWeights
 		}
 		const int Candidates = 4;
 		let n = places.Count;
-		let candidate = scope int32[n * Candidates];
-		let distance = scope float[n * Candidates];
-		let closest = scope Vector3[n * Candidates];
+		// On the heap: a dense model's buffers are far more than a thread's stack holds (Windows' main thread has 1 MB).
+		let candidate = new int32[n * Candidates];
+		defer delete candidate;
+		let distance = new float[n * Candidates];
+		defer delete distance;
+		let closest = new Vector3[n * Candidates];
+		defer delete closest;
 		for (int p < n)
 		{
 			for (int k < Candidates)
 			{
 				candidate[p * Candidates + k] = -1;
 				distance[p * Candidates + k] = float.MaxValue;
+				closest[p * Candidates + k] = places[p];
 			}
 			let point = places[p];
 			for (int d < deforming.Count)
@@ -173,8 +178,10 @@ static class AutoWeights
 				}
 			}
 		}
-		let froms = scope Vector3[n * Candidates];
-		let tos = scope Vector3[n * Candidates];
+		let froms = new Vector3[n * Candidates];
+		defer delete froms;
+		let tos = new Vector3[n * Candidates];
+		defer delete tos;
 		let skip = size * 1e-4f;
 		for (int i < n * Candidates)
 		{
@@ -186,13 +193,17 @@ static class AutoWeights
 			froms[i] = start;
 			tos[i] = candidate[i] >= 0 ? closest[i] : start;
 		}
-		let blocked = scope bool[n * Candidates];
+		let blocked = new bool[n * Candidates];
+		defer delete blocked;
 		rays.Blocked(froms, tos, blocked);
 
 		// Heat: from the nearest bone it can see (or the nearest at all), shared with any as near.
-		let heat = scope float[n];
-		let nearest = scope int32[n * 2];
-		let shares = scope float[n * 2];
+		let heat = new float[n];
+		defer delete heat;
+		let nearest = new int32[n * 2];
+		defer delete nearest;
+		let shares = new float[n * 2];
+		defer delete shares;
 		let floor = size * 1e-3f;
 		for (int p < n)
 		{
@@ -227,7 +238,8 @@ static class AutoWeights
 				}
 			}
 		}
-		let solved = scope float[n * deforming.Count];
+		let solved = new float[n * deforming.Count];
+		defer delete solved;
 		tn_rig_heat_weights((float*)places.Ptr, (int32)n, triangles.Ptr, (int32)(triangles.Count / 3), heat.Ptr, nearest.Ptr, shares.Ptr, 2, (int32)deforming.Count,
 			(int32)iterations, solved.Ptr);
 

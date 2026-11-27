@@ -47,7 +47,9 @@ class RigRays
 				blocked[i] = false;
 			return;
 		}
-		let rays = scope float[from.Length * 7];
+		// On the heap: a dense model asks about millions of rays at once, more than a thread's stack holds.
+		let rays = new float[from.Length * 7];
+		defer delete rays;
 		for (int i < from.Length)
 		{
 			let d = to[i] - from[i];
@@ -61,7 +63,8 @@ class RigRays
 			rays[i * 7 + 5] = dir.z;
 			rays[i * 7 + 6] = length;
 		}
-		let result = scope uint8[from.Length];
+		let result = new uint8[from.Length];
+		defer delete result;
 		tn_bake_occluded(mBvh, rays.Ptr, (int32)from.Length, result.Ptr);
 		for (int i < from.Length)
 			blocked[i] = result[i] != 0;

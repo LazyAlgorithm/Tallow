@@ -68,9 +68,17 @@ static class RigExport
 			return accessorCount++;
 		}
 
-		// Each vertex's four strongest bones, adding up to 1.
-		let joints = scope uint16[rig.positions.Count * 4];
-		let jointWeights = scope float[rig.positions.Count * 4];
+		// Each vertex's four strongest bones, adding up to 1. On the heap: a dense model's buffers are more than a
+		// thread's stack holds (Windows' main thread has 1 MB).
+		let joints = new uint16[rig.positions.Count * 4];
+		defer delete joints;
+		let jointWeights = new float[rig.positions.Count * 4];
+		defer delete jointWeights;
+		for (int i < joints.Count)
+		{
+			joints[i] = 0;
+			jointWeights[i] = 0;
+		}
 		for (int v < rig.positions.Count)
 		{
 			let row = rig.weights.Ptr + v * boneCount;
@@ -110,7 +118,8 @@ static class RigExport
 		{
 			let remap = scope Dictionary<uint32, uint32>();
 			let used = scope List<uint32>();
-			let indices = scope uint32[part.indices.Count];
+			let indices = new uint32[part.indices.Count];
+			defer delete indices;
 			for (int i < part.indices.Count)
 			{
 				let v = part.indices[i];
@@ -125,13 +134,20 @@ static class RigExport
 			let n = used.Count;
 			if (n == 0)
 				continue;
-			let positions = scope float[n * 3];
-			let normals = scope float[n * 3];
-			let uvs = scope float[n * 2];
-			let uv2s = scope float[n * 2];
-			let colors = scope float[n * 4];
-			let partJoints = scope uint16[n * 4];
-			let partWeights = scope float[n * 4];
+			let positions = new float[n * 3];
+			defer delete positions;
+			let normals = new float[n * 3];
+			defer delete normals;
+			let uvs = new float[n * 2];
+			defer delete uvs;
+			let uv2s = new float[n * 2];
+			defer delete uv2s;
+			let colors = new float[n * 4];
+			defer delete colors;
+			let partJoints = new uint16[n * 4];
+			defer delete partJoints;
+			let partWeights = new float[n * 4];
+			defer delete partWeights;
 			var min = Vector3(float.MaxValue), max = Vector3(-float.MaxValue);
 			for (int i < n)
 			{
