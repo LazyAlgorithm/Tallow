@@ -1,6 +1,9 @@
 The physical sky's shaders (Engine/shaders/include/atmosphere.sh, fs_atmo_transmittance.sc,
 fs_atmo_multiscatter.sc, fs_atmo_skyview.sc and include/sky_physical.sh) are ported from Bevy's
-atmosphere (bevy_pbr), used under the MIT licence below.
+atmosphere (bevy_pbr), and the volumetric fog's phase function, ambient term and shadow lookup from
+Bevy's volumetric_fog; used under the MIT licence below. The cloud layer's shaders are Tallow's own,
+following the published methods cited in Engine/shaders/include/clouds.sh (Schneider 2015,
+Hillaire 2015).
 
 MIT License
 
