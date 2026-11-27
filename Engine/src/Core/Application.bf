@@ -19,7 +19,7 @@ namespace Tallow;
 ///                                                      and exit 0 or 1 (builtin:sphere_smooth, sphere:512x300, a model)
 ///   --gpu-driven on|off                                draw big meshes from clusters picked on the graphics card (or
 ///                                                      not), whatever the quality setting says
-///   --gpu-debug-view <name> [--gpu-debug-mip N]       show clusters, lod, triangles, hzb, residency or vt instead of the lit picture
+///   --gpu-debug-view <name> [--gpu-debug-mip N]       show clusters, lod, triangles, hzb, residency, vt, fog or the cloud rays instead of the lit picture
 ///   --gpu-occlusion on|off                             leave out what is hidden behind other things in the GPU-driven
 ///                                                      path (on by default, with the camera's occlusion culling)
 ///   --gi-history-scale N                               multiplier for probe lighting history (0 to 1)
@@ -44,7 +44,8 @@ namespace Tallow;
 ///                                                      GPU-path and streaming values, check the quality file, exit 0 or 1
 ///   --cloud-test settings                              print the cloud settings with no window, check they save and reload
 ///                                                      through a scene file, exit 0 or 1
-///   --cloud-test sky|volume|lighting                   draw the 2D backup / the raymarch / its lighting and check them
+///   --cloud-test sky|volume|lighting|temporal          draw the 2D backup / the raymarch / its lighting / the temporal
+///                                                      blend and budget, and check them
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
 ///   --no-geometry-streaming                            load every page of a big mesh whole instead of streaming them
 ///   --no-texture-streaming                             load big textures whole instead of streaming their mip levels
@@ -279,8 +280,8 @@ class Application
 			else
 				Log.Warning(scope $"--gpu-occlusion takes on or off, not '{gpuOcclusion}'");
 		}
-		// --gpu-debug-view off|clusters|lod|triangles|hzb|residency|vt|fog-density|fog-light [--gpu-debug-mip N]: draw a
-		// debug picture (the GPU-driven path's, or the volumetric fog's cells).
+		// --gpu-debug-view off|clusters|lod|triangles|hzb|residency|vt|fog-density|fog-light|clouds [--gpu-debug-mip N]:
+		// draw a debug picture (the GPU-driven path's, the volumetric fog's cells, or the clouds' ray count).
 		let debugView = scope String();
 		if (GetArg("--gpu-debug-view", debugView))
 		{
@@ -296,7 +297,8 @@ class Application
 			case "vt", "vtpages": GpuDriven.View = .VtPages;
 			case "fog", "fogdensity", "fog-density": GpuDriven.View = .FogDensity;
 			case "foglight", "fog-light": GpuDriven.View = .FogLight;
-			default: Log.Warning(scope $"--gpu-debug-view takes off, clusters, lod, triangles, hzb, residency, vt, fog-density or fog-light, not '{debugView}'");
+			case "clouds", "cloudrays", "cloud-rays": GpuDriven.View = .Clouds;
+			default: Log.Warning(scope $"--gpu-debug-view takes off, clusters, lod, triangles, hzb, residency, vt, fog-density, fog-light or clouds, not '{debugView}'");
 			}
 		}
 		let debugMip = scope String();
@@ -407,6 +409,13 @@ class Application
 		if (GetArg("--cloud-test", cloudTest) && cloudTest == "lighting" && !(this is CloudLightingTestApp))
 		{
 			let test = scope CloudLightingTestApp();
+			test.Run(args);
+			return test.Result;
+		}
+		// The cloud temporal and budget check draws a still, a cut and a pan, and needs a window (C2c).
+		if (GetArg("--cloud-test", cloudTest) && cloudTest == "temporal" && !(this is CloudTemporalTestApp))
+		{
+			let test = scope CloudTemporalTestApp();
 			test.Run(args);
 			return test.Result;
 		}

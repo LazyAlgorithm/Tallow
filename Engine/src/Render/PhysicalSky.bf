@@ -289,7 +289,9 @@ static class PhysicalSky
 		Vector4 wind = .(offset.x, offset.y, 0.12f, (float)(seconds % 1000.0));
 		// x the HG anisotropy, y the ambient share, z the powder's scale (1/m; C2b), w the sun scattering.
 		Vector4 light = .(Math.Clamp(env.cloudAnisotropy, -0.9f, 0.9f), Math.Max(env.cloudAmbient, 0), 8.0f, 1);
-		Vector4 view = .(Math.Max(env.cloudDistance, 1), env.clouds ? 1.0f : 0.0f, env.cloudMode == .TwoD ? 1.0f : 2.0f, 0.0f);
+		// The scene's distance, capped by the quality setting's (C2c): both cloud paths read it from u_cloudView.x.
+		let distance = Math.Clamp(Math.Min(Math.Max(env.cloudDistance, 1), Math.Max(RenderView.CloudMaxDistance, 500)), 1, 100000);
+		Vector4 view = .(distance, env.clouds ? 1.0f : 0.0f, env.cloudMode == .TwoD ? 1.0f : 2.0f, 0.0f);
 		var tint = Linear(env.cloudTint);
 		tint.w = 1;
 		Vector4 cloudSunDir = .(sun.x, sun.y, sun.z, 1);

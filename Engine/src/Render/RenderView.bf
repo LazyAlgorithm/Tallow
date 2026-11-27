@@ -534,6 +534,8 @@ class RenderView
 		mCloudsActive = UsesVolumetricClouds(camera, env);
 		if (mCloudsActive)
 			DispatchClouds(scene, camera, env);
+		else
+			InvalidateCloudHistory();
 		if (mVolumetricFogActive)
 			DispatchVolumetricFog(camera, env);
 		using (sOpaqueMarker.Sample())

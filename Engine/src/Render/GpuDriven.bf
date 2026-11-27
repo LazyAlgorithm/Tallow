@@ -39,7 +39,10 @@ static class GpuDriven
 		/// Volumetric fog's cells' density (grey), at each pixel's own depth. Fog off: the normal picture.
 		FogDensity,
 		/// The light the volumetric fog's cells scatter towards the camera.
-		FogLight
+		FogLight,
+		/// Volumetric clouds' ray count: each pixel's share of the step budget it marched, in grey (0 where no ray met
+		/// the slab). Clouds off: the normal picture.
+		Clouds
 	}
 
 	/// The bgfx view the culling dispatches go in: after the skinning's (Compute.View) and before every camera's.

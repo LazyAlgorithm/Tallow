@@ -22,7 +22,7 @@ static class CSharpGpuDriven
 	[CSharpExpose]
 	public static bool SetDebugView(int32 view, int32 mip)
 	{
-		if (view < 0 || view > (int32)GpuDriven.DebugView.FogLight)
+		if (view < 0 || view > (int32)GpuDriven.DebugView.Clouds)
 			return false;
 		GpuDriven.View = (GpuDriven.DebugView)view;
 		GpuDriven.DebugMip = Math.Max(0, mip);

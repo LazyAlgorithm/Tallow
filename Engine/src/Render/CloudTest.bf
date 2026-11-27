@@ -1008,3 +1008,331 @@ class CloudLightingTestApp : Application
 		Close();
 	}
 }
+
+/// `--cloud-test temporal [--cloud-test-folder <dir>]`: the temporal blend and the step budget (C2c). The weather
+/// clock is advanced a frame at a time so the wind drifts deterministically. Shots: a still camera settled for a while
+/// and one frame more (no shimmer: the consecutive frames are nearly the same), a teleport to a new place and the one
+/// frame after it (the history must be dropped, so no ghost of the old view is blended in), the same place once it has
+/// settled again, a smooth pan (the history stays, reprojected), that place settled, a ray-count debug view and a
+/// budget shot. Writes a screenshot of each and checks: the cut drops the history and the cut frame matches the settled
+/// one at the new place; the pan keeps the history and the moving frame matches the settled one at its end; the still
+/// frames converge; the debug view shows varying ray counts; and the pass stays inside 1.5 ms at High (half res,
+/// 48 steps). Needs Vulkan, Direct3D or Metal.
+class CloudTemporalTestApp : Application
+{
+	const int32 ShotWidth = 640;
+	const int32 ShotHeight = 360;
+	const int32 SettleFrames = 32;
+	/// Frames of the smooth pan: slow enough that every step stays under the history's 5 m cut.
+	const int32 PanFrames = 20;
+	/// The share of the picture above the horizon that the comparisons use.
+	const int32 SkyRows = ShotHeight * 7 / 10;
+	/// The weather clock the shots are drawn at; the cloud time moves on a frame at a time from here.
+	const double CloudTime = 3600.0;
+	/// The cloud pass's budget at High quality, half resolution and 48 steps (the spec's C2c check).
+	const float BudgetMs = 1.5f;
+	/// The most the settled frames' mean difference may be (of 255): temporal noise, not shimmer.
+	const float ShimmerLimit = 4.0f;
+	/// The most a cut or pan frame's mean difference from the settled frame may be: a ghost would be far larger.
+	const float GhostLimit = 6.0f;
+
+	public int32 Result;
+
+	struct Phase
+	{
+		public StringView name;
+		public Vector3 position;
+		/// Degrees added to the sun's azimuth (the camera looks near the sun).
+		public float yawOffset;
+		public float pitch;
+		public int32 settle;
+		public GpuDriven.DebugView debug;
+		/// Move from the previous phase's pose to this one over PanFrames (the moving camera).
+		public bool pan;
+	}
+
+	Scene mScene ~ delete _;
+	RenderView mView ~ delete _;
+	Camera mCamera;
+	GameObject mCameraObject;
+	GameObject mSunObject;
+	String mDir = new .() ~ delete _;
+	List<Phase> mPhases = new .() ~ delete _;
+	int mPhase = -1;
+	int mFrame;
+	double mClock;
+	float mBaseYaw;
+	CompareShot mShot ~ delete _;
+	// The shots the checks compare, by name.
+	uint8[] mSettledA ~ delete _;
+	uint8[] mCut ~ delete _;
+	uint8[] mSettledQ ~ delete _;
+	uint8[] mMoving ~ delete _;
+	/// Whether the capture frame used last frame's layer (the cut must not, the stills and the pan must).
+	bool mCaptureHistoryValid;
+	/// Whether every frame of the pan reused the history.
+	bool mPanHistoryValid = true;
+
+	protected override bool LoadsPlayerQuality => false;
+
+	public this()
+	{
+		Title.Set("Cloud temporal test");
+		Width = ShotWidth;
+		Height = ShotHeight;
+	}
+
+	void Check(bool ok, StringView what)
+	{
+		Console.WriteLine(scope $"cloud-test: {ok ? "ok" : "FAIL"} {what}");
+		if (!ok)
+			Result = 1;
+	}
+
+	protected override bool OnInit()
+	{
+		if (!GetArg("--cloud-test-folder", mDir) || mDir.IsEmpty || mDir.StartsWith("--"))
+			mDir.Set(scope $"{Path.GetTempPath(.. scope .())}tallow-cloud-temporal");
+		Directory.CreateDirectory(mDir);
+		Clouds.OverrideSeconds = CloudTime;
+		Profiler.Enabled = true;
+		// The still, one frame more, the budget shot (early, before the GPU has run flat out for a minute), a
+		// teleport, the new place settled, a pan to a third place, it settled and the ray-count debug view.
+		mPhases.Add(.() { name = "settled-a", position = .(0, 200, 0), yawOffset = 0, pitch = 20, settle = SettleFrames });
+		mPhases.Add(.() { name = "settled-b", position = .(0, 200, 0), yawOffset = 0, pitch = 20, settle = 1 });
+		mPhases.Add(.() { name = "budget", position = .(0, 200, 0), yawOffset = 0, pitch = 20, settle = 2 });
+		mPhases.Add(.() { name = "cut", position = .(60, 200, 40), yawOffset = 20, pitch = 20, settle = 1 });
+		mPhases.Add(.() { name = "settled-q", position = .(60, 200, 40), yawOffset = 20, pitch = 20, settle = SettleFrames });
+		mPhases.Add(.() { name = "moving", position = .(90, 220, 70), yawOffset = 35, pitch = 22, settle = PanFrames + 1, pan = true });
+		mPhases.Add(.() { name = "settled-r", position = .(90, 220, 70), yawOffset = 35, pitch = 22, settle = SettleFrames });
+		mPhases.Add(.() { name = "rays", position = .(90, 220, 70), yawOffset = 35, pitch = 22, settle = 2, debug = .Clouds });
+
+		mScene = new Scene();
+		let cameraObject = mScene.CreateGameObject("Camera");
+		mCameraObject = cameraObject;
+		mCamera = cameraObject.AddComponent<Camera>();
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mSunObject = mScene.CreateGameObject("Sun");
+		mSunObject.Transform.EulerAngles = .(20, -30, 0);
+		let light = mSunObject.AddComponent<Light>();
+		light.intensity = 1.5f;
+		let ground = mScene.CreateGameObject("Ground");
+		let renderer = ground.AddComponent<MeshRenderer>();
+		renderer.mesh.Set("builtin:plane");
+		renderer.color = .FromBytes(112, 158, 92);
+		ground.Transform.LocalScale = .(500, 1, 500);
+		mView = new RenderView(10);
+		mView.AllowPostAa = false;
+		ScreenEffects.GlobalIllumination = .Ambient;
+		mScene.StartPlay();
+		return true;
+	}
+
+	void SetPose(Vector3 position, float yawOffset, float pitch)
+	{
+		let yaw = (mBaseYaw + yawOffset) * Mathf.Deg2Rad;
+		let p = pitch * Mathf.Deg2Rad;
+		let look = Vector3(Math.Sin(yaw) * Math.Cos(p), Math.Sin(p), Math.Cos(yaw) * Math.Cos(p)).Normalized;
+		mCameraObject.Transform.Position = position;
+		mCameraObject.Transform.Rotation = Quaternion.LookRotation(look, .(0, 1, 0));
+	}
+
+	void StartPhase(Phase phase)
+	{
+		let env = mScene.Environment;
+		env.Reset();
+		env.skyMode = .Physical;
+		env.dayNight = true;
+		env.dayNightPaused = true;
+		env.autoColors = true;
+		env.sunIntensity = Atmosphere.ReferenceSunIntensity;
+		env.sunLight = mSunObject.Id;
+		// No fog over the sky: the cloud pass is what this test measures.
+		env.volumetricFog = false;
+		env.clouds = true;
+		env.cloudMode = .Volumetric;
+		env.cloudCoverage = 0.45f;
+		// The afternoon hour with the sun 45 degrees up (as --cloud-test volume).
+		float bestHour = 12;
+		float bestError = float.MaxValue;
+		for (float hour = 12; hour < 21; hour += 0.01f)
+		{
+			env.timeOfDay = hour;
+			let error = Math.Abs(DayNight.SunElevation(env) - 45);
+			if (error < bestError)
+			{
+				bestError = error;
+				bestHour = hour;
+			}
+		}
+		env.timeOfDay = bestHour;
+		let sun = DayNight.SunDirection(env);
+		mBaseYaw = Math.Atan2(sun.x, sun.z) * Mathf.Rad2Deg;
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		DayNight.Apply(mScene);
+		GpuDriven.View = phase.debug;
+		if (!phase.pan)
+			SetPose(phase.position, phase.yawOffset, phase.pitch);
+		mCaptureHistoryValid = false;
+		mPanHistoryValid = true;
+	}
+
+	protected override void OnUpdate()
+	{
+		mScene.Update();
+		AssetLoader.Update();
+	}
+
+	protected override void OnRender()
+	{
+		if (mPhase < 0 || (mShot != null && mFrame < 0))
+		{
+			mPhase++;
+			if (mPhase >= mPhases.Count)
+			{
+				Finish();
+				return;
+			}
+			StartPhase(mPhases[mPhase]);
+			mFrame = 0;
+			DeleteAndNullify!(mShot);
+		}
+		let phase = mPhases[mPhase];
+		if (phase.pan)
+		{
+			// From the previous phase's pose to this one, eased, a frame at a time: the camera moves and turns
+			// smoothly, so the history may still be reused (reprojected).
+			let from = mPhases[mPhase - 1];
+			float t = Math.Clamp((float)mFrame / PanFrames, 0.0f, 1.0f);
+			t = t * t * (3.0f - 2.0f * t);
+			let position = from.position + (phase.position - from.position) * t;
+			SetPose(position, from.yawOffset + (phase.yawOffset - from.yawOffset) * t, from.pitch + (phase.pitch - from.pitch) * t);
+		}
+		// The cloud clock moves on a frame at a time, so the wind drift (and its reprojection) is deterministic.
+		Clouds.OverrideSeconds = CloudTime + mClock;
+		mClock += 1.0 / 60.0;
+		mView.Resize(ShotWidth, ShotHeight);
+		mView.Render(mScene, mCamera.GetCameraData((float)ShotWidth / ShotHeight));
+		if (phase.pan)
+			mPanHistoryValid &= mView.CloudHistoryValid;
+		mFrame++;
+		if (mFrame < phase.settle)
+			return;
+		if (mShot == null)
+		{
+			mCaptureHistoryValid = mView.CloudHistoryValid;
+			mShot = new CompareShot();
+		}
+		let path = scope $"{mDir}/{phase.name}.png";
+		if (mShot.Step(mView, ShotWidth, ShotHeight, path))
+		{
+			let pixels = mShot.Pixels;
+			let copy = new uint8[pixels.Count];
+			Internal.MemCpy(copy.CArray(), pixels.CArray(), pixels.Count);
+			CheckShot(phase, copy);
+			mFrame = -1;
+		}
+	}
+
+	void CheckShot(Phase phase, uint8[] pixels)
+	{
+		let gpu = ProfilerModules.VolumetricCloudsMs;
+		Console.WriteLine(scope $"cloud-test: {phase.name}: pixels {RenderView.VolumetricCloudPixels}, steps {RenderView.CloudSteps}, rays {RenderView.VolumetricCloudRays}, GPU {gpu:F3} ms, history {(mCaptureHistoryValid ? "kept" : "dropped")}");
+		float total = 0;
+		float minLum = 255;
+		float maxLum = 0;
+		for (int32 y = 0; y < SkyRows; y++)
+			for (int32 x = 0; x < ShotWidth; x++)
+			{
+				let l = Lum(pixels, (y * ShotWidth + x) * 4);
+				total += l;
+				minLum = Math.Min(minLum, l);
+				maxLum = Math.Max(maxLum, l);
+			}
+		Check(total > 0, scope $"{phase.name}: not black");
+		if (!RenderView.CloudsRunnable)
+			return;
+		if (phase.name == "settled-a")
+		{
+			mSettledA = pixels;
+			Check(mCaptureHistoryValid, "settled: last frame's layer is reused");
+		}
+		else if (phase.name == "settled-b")
+		{
+			if (mSettledA == null)
+				return;
+			let d = MeanDiff(mSettledA, pixels);
+			Console.WriteLine(scope $"cloud-test: settled frame-to-frame mean difference {d:F2} of 255");
+			Check(mCaptureHistoryValid, "settled: the second frame still reuses the layer");
+			Check(d < ShimmerLimit, scope $"still camera: no shimmer between frames (mean difference {d:F2} < {ShimmerLimit:F1})");
+			mSettledA = null;
+		}
+		else if (phase.name == "cut")
+		{
+			mCut = pixels;
+			Check(!mCaptureHistoryValid, "a camera cut drops the history (no ghost of the old view)");
+		}
+		else if (phase.name == "settled-q")
+		{
+			mSettledQ = pixels;
+			Check(mCaptureHistoryValid, "after the cut the history builds again");
+			if (mCut != null)
+			{
+				let d = MeanDiff(mCut, pixels);
+				Console.WriteLine(scope $"cloud-test: cut frame to settled frame mean difference {d:F2} of 255");
+				Check(d < GhostLimit, scope $"the cut frame is the new view, not a ghost (mean difference {d:F2} < {GhostLimit:F1})");
+			}
+		}
+		else if (phase.name == "moving")
+		{
+			mMoving = pixels;
+			Check(mPanHistoryValid, "a smooth pan keeps the history (reprojected by the slab midpoint)");
+		}
+		else if (phase.name == "settled-r")
+		{
+			if (mMoving == null)
+				return;
+			let d = MeanDiff(mMoving, pixels);
+			Console.WriteLine(scope $"cloud-test: moving frame to settled frame mean difference {d:F2} of 255");
+			Check(d < GhostLimit, scope $"the moving frame is the settled view, not a ghost (mean difference {d:F2} < {GhostLimit:F1})");
+		}
+		else if (phase.name == "rays")
+		{
+			Console.WriteLine(scope $"cloud-test: ray count view {minLum:F0}..{maxLum:F0} of 255, mean {total / (SkyRows * ShotWidth):F0}");
+			Check(maxLum > 0, "the debug view shows the ray counts");
+			Check(maxLum - minLum > 12, scope $"ray counts vary across the sky ({minLum:F0}..{maxLum:F0})");
+		}
+		else if (phase.name == "budget")
+		{
+			Check(RenderView.VolumetricCloudPixels > 0 && RenderView.VolumetricCloudRays > 0, "the pass has pixels and rays");
+			Check(gpu > 0 && gpu <= BudgetMs, scope $"the cloud pass is inside its budget ({gpu:F3} ms <= {BudgetMs:F1} ms at High, half res, {RenderView.CloudSteps} steps)");
+		}
+	}
+
+	/// The mean absolute difference of two shots over the sky part, per channel (0..255).
+	static float MeanDiff(uint8[] a, uint8[] b)
+	{
+		if (a == null || b == null || a.Count != b.Count)
+			return float.MaxValue;
+		int64 sum = 0;
+		for (int32 y = 0; y < SkyRows; y++)
+			for (int32 x = 0; x < ShotWidth; x++)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				for (int32 c < 3)
+					sum += Math.Abs((int32)a[i + c] - (int32)b[i + c]);
+			}
+		return (float)sum / (SkyRows * ShotWidth * 3);
+	}
+
+	static float Lum(uint8[] pixels, int32 i) => pixels[i] * 0.2126f + pixels[i + 1] * 0.7152f + pixels[i + 2] * 0.0722f;
+
+	void Finish()
+	{
+		GpuDriven.View = .Off;
+		Console.WriteLine(Result == 0 ? "cloud-test temporal: PASS" : "cloud-test temporal: FAILED");
+		Close();
+	}
+}

@@ -23,7 +23,8 @@ uniform vec4 u_cloudMoonDir;
 uniform vec4 u_cloudMoonColor;
 // rgb the ambient sky light, w the ground share.
 uniform vec4 u_cloudAmbient;
-// x raymarch steps, y self-shadow steps, z the frame (the march's jitter), w how much of last frame's layer to keep.
+// x raymarch steps, y self-shadow steps, z the frame (the blue-noise tile's shift), w how much of last frame's layer to
+// keep (0: no history this frame).
 uniform vec4 u_cloudSteps;
 
 // An integer hash (no sin): stable at the kilometre coordinates the weather is sampled at, and the same shape on every
@@ -256,12 +257,6 @@ vec3 cloudLighting(vec3 p, vec3 rd, float density)
 	return u_cloudTint.rgb * (sun + moon + ambient);
 }
 
-// Interleaved gradient noise for the march's per-pixel start offset.
-float cloudIGN(vec2 p)
-{
-	return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
-}
-
 // The slab's [t0, t1] along a unit ray from ro, clamped to far; false when the ray misses it.
 bool cloudSlab(vec3 ro, vec3 rd, float far, out float t0, out float t1)
 {
@@ -284,22 +279,29 @@ bool cloudSlab(vec3 ro, vec3 rd, float far, out float t0, out float t1)
 }
 
 // The cloud layer along a unit ray: premultiplied scattered light in rgb and its opacity (1 - transmittance) in a, for
-// the sky composite `sky * (1 - a) + rgb`. pixel is the target pixel for the jitter (the frame's noise decorrelates it).
-vec4 cloudMarch(vec3 ro, vec3 rd, vec2 pixel)
+// the sky composite `sky * (1 - a) + rgb`. jitter (0..1) is the march's start offset within the first step, from the
+// blue-noise tile (C2c): it changes every frame and every pixel, and the temporal blend in cs_clouds.sc averages the
+// banding it would otherwise leave. midDistance is the middle of the slab along the ray (0 when it is missed), where
+// cs_clouds.sc reprojects this frame's layer into last frame's; marched is how many steps were taken (the debug view).
+vec4 cloudMarch(vec3 ro, vec3 rd, float jitter, out float midDistance, out float marched)
 {
+	midDistance = 0.0;
+	marched = 0.0;
 	if (u_cloudView.y < 0.5 || u_cloudShape.z <= 0.0 || u_cloudShape.w <= 0.0)
 		return vec4_splat(0.0);
 	float t0, t1;
 	if (!cloudSlab(ro, rd, max(u_cloudView.x, 1.0), t0, t1))
 		return vec4_splat(0.0);
+	midDistance = (t0 + t1) * 0.5;
 	int steps = int(max(u_cloudSteps.x, 1.0));
 	float dt = (t1 - t0) / float(steps);
-	float jitter = cloudIGN(pixel + u_cloudSteps.z);
 	float transmittance = 1.0;
 	vec3 light = vec3_splat(0.0);
+	float taken = 0.0;
 	for (int i = 0; i < steps; ++i)
 	{
 		vec3 p = ro + rd * (t0 + (float(i) + jitter) * dt);
+		taken += 1.0;
 		float d = cloudDensity(p);
 		if (d <= 0.0)
 			continue;
@@ -310,6 +312,7 @@ vec4 cloudMarch(vec3 ro, vec3 rd, vec2 pixel)
 		if (transmittance < 0.01)
 			break;
 	}
+	marched = taken;
 	// The layer fades out where the march ran out of distance, so a deck that reaches the far end never stops in a
 	// hard line above the horizon (the near horizon fade is the composite's; the aerial perspective is C2d's).
 	float fade = 1.0 - smoothstep(0.85 * max(u_cloudView.x, 1.0), max(u_cloudView.x, 1.0), t1);

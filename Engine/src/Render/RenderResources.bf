@@ -76,9 +76,53 @@ static class RenderResources
 	/// The cloud pass (cs_clouds.sc, RenderViewClouds.bf): the march's steps and frame, the target's size, its texture.
 	public static bgfx.ProgramHandle CloudsProgram;
 	public static bgfx.UniformHandle uCloudSteps, uCloudSize, sClouds;
+	/// The cloud pass's temporal blend (C2c): last frame's view-projection, the weather's drift since, the debug view's
+	/// ray-count switch, and the history and blue-noise samplers.
+	public static bgfx.UniformHandle uCloudPrevViewProj, uCloudWindDelta, uCloudDebug, sCloudHistory, sCloudNoise;
+	/// The 32x32 blue-noise tile the march's start is jittered with (each value 0..255, 0 once, 255 once), made by
+	/// Ulichney's void-and-cluster and kept here so every run and every peer jitters identically. Sampled with point
+	/// filtering and wrapped by the shader (cs_clouds.sc), so it tiles.
+	public static bgfx.TextureHandle BlueNoise = .() { idx = uint16.MaxValue };
 	/// Bound as s_clouds where the raymarch did not run, so the sky shader's sampler is always set (1x1, transparent).
 	public static bgfx.TextureHandle CloudDummy;
 	public static bool CloudsReady;
+
+	/// The 32x32 blue-noise tile (BlueNoise), row by row: every value 0..255 used once, arranged so no two close values
+	/// are neighbours in a way white noise would allow (Ulichney's void-and-cluster, sigma 1.5, tileable). Fixed here
+	/// rather than generated at startup so the jitter is the same on every run and every peer.
+	static uint8[1024] sBlueNoise = .(
+		 85, 239,  28,  79, 164,  22, 204, 160, 113, 183, 218, 155, 241,  32, 114, 221, 190, 129,  70, 216, 146, 195, 239,   7, 158,  27, 119,  42, 100,  25, 122, 220,
+		150, 175, 103, 224,  53, 123, 231,  62,  40, 133,  24,  51, 121, 180,  88, 161,  60, 102, 166,  13, 110,  36,  78, 124, 224,  83, 205, 154, 235,  67, 162,  38,
+		 63,  15, 202, 143, 189,   1, 148,  99, 195, 255,  91, 190, 231,  73,  17, 249,  28, 197, 242,  86, 230, 136, 211,  50, 185, 138,  63,   1, 184,  93, 247, 191,
+		129, 244,  71,  34,  93, 248,  75, 216,  11, 163,  66, 147,   6, 135, 201, 107, 140,  44, 152,  56, 178,  19, 165,  97,  15, 252, 104, 227,  46, 141,  11, 105,
+		 47, 158, 112, 216, 132, 169,  46, 179, 120,  37, 207, 105, 221,  46, 165, 226,  76, 213,   7, 126, 204,  68, 243, 148, 203,  36, 159, 124, 200,  72, 223, 206,
+		 80, 226,   5, 180,  60,  23, 110, 242,  84, 138, 237,  26, 172,  93,  63,  20, 120, 185,  92, 254, 110,  41,  86, 120,  61, 181,  79,  24, 167, 113,  33, 171,
+		 21, 190, 138,  84, 233, 206, 155,  15, 196,  57, 183,  81, 122, 252, 193, 155, 238,  52, 170,  24, 154, 189, 228,   5, 218, 101, 240, 208,  54, 250, 146,  97,
+		124,  55, 253,  37, 103, 141,  69, 227, 100, 160,   2, 215,  36, 137,  12, 102,  35, 143, 229,  81, 210,  30, 140, 172,  45, 129,  14, 144,  89,   4, 186, 232,
+		157, 210, 115, 174,  13, 186,  48, 127,  32, 248, 115, 152,  67, 176, 219,  77, 201, 113,   2, 132,  54, 106,  71, 250, 156, 194,  70, 175, 218, 134,  65,  41,
+		 90,   9,  73, 147, 237,  90, 220, 165, 202,  88,  52, 234, 199, 109,  48, 246, 166,  64, 212, 161, 244, 186,  13, 115,  88,  31, 211, 104,  20, 237, 111, 204,
+		246, 167, 222,  53, 198,  29, 109,   8,  74, 176, 135,  27,  92,   8, 149, 126,  17, 189,  96,  32,  87, 126, 225, 199,  57, 230, 125,  52, 160,  80, 173,  28,
+		141, 108,  20, 126,  79, 137, 252, 153, 214,  18, 226, 186, 162, 238, 213,  85,  42, 232, 140, 219, 179,  48,  24, 166, 143,   1, 183, 254,  35, 198, 127,  58,
+		182,  39, 191, 243, 168,  43, 188,  59, 121, 101,  43,  66, 122,  33,  58, 185, 159, 113,  61,  10,  77, 207, 134,  67, 236, 107,  76, 147,  98, 223,   7, 234,
+		 97, 217,  61,  89,   0, 228,  95,  26, 240, 197, 151, 250,  83, 208, 142,  99, 255,  28, 174, 241, 149, 109, 251,  96,  30, 171, 209,  17,  60, 119, 154,  75,
+		 16, 132, 158, 117, 205, 150, 125, 175,  70, 137,  12, 171, 106,   4, 192,  20,  73, 204, 130,  94,  38, 164,   7, 187, 217,  46, 131, 241, 193, 174,  45, 207,
+		177, 239,  25, 222,  50,  74,  19, 218,  40,  90, 233,  54, 216, 128, 229, 167, 122,  48, 225,  70, 195, 227,  59,  84, 151, 116,  69, 159,  29,  84, 251, 112,
+		 68,  42,  85, 170, 103, 196, 237, 158, 188, 119, 203,  31, 156,  65,  40,  86, 240, 152,   0, 178,  26, 117, 142,  19, 246, 200,  10,  94, 214, 138,   3, 152,
+		230, 193, 142, 255,   9, 131,  44, 101,   4, 144,  77, 177,  99, 248, 183, 112,  18, 201, 100, 139, 211,  88, 235, 172, 101,  41, 181, 233, 114,  39, 202,  95,
+		127,  16, 115,  55, 184, 151,  81, 247,  62, 214, 242,  22, 133,   9, 145, 210,  57, 171,  74, 251,  53, 162,  33,  65, 220, 125,  72, 164,  55, 245, 182,  58,
+		215, 168, 207,  76, 233,  30, 198, 116, 168,  36, 107,  56, 196, 222,  71,  30, 228, 123,  38, 114,  10, 203, 134, 192,   3, 150, 209,  22, 135,  82, 156,  27,
+		 87,  40, 102,  12, 161,  94, 223,  16, 130, 191, 148, 229,  85, 117, 169,  95, 140, 188, 236, 159, 220,  78, 106, 249,  91,  52, 236, 102, 199,  10, 116, 236,
+		133, 245, 145, 221, 128,  64, 175,  49, 211,  69,   6, 163,  37, 187,  49, 253,   6,  82,  26,  62, 130,  17, 179,  39, 166, 118, 182,  35, 145, 225, 178,  67,
+		  5, 173,  56, 193,  39, 248, 110, 146,  87, 252,  98, 123, 240,  14, 151, 206, 109, 165, 209,  98, 187, 226, 147,  68, 231,  18,  78, 253,  64,  97,  44, 196,
+		212,  78, 118,  23,  90, 184,   1, 229,  27, 170, 200,  58, 213,  80, 129,  60, 232,  37, 145, 243,  45,  86,  29, 198, 136, 214, 160, 121, 205,  25, 161, 107,
+		 32, 149, 234, 203, 156, 136,  77, 195, 116,  42, 135,  22, 174, 105, 194,  18, 177,  75, 118,   2, 173, 123, 245, 112,  49,  96,   5,  53, 176, 231, 137, 249,
+		189, 100,  15,  63, 241,  44, 215,  57, 154, 238,  83, 224, 153,  43, 245,  92, 136, 222, 197,  59, 155, 210,  72,  21, 168, 194, 244, 131,  89,  12,  82,  51,
+		 71, 224, 131, 179, 106,  13, 124, 176,  93,   8, 190, 114,  68,   3, 217, 163,  50,  23, 104, 254,  91,  14, 188, 148, 225,  79,  31, 153, 223, 185, 117, 157,
+		  2, 169,  47, 217,  81, 163, 250,  31, 221, 139,  51, 253, 182, 141, 118,  74, 239, 153, 181,  35, 139, 230,  45,  99, 125,  56, 178, 108,  65,  43, 242, 208,
+		 91, 254, 119,  25, 200, 134,  69, 103, 197,  75, 164,  21,  89, 209,  34, 192,  16, 127,  82, 201,  64, 111, 173, 249,   3, 205, 235,  23, 212, 149,  19, 132,
+		 34,  66, 157,  98, 232,  41, 187,  11, 121, 235,  38, 111, 228,  59, 167, 105, 213,  54, 227,   9, 157, 208,  76,  34, 144,  94, 162, 128,  87, 192, 104, 181,
+		146, 212, 194,   8,  62, 143, 219, 170,  55, 144, 206, 177, 133,  14, 247,  83, 142, 172,  96, 120, 246,  21, 130, 219, 191,  47,  73,  11, 251,  49,  72, 234,
+		111,  50, 128, 180, 247, 108,  85,  29, 244,  80,   4,  95,  66, 199, 150,  47,   0, 238,  33, 184,  51,  92, 169,  61, 108, 243, 180, 215, 139, 170, 202,   6);
 
 	public static bgfx.TextureHandle ShadowMap;
 	public static bgfx.FrameBufferHandle ShadowFrameBuffer;
@@ -243,9 +287,15 @@ static class RenderResources
 		uCloudAmbient = bgfx.create_uniform("u_cloudAmbient", .Vec4, 1);
 		uCloudSteps = bgfx.create_uniform("u_cloudSteps", .Vec4, 1);
 		uCloudSize = bgfx.create_uniform("u_cloudSize", .Vec4, 1);
+		uCloudPrevViewProj = bgfx.create_uniform("u_cloudPrevViewProj", .Mat4, 1);
+		uCloudWindDelta = bgfx.create_uniform("u_cloudWindDelta", .Vec4, 1);
+		uCloudDebug = bgfx.create_uniform("u_cloudDebug", .Vec4, 1);
+		sCloudHistory = bgfx.create_uniform("s_cloudHistory", .Sampler, 1);
+		sCloudNoise = bgfx.create_uniform("s_cloudNoise", .Sampler, 1);
 		sClouds = bgfx.create_uniform("s_clouds", .Sampler, 1);
 		CloudsProgram = LoadCompute("cs_clouds");
 		CloudsReady = CloudsProgram.Valid;
+		BlueNoise = bgfx.create_texture_2d(32, 32, false, 1, .R8, Gfx.SamplerPoint | Gfx.SamplerClamp, bgfx.copy(&sBlueNoise[0], 32 * 32), 0);
 		uint8[4] transparent = .(0, 0, 0, 0);
 		CloudDummy = bgfx.create_texture_2d(1, 1, false, 1, .RGBA8, Gfx.SamplerClamp, bgfx.copy(&transparent, 4), 0);
 		VFogInjectProgram = LoadCompute("cs_vfog_inject");
@@ -415,11 +465,18 @@ static class RenderResources
 		bgfx.destroy_uniform(uCloudAmbient);
 		bgfx.destroy_uniform(uCloudSteps);
 		bgfx.destroy_uniform(uCloudSize);
+		bgfx.destroy_uniform(uCloudPrevViewProj);
+		bgfx.destroy_uniform(uCloudWindDelta);
+		bgfx.destroy_uniform(uCloudDebug);
+		bgfx.destroy_uniform(sCloudHistory);
+		bgfx.destroy_uniform(sCloudNoise);
 		bgfx.destroy_uniform(sClouds);
 		if (CloudsProgram.Valid)
 			bgfx.destroy_program(CloudsProgram);
 		if (CloudDummy.Valid)
 			bgfx.destroy_texture(CloudDummy);
+		if (BlueNoise.Valid)
+			bgfx.destroy_texture(BlueNoise);
 		CloudsReady = false;
 		bgfx.destroy_program(DecalProgram);
 		bgfx.destroy_program(WaterProgram);

@@ -413,8 +413,8 @@ extension EditorApp
 			// volumetric fog to be on; without it they show the normal picture.
 			if (ImGui.BeginMenu("GPU Debug View", GpuDriven.Available || RenderResources.VFogReady))
 			{
-				StringView[9] names = .("Off", "Clusters", "LOD Level", "Triangles", "HZB", "Residency", "Virtual Texture Pages", "Fog Density", "Fog Light");
-				for (int k < 9)
+				StringView[10] names = .("Off", "Clusters", "LOD Level", "Triangles", "HZB", "Residency", "Virtual Texture Pages", "Fog Density", "Fog Light", "Cloud Rays");
+				for (int k < 10)
 				{
 					if (ImGui.MenuItem(scope String(names[k]).CStr(), null, (int)GpuDriven.View == k))
 						GpuDriven.View = (GpuDriven.DebugView)k;

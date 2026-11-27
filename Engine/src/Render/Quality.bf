@@ -79,12 +79,26 @@ struct QualityValues : IEquatable<QualityValues>
 	public bool fogTemporal = true;
 	/// How many point and spot lights may scatter into the fog in a view (the first in each cell's cluster list).
 	public int32 fogLocalLights = 64;
+	/// Volumetric clouds (RenderViewClouds.bf) may raymarch the sky; off, the scene's mode is treated as 2D (the cloud
+	/// backup on the physical sky) even when the scene asks for volumetric.
+	public bool clouds = true;
+	/// Raymarch steps through the cloud slab per pixel.
+	public int32 cloudSteps = 48;
+	/// Steps of each shadow ray towards the sun (the cloud's self-shadowing): more is puffier, costs more.
+	public int32 cloudShadowSteps = 4;
+	/// Blend each frame's cloud layer with last frame's reprojected layer, which hides the march's noise (and needs
+	/// the camera to be still or moving smoothly; a cut drops it).
+	public bool cloudTemporal = true;
+	/// The largest share of the picture's resolution the cloud march may use (a scene's cloudResolution is capped).
+	public float cloudMaxResolution = 0.75f;
+	/// The farthest the cloud march goes, in metres (a scene's cloudDistance is capped).
+	public float cloudMaxDistance = 12000;
 
 	public this()
 	{
 	}
 
-	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialiasMode == other.antialiasMode && upscaler == other.upscaler && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize && gpuDriven == other.gpuDriven && pixelError == other.pixelError && gpuOcclusion == other.gpuOcclusion && streamGeometry == other.streamGeometry && geometryBudgetMB == other.geometryBudgetMB && textureBudgetMB == other.textureBudgetMB && vtBudgetMB == other.vtBudgetMB && skyQuality == other.skyQuality && volumetricFog == other.volumetricFog && fogTileSize == other.fogTileSize && fogSlices == other.fogSlices && fogTemporal == other.fogTemporal && fogLocalLights == other.fogLocalLights;
+	public bool Equals(QualityValues other) => renderScale == other.renderScale && antialiasMode == other.antialiasMode && upscaler == other.upscaler && shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && depthOfField == other.depthOfField && motionBlur == other.motionBlur && globalIllumination == other.globalIllumination && lodBias == other.lodBias && foliageDistance == other.foliageDistance && gpuSkinning == other.gpuSkinning && vsync == other.vsync && textureDetail == other.textureDetail && anisotropic == other.anisotropic && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize && gpuDriven == other.gpuDriven && pixelError == other.pixelError && gpuOcclusion == other.gpuOcclusion && streamGeometry == other.streamGeometry && geometryBudgetMB == other.geometryBudgetMB && textureBudgetMB == other.textureBudgetMB && vtBudgetMB == other.vtBudgetMB && skyQuality == other.skyQuality && volumetricFog == other.volumetricFog && fogTileSize == other.fogTileSize && fogSlices == other.fogSlices && fogTemporal == other.fogTemporal && fogLocalLights == other.fogLocalLights && clouds == other.clouds && cloudSteps == other.cloudSteps && cloudShadowSteps == other.cloudShadowSteps && cloudTemporal == other.cloudTemporal && cloudMaxResolution == other.cloudMaxResolution && cloudMaxDistance == other.cloudMaxDistance;
 	public static bool operator ==(QualityValues a, QualityValues b) => a.Equals(b);
 }
 
@@ -106,12 +120,18 @@ struct LightingValues : IEquatable<LightingValues>
 	public int32 fogSlices = 64;
 	public bool fogTemporal = true;
 	public int32 fogLocalLights = 64;
+	public bool clouds = true;
+	public int32 cloudSteps = 48;
+	public int32 cloudShadowSteps = 4;
+	public bool cloudTemporal = true;
+	public float cloudMaxResolution = 0.75f;
+	public float cloudMaxDistance = 12000;
 
 	public this()
 	{
 	}
 
-	public bool Equals(LightingValues other) => shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && globalIllumination == other.globalIllumination && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize && volumetricFog == other.volumetricFog && fogTileSize == other.fogTileSize && fogSlices == other.fogSlices && fogTemporal == other.fogTemporal && fogLocalLights == other.fogLocalLights;
+	public bool Equals(LightingValues other) => shadows == other.shadows && shadowedLights == other.shadowedLights && shadowMapSize == other.shadowMapSize && shadowDistance == other.shadowDistance && ambientOcclusion == other.ambientOcclusion && globalIllumination == other.globalIllumination && reflectionProbes == other.reflectionProbes && reflectionSize == other.reflectionSize && volumetricFog == other.volumetricFog && fogTileSize == other.fogTileSize && fogSlices == other.fogSlices && fogTemporal == other.fogTemporal && fogLocalLights == other.fogLocalLights && clouds == other.clouds && cloudSteps == other.cloudSteps && cloudShadowSteps == other.cloudShadowSteps && cloudTemporal == other.cloudTemporal && cloudMaxResolution == other.cloudMaxResolution && cloudMaxDistance == other.cloudMaxDistance;
 	public static bool operator ==(LightingValues a, LightingValues b) => a.Equals(b);
 }
 
@@ -167,6 +187,13 @@ static class Quality
 			v.fogSlices = 32;
 			v.fogTemporal = false;
 			v.fogLocalLights = 0;
+			// Low draws the 2D cloud backup instead of the raymarch (the scene's mode is treated as 2D).
+			v.clouds = false;
+			v.cloudSteps = 0;
+			v.cloudShadowSteps = 0;
+			v.cloudTemporal = false;
+			v.cloudMaxResolution = 0.5f;
+			v.cloudMaxDistance = 6000;
 		case .Medium:
 			v.renderScale = 0.85f;
 			v.upscaler = .FSR1;
@@ -187,7 +214,21 @@ static class Quality
 			v.fogSlices = 48;
 			v.fogTemporal = true;
 			v.fogLocalLights = 16;
+			// Half the picture's resolution, 32 steps and 2 shadow steps: the raymarch is on but cheap.
+			v.clouds = true;
+			v.cloudSteps = 32;
+			v.cloudShadowSteps = 2;
+			v.cloudTemporal = true;
+			v.cloudMaxResolution = 0.5f;
+			v.cloudMaxDistance = 8000;
 		case .High,.Custom:
+			// High is the cloud march's default (48 steps, 4 shadow steps, 0.75 of the picture, 12 km); Ultra refines it.
+			v.clouds = true;
+			v.cloudSteps = 48;
+			v.cloudShadowSteps = 4;
+			v.cloudTemporal = true;
+			v.cloudMaxResolution = 0.75f;
+			v.cloudMaxDistance = 12000;
 		case .Ultra:
 			// TAA (a graphics card that cannot do it falls back to FXAA: Antialiasing.Resolve).
 			v.antialiasMode = .TAA;
@@ -206,6 +247,10 @@ static class Quality
 			v.fogTileSize = 8;
 			v.fogSlices = 128;
 			v.fogLocalLights = 128;
+			// Ultra: the full picture, 64 steps and 20 km.
+			v.cloudSteps = 64;
+			v.cloudMaxResolution = 1.0f;
+			v.cloudMaxDistance = 20000;
 		}
 		return v;
 	}
@@ -234,7 +279,7 @@ static class Quality
 	// ---- lighting quality (shadows, ambient occlusion, global illumination, reflections and the volumetric fog grid)
 
 	/// The serialized names of the settings a lighting preset changes (Quality.Write's spelling).
-	public static StringView[13] LightingFieldNames = .("shadows", "shadowedLights", "shadowMapSize", "shadowDistance", "ambientOcclusion", "globalIllumination", "reflectionProbes", "reflectionSize", "volumetricFog", "fogTileSize", "fogSlices", "fogTemporal", "fogLocalLights");
+	public static StringView[19] LightingFieldNames = .("shadows", "shadowedLights", "shadowMapSize", "shadowDistance", "ambientOcclusion", "globalIllumination", "reflectionProbes", "reflectionSize", "volumetricFog", "fogTileSize", "fogSlices", "fogTemporal", "fogLocalLights", "clouds", "cloudSteps", "cloudShadowSteps", "cloudTemporal", "cloudMaxResolution", "cloudMaxDistance");
 
 	/// Whether a setting is one a lighting preset changes.
 	public static bool IsLightingField(StringView name)
@@ -270,6 +315,12 @@ static class Quality
 		v.fogSlices = values.fogSlices;
 		v.fogTemporal = values.fogTemporal;
 		v.fogLocalLights = values.fogLocalLights;
+		v.clouds = values.clouds;
+		v.cloudSteps = values.cloudSteps;
+		v.cloudShadowSteps = values.cloudShadowSteps;
+		v.cloudTemporal = values.cloudTemporal;
+		v.cloudMaxResolution = values.cloudMaxResolution;
+		v.cloudMaxDistance = values.cloudMaxDistance;
 		return v;
 	}
 
@@ -310,6 +361,14 @@ static class Quality
 		RenderView.FogTemporalAllowed = Current.fogTemporal;
 		RenderView.FogLocalLights = Math.Clamp(Current.fogLocalLights, 0, 256);
 		RenderView.FogHistoryBlend = LightingLevel == .Ultra ? 0.95f : 0.9f;
+		// Volumetric clouds (RenderViewClouds.bf): whether the raymarch may run, its step/ray budget, the temporal blend
+		// and the caps on the scene's own resolution and distance.
+		RenderView.CloudsAllowed = Current.clouds;
+		RenderView.CloudSteps = Math.Clamp(Current.cloudSteps, 0, 128);
+		RenderView.CloudShadowSteps = Math.Clamp(Current.cloudShadowSteps, 0, 8);
+		RenderView.CloudTemporalAllowed = Current.cloudTemporal;
+		RenderView.CloudMaxResolution = Math.Clamp(Current.cloudMaxResolution, 0.25f, 1);
+		RenderView.CloudMaxDistance = Math.Clamp(Current.cloudMaxDistance, 500, 100000);
 	}
 
 	/// Switches to a preset's lighting settings and applies only them; the rest of Current stays as it is. Custom does
@@ -332,6 +391,12 @@ static class Quality
 		Current.fogSlices = v.fogSlices;
 		Current.fogTemporal = v.fogTemporal;
 		Current.fogLocalLights = v.fogLocalLights;
+		Current.clouds = v.clouds;
+		Current.cloudSteps = v.cloudSteps;
+		Current.cloudShadowSteps = v.cloudShadowSteps;
+		Current.cloudTemporal = v.cloudTemporal;
+		Current.cloudMaxResolution = v.cloudMaxResolution;
+		Current.cloudMaxDistance = v.cloudMaxDistance;
 		ApplyLighting();
 		Level = LevelOf(Current);
 	}
@@ -392,8 +457,8 @@ static class Quality
 	/// The settings as text, one `name=value` a line.
 	public static void Write(QualityValues v, String text)
 	{
-		text.AppendF("renderScale={}\nantialias={}\nantialiasMode={}\nupscaler={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\ngpuDriven={}\npixelError={}\ngpuOcclusion={}\nstreamGeometry={}\ngeometryBudgetMB={}\ntextureBudgetMB={}\nvtBudgetMB={}\nskyQuality={}\nvolumetricFog={}\nfogTileSize={}\nfogSlices={}\nfogTemporal={}\nfogLocalLights={}\n",
-			v.renderScale, v.antialiasMode != .Off ? 1 : 0, (int32)v.antialiasMode, (int32)v.upscaler, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize, v.gpuDriven ? 1 : 0, v.pixelError, v.gpuOcclusion ? 1 : 0, v.streamGeometry ? 1 : 0, v.geometryBudgetMB, v.textureBudgetMB, v.vtBudgetMB, v.skyQuality, v.volumetricFog ? 1 : 0, v.fogTileSize, v.fogSlices, v.fogTemporal ? 1 : 0, v.fogLocalLights);
+		text.AppendF("renderScale={}\nantialias={}\nantialiasMode={}\nupscaler={}\nshadows={}\nshadowedLights={}\nshadowMapSize={}\nshadowDistance={}\nambientOcclusion={}\ndepthOfField={}\nmotionBlur={}\nglobalIllumination={}\nlodBias={}\nfoliageDistance={}\ngpuSkinning={}\nvsync={}\ntextureDetail={}\nanisotropic={}\nreflectionProbes={}\nreflectionSize={}\ngpuDriven={}\npixelError={}\ngpuOcclusion={}\nstreamGeometry={}\ngeometryBudgetMB={}\ntextureBudgetMB={}\nvtBudgetMB={}\nskyQuality={}\nvolumetricFog={}\nfogTileSize={}\nfogSlices={}\nfogTemporal={}\nfogLocalLights={}\nclouds={}\ncloudSteps={}\ncloudShadowSteps={}\ncloudTemporal={}\ncloudMaxResolution={}\ncloudMaxDistance={}\n",
+			v.renderScale, v.antialiasMode != .Off ? 1 : 0, (int32)v.antialiasMode, (int32)v.upscaler, v.shadows ? 1 : 0, v.shadowedLights, v.shadowMapSize, v.shadowDistance, v.ambientOcclusion ? 1 : 0, v.depthOfField ? 1 : 0, v.motionBlur ? 1 : 0, (int32)v.globalIllumination, v.lodBias, v.foliageDistance, v.gpuSkinning ? 1 : 0, v.vsync ? 1 : 0, v.textureDetail, v.anisotropic ? 1 : 0, v.reflectionProbes ? 1 : 0, v.reflectionSize, v.gpuDriven ? 1 : 0, v.pixelError, v.gpuOcclusion ? 1 : 0, v.streamGeometry ? 1 : 0, v.geometryBudgetMB, v.textureBudgetMB, v.vtBudgetMB, v.skyQuality, v.volumetricFog ? 1 : 0, v.fogTileSize, v.fogSlices, v.fogTemporal ? 1 : 0, v.fogLocalLights, v.clouds ? 1 : 0, v.cloudSteps, v.cloudShadowSteps, v.cloudTemporal ? 1 : 0, v.cloudMaxResolution, v.cloudMaxDistance);
 	}
 
 	/// Reads settings from text (unknown or missing lines keep the values given).
@@ -447,6 +512,12 @@ static class Quality
 			case "fogSlices": v.fogSlices = (int32)Math.Clamp(number, 16, 160);
 			case "fogTemporal": v.fogTemporal = flag;
 			case "fogLocalLights": v.fogLocalLights = (int32)Math.Clamp(number, 0, 256);
+			case "clouds": v.clouds = flag;
+			case "cloudSteps": v.cloudSteps = (int32)Math.Clamp(number, 0, 128);
+			case "cloudShadowSteps": v.cloudShadowSteps = (int32)Math.Clamp(number, 0, 8);
+			case "cloudTemporal": v.cloudTemporal = flag;
+			case "cloudMaxResolution": v.cloudMaxResolution = Math.Clamp(number, 0.25f, 1);
+			case "cloudMaxDistance": v.cloudMaxDistance = Math.Clamp(number, 500, 100000);
 			}
 		}
 		return v;

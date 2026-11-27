@@ -58,6 +58,9 @@ static class ProfilerModules
 	public static double VolumetricFogMs { get; private set; }
 	/// Volumetric clouds' raymarch pass (RenderViewClouds.bf), in ms (0 when it did not run).
 	static ProfilerCounter sGpuCloudsMs = .("GPU Time: Volumetric clouds", .Rendering, "ms");
+	/// The cloud pass's work: the pixels of its target and the rays it cast (pixels x steps), last frame.
+	static ProfilerCounter sCloudPixels = .("Volumetric Cloud Pixels", .Rendering);
+	static ProfilerCounter sCloudRays = .("Volumetric Cloud Rays", .Rendering);
 	/// The latest frame's volumetric cloud raymarch GPU time in ms (read by --cloud-test).
 	public static double VolumetricCloudsMs { get; private set; }
 	// Virtual textures (VirtualTextures.bf).
@@ -370,6 +373,8 @@ static class ProfilerModules
 			sGpuVtMs.Set(vt);
 			sGpuVFogMs.Set(vfog);
 			sGpuCloudsMs.Set(clouds);
+			sCloudPixels.Set(RenderView.VolumetricCloudPixels);
+			sCloudRays.Set(RenderView.VolumetricCloudRays);
 			CullMs = cull;
 			OccluderMs = occluder;
 			HzbMs = hzb;
