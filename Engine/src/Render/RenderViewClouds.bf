@@ -9,8 +9,9 @@ namespace Tallow;
 /// camera's fog-inject compute view (all 28 per-camera views are taken), submitted before the fog's own inject.
 ///
 /// Vulkan, Direct3D 11/12 and Metal run it; OpenGL, the web and `--gpu-driven-caps-off` fall back to the 2D layer,
-/// as does a scene in 2D mode or a coverage of 0 (which draws the sky exactly as clouds off). Lighting here is the
-/// placeholder C2a uses; C2b adds self-shadowing, the Henyey-Greenstein phase, powder and multiple scattering.
+/// as does a scene in 2D mode or a coverage of 0 (which draws the sky exactly as clouds off). The lighting (C2b) is
+/// self-shadowing by an optical depth towards the sun (or the moon at night), a two-lobe Henyey-Greenstein phase, the
+/// powder term, a near-isotropic multiple-scattering term and the desaturated sky/ground ambient (include/clouds.sh).
 extension RenderView
 {
 	/// Raymarch steps through the slab (the quality setting in C3a; 48 is High).

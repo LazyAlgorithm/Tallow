@@ -287,12 +287,15 @@ static class PhysicalSky
 		Vector4 shape = .(env.cloudHeight, Math.Max(env.cloudThickness, 1), Math.Clamp(env.cloudCoverage, 0, 1), Math.Max(env.cloudDensity, 0));
 		// 0.12 is the weather map's soft edge (spec 2.2); w carries the time the volume's detail drift will use.
 		Vector4 wind = .(offset.x, offset.y, 0.12f, (float)(seconds % 1000.0));
-		Vector4 light = .(Math.Clamp(env.cloudAnisotropy, -0.9f, 0.9f), Math.Max(env.cloudAmbient, 0), 0, 1);
+		// x the HG anisotropy, y the ambient share, z the powder's scale (1/m; C2b), w the sun scattering.
+		Vector4 light = .(Math.Clamp(env.cloudAnisotropy, -0.9f, 0.9f), Math.Max(env.cloudAmbient, 0), 8.0f, 1);
 		Vector4 view = .(Math.Max(env.cloudDistance, 1), env.clouds ? 1.0f : 0.0f, env.cloudMode == .TwoD ? 1.0f : 2.0f, 0.0f);
 		var tint = Linear(env.cloudTint);
 		tint.w = 1;
 		Vector4 cloudSunDir = .(sun.x, sun.y, sun.z, 1);
-		Vector4 cloudSun = .(sunColor.x, sunColor.y, sunColor.z, 1);
+		// The sun's radiance on the clouds: the same colour the sky draws, scaled by the sky's brightness (C2b).
+		let brightness = Math.Max(env.skyBrightness, 0);
+		Vector4 cloudSun = .(sunColor.x * brightness, sunColor.y * brightness, sunColor.z * brightness, 1);
 		Vector4 cloudMoonDir = .(moon.x, moon.y, moon.z, moon.w > 0 ? 1.0f : 0.0f);
 		Vector4 cloudMoon = .(0, 0, 0, 0);
 		if (moon.w > 0)

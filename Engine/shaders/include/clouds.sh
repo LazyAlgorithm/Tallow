@@ -183,15 +183,76 @@ float cloudDensity(vec3 p)
 	return saturate((base - erode) / max(1.0 - erode, 0.05)) * max(u_cloudShape.w, 0.0);
 }
 
-// The light a step scatters towards the camera. The full model (self-shadowing, Henyey-Greenstein phase, powder and
-// multiple scattering) is C2b; until then the sun and moon's facing and the ambient give the layer its shape.
-vec3 cloudLighting(vec3 p, vec3 rd)
+// Henyey-Greenstein phase, normalised so an isotropic lobe (g = 0) is 1 (no 1/(4pi)): the shape matters, the albedo
+// lives in cloudTint and the sun's radiance in u_cloudSunColor.
+float cloudHG(float cosTheta, float g)
 {
-	float sunFacing = max(dot(rd, u_cloudSunDir.xyz), 0.0);
-	float sunPhase = 0.55 + 0.45 * pow(sunFacing, 4.0);
-	vec3 sun = u_cloudSunColor.rgb * (sunPhase * u_cloudLight.w);
-	vec3 moon = u_cloudMoonColor.rgb * (max(dot(rd, u_cloudMoonDir.xyz), 0.0) * u_cloudMoonDir.w);
-	vec3 ambient = u_cloudAmbient.rgb * u_cloudLight.y;
+	float g2 = g * g;
+	return (1.0 - g2) / pow(max(1.0 + g2 - 2.0 * g * cosTheta, 1.0e-3), 1.5);
+}
+
+// The two-lobe phase (Hillaire / Frostbite): a strong forward lobe at u_cloudLight.x (the silver lining when looking
+// towards the sun) blended with a weak back lobe (g = -0.3) so the shaded side keeps some light. Scaled to ~1 forward.
+float cloudPhase(float cosTheta, float g)
+{
+	return mix(cloudHG(cosTheta, g), cloudHG(cosTheta, -0.3), 0.25) * 0.125;
+}
+
+// Beer-Lambert towards a light: the optical depth from p through the slab, summed over u_cloudSteps.y short steps of
+// cloudThickness / steps (Schneider 2015's self-shadow march). 0 steps returns 0 (no self-shadowing: flat clouds).
+float cloudShadowTau(vec3 p, vec3 lightDir)
+{
+	int steps = int(u_cloudSteps.y);
+	if (steps <= 0 || lightDir.y < -0.05)
+		return 0.0;
+	float ds = max(u_cloudShape.y, 1.0) / float(steps);
+	float tau = 0.0;
+	vec3 q = p;
+	for (int i = 0; i < steps; ++i)
+	{
+		q += lightDir * ds;
+		tau += cloudDensity(q) * ds;
+		// exp(-8) is 3e-4: past this the light is gone, so a thick deck stops the march early.
+		if (tau > 8.0)
+			break;
+	}
+	return tau;
+}
+
+// The light a step of density d at p scatters towards the camera (C2b): single scattering by the sun (or the moon at
+// night) with the two-lobe phase, the powder term for thin bright edges, self-shadowing by the optical depth towards
+// that light, a cheap multiple-scattering term so shaded sides do not go black, and the sky/ground ambient.
+vec3 cloudLighting(vec3 p, vec3 rd, float density)
+{
+	float g = clamp(u_cloudLight.x, -0.9, 0.9);
+	float h = saturate((p.y - u_cloudShape.x) / max(u_cloudShape.y, 1.0));
+	// The brighter of the sun and the moon casts the shadow (at night the moon is the sun); one march serves both.
+	float sunLum = dot(u_cloudSunColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+	float moonLum = dot(u_cloudMoonColor.rgb, vec3(0.2126, 0.7152, 0.0722)) * u_cloudMoonDir.w;
+	vec3 shadowDir = sunLum >= moonLum ? u_cloudSunDir.xyz : u_cloudMoonDir.xyz;
+	float tau = cloudShadowTau(p, shadowDir);
+	float transmittance = exp(-tau);
+	// The powder term (Schneider 2015) darkens thin cloud that the viewer sees edge-on, so the billows read as puffy
+	// rather than as a flat sheet.
+	float powder = 1.0 - exp(-density * max(u_cloudLight.z, 0.0));
+	float single = transmittance * mix(1.0, powder, 0.6);
+	// The cheap two-term multiple scattering (Hillaire / Frostbite): 0.3 of the light that the single-scatter march
+	// loses still reaches, near-isotropic (not through the forward phase, so a sunlit top is white seen from any
+	// direction), and a thick base is grey rather than black.
+	float multi = 0.3 * exp(-0.5 * tau);
+	float sunPhase = cloudPhase(dot(rd, u_cloudSunDir.xyz), g) * u_cloudLight.w;
+	float moonPhase = cloudPhase(dot(rd, u_cloudMoonDir.xyz), g) * u_cloudMoonDir.w;
+	vec3 sun = u_cloudSunColor.rgb * (sunPhase * single + multi * u_cloudLight.w);
+	vec3 moon = u_cloudMoonColor.rgb * (moonPhase * single + multi * u_cloudMoonDir.w);
+	// Ambient: the top of the cloud sees the sky, its base the ground bounce (u_cloudAmbient.w is the ground share),
+	// scaled by cloudAmbient. The colours are already dark at night (Day / Night's auto colours). Two tuned constants
+	// (recorded in the Log): the ambient is desaturated toward its luminance (the scene's ambient is the blue of the
+	// sky, but a cloud's is nearly grey), and lifted 3x (its albedo is near 1, while the scene's ambient is tuned for
+	// surfaces darker than a cloud's inside; without it the shaded bases went near black).
+	float ambientLum = dot(u_cloudAmbient.rgb, vec3(0.2126, 0.7152, 0.0722));
+	vec3 skyAmbient = mix(vec3_splat(ambientLum), u_cloudAmbient.rgb, 0.45);
+	vec3 ground = skyAmbient * max(u_cloudAmbient.w, 0.0);
+	vec3 ambient = mix(ground, skyAmbient, h) * (u_cloudLight.y * 3.0);
 	return u_cloudTint.rgb * (sun + moon + ambient);
 }
 
@@ -242,14 +303,18 @@ vec4 cloudMarch(vec3 ro, vec3 rd, vec2 pixel)
 		float d = cloudDensity(p);
 		if (d <= 0.0)
 			continue;
-		vec3 scattered = cloudLighting(p, rd);
+		vec3 scattered = cloudLighting(p, rd, d);
 		float through = exp(-d * dt);
 		light += transmittance * scattered * (1.0 - through);
 		transmittance *= through;
 		if (transmittance < 0.01)
 			break;
 	}
-	return vec4(light, 1.0 - transmittance);
+	// The layer fades out where the march ran out of distance, so a deck that reaches the far end never stops in a
+	// hard line above the horizon (the near horizon fade is the composite's; the aerial perspective is C2d's).
+	float fade = 1.0 - smoothstep(0.85 * max(u_cloudView.x, 1.0), max(u_cloudView.x, 1.0), t1);
+	light *= fade;
+	return vec4(light, (1.0 - transmittance) * fade);
 }
 
 #endif

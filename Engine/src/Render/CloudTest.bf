@@ -602,3 +602,409 @@ class CloudVolumeTestApp : Application
 		Close();
 	}
 }
+
+/// `--cloud-test lighting [--cloud-test-folder <dir>]`: the volumetric cloud lighting (C2b) on the physical sky, from
+/// one camera: noon towards and away from the sun, sunset and night (the moon up), the first of each pair cloudless (so
+/// the cloud is the pixels that changed), and the sun with a clear sky and behind an overcast deck. Writes a screenshot
+/// of each and checks: the sunward deck is brighter than the one away from the sun; the noon deck has shaded bases
+/// below lit tops (a wide range inside the cloud); the sunset deck is warmer (lit undersides); the night deck is
+/// moonlit but much darker; and the overcast deck
+/// hides the sun's disc. GPU time of the "Volumetric clouds" pass is logged. Needs Vulkan, Direct3D or Metal.
+class CloudLightingTestApp : Application
+{
+	const int32 ShotWidth = 640;
+	const int32 ShotHeight = 360;
+	const int SettleFrames = 16;
+	/// The weather clock the shots are drawn at, so the wind does not drift between phases.
+	const double CloudTime = 3600.0;
+	/// The share of the picture above the horizon that the cloud statistics use.
+	const int32 SkyRows = ShotHeight * 7 / 10;
+	/// A pixel counts as cloud when its colour moved at least this much from the cloudless shot (sum of rgb).
+	const int64 MaskDiff = 24;
+
+	public int32 Result;
+
+	struct Phase
+	{
+		public StringView name;
+		public bool clouds;
+		public float coverage;
+		/// The sun's height to find in the afternoon (degrees), or NaN: night with the moon up.
+		public float elevation;
+		/// The camera's pitch (degrees, positive up).
+		public float pitch;
+		/// Look towards the sun (or the moon at night), else directly away from it.
+		public bool toward;
+		/// Look exactly at the sun: its disc in the picture's middle (the sun-behind-cloud shot).
+		public bool atSun;
+		/// The camera's height (m): above the slab's top (3300 m) sees the deck's tops, below it the bases.
+		public float height;
+	}
+
+	struct CloudStats
+	{
+		/// Pixels the cloud changed against its cloudless partner.
+		public int32 count;
+		public float meanLum;
+		/// The 20th and 95th brightest of the cloud's luminances: shaded bases against lit tops.
+		public float p20;
+		public float p95;
+		/// Mean red minus mean blue: how warm (sunset) the cloud is.
+		public float warmth;
+	}
+
+	Scene mScene ~ delete _;
+	RenderView mView ~ delete _;
+	Camera mCamera;
+	GameObject mCameraObject;
+	GameObject mSunObject;
+	String mDir = new .() ~ delete _;
+	List<Phase> mPhases = new .() ~ delete _;
+	int mPhase = -1;
+	int mFrame;
+	CompareShot mShot ~ delete _;
+	// The shots the checks compare, by name.
+	uint8[] mNoonClear ~ delete _;
+	uint8[] mNoonClouds ~ delete _;
+	uint8[] mSunsetClear ~ delete _;
+	uint8[] mNightClear ~ delete _;
+	uint8[] mBehindClear ~ delete _;
+
+	protected override bool LoadsPlayerQuality => false;
+
+	public this()
+	{
+		Title.Set("Cloud lighting test");
+		Width = ShotWidth;
+		Height = ShotHeight;
+	}
+
+	void Check(bool ok, StringView what)
+	{
+		Console.WriteLine(scope $"cloud-test: {ok ? "ok" : "FAIL"} {what}");
+		if (!ok)
+			Result = 1;
+	}
+
+	protected override bool OnInit()
+	{
+		if (!GetArg("--cloud-test-folder", mDir) || mDir.IsEmpty || mDir.StartsWith("--"))
+			mDir.Set(scope $"{Path.GetTempPath(.. scope .())}tallow-cloud-lighting");
+		Directory.CreateDirectory(mDir);
+		Clouds.OverrideSeconds = CloudTime;
+		Profiler.Enabled = true;
+		// Clear then cloudy pairs (the clear shot is the mask's partner), then away from the sun, then the sun behind
+		// the deck.
+		mPhases.Add(.() { name = "noon-clear", clouds = false, coverage = 0, elevation = 55, pitch = 30, toward = true, height = 200 });
+		mPhases.Add(.() { name = "noon-clouds", clouds = true, coverage = 0.45f, elevation = 55, pitch = 30, toward = true, height = 200 });
+		mPhases.Add(.() { name = "noon-away", clouds = true, coverage = 0.45f, elevation = 55, pitch = 30, toward = false, height = 200 });
+		mPhases.Add(.() { name = "sunset-clear", clouds = false, coverage = 0, elevation = 6, pitch = 10, toward = true, height = 200 });
+		mPhases.Add(.() { name = "sunset-clouds", clouds = true, coverage = 0.4f, elevation = 6, pitch = 10, toward = true, height = 200 });
+		mPhases.Add(.() { name = "night-clear", clouds = false, coverage = 0, elevation = float.NaN, pitch = 30, toward = true, height = 200 });
+		mPhases.Add(.() { name = "night-clouds", clouds = true, coverage = 0.45f, elevation = float.NaN, pitch = 30, toward = true, height = 200 });
+		mPhases.Add(.() { name = "behind-clear", clouds = false, coverage = 0, elevation = 45, pitch = 0, toward = true, atSun = true, height = 200 });
+		mPhases.Add(.() { name = "behind-cloud", clouds = true, coverage = 0.95f, elevation = 45, pitch = 0, toward = true, atSun = true, height = 200 });
+
+		mScene = new Scene();
+		let cameraObject = mScene.CreateGameObject("Camera");
+		mCameraObject = cameraObject;
+		mCamera = cameraObject.AddComponent<Camera>();
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mSunObject = mScene.CreateGameObject("Sun");
+		mSunObject.Transform.EulerAngles = .(20, -30, 0);
+		let light = mSunObject.AddComponent<Light>();
+		light.intensity = 1.5f;
+		let ground = mScene.CreateGameObject("Ground");
+		let renderer = ground.AddComponent<MeshRenderer>();
+		renderer.mesh.Set("builtin:plane");
+		renderer.color = .FromBytes(112, 158, 92);
+		ground.Transform.LocalScale = .(500, 1, 500);
+		mView = new RenderView(10);
+		mView.AllowPostAa = false;
+		ScreenEffects.GlobalIllumination = .Ambient;
+		mScene.StartPlay();
+		return true;
+	}
+
+	void StartPhase(Phase phase)
+	{
+		let env = mScene.Environment;
+		env.Reset();
+		env.skyMode = .Physical;
+		env.dayNight = true;
+		env.dayNightPaused = true;
+		env.autoColors = true;
+		env.sunIntensity = Atmosphere.ReferenceSunIntensity;
+		env.sunLight = mSunObject.Id;
+		env.moonSize = 1;
+		// No fog over the sky: the cloud pass is what this test measures.
+		env.volumetricFog = false;
+		env.clouds = phase.clouds;
+		env.cloudMode = .Volumetric;
+		env.cloudCoverage = phase.coverage;
+		Vector3 look;
+		if (phase.elevation.IsNaN)
+		{
+			// Night: the day and hour with the moon highest and well lit (as --cloud-test sky).
+			float best = -90;
+			int32 bestDay = 0;
+			float bestHour = 0;
+			for (int32 day = 0; day < 365; day += 2)
+			{
+				env.dayOfYear = day;
+				for (float hour in float[?](21, 22, 23, 0, 1, 2, 3))
+				{
+					env.timeOfDay = hour;
+					let moon = DayNight.MoonDirection(env);
+					if (DayNight.SunElevation(env) < -18 && DayNight.MoonIllumination(env) > 0.6f && moon.y > Math.Sin(best * Mathf.Deg2Rad) && moon.y < Math.Sin(50 * Mathf.Deg2Rad))
+					{
+						best = Math.Asin(moon.y) * Mathf.Rad2Deg;
+						bestDay = day;
+						bestHour = hour;
+					}
+				}
+			}
+			env.dayOfYear = bestDay;
+			env.timeOfDay = bestHour;
+			let moon = DayNight.MoonDirection(env);
+			let flat = Vector3(moon.x, 0, moon.z);
+			let yaw = flat.Length > 1e-4f ? flat.Normalized : Vector3(0, 0, 1);
+			look = yaw * Math.Cos(phase.pitch * Mathf.Deg2Rad) + .(0, 1, 0) * Math.Sin(phase.pitch * Mathf.Deg2Rad);
+		}
+		else
+		{
+			// The afternoon hour with the sun at this height.
+			float bestHour = 12;
+			float bestError = float.MaxValue;
+			for (float hour = 12; hour < 21; hour += 0.005f)
+			{
+				env.timeOfDay = hour;
+				let error = phase.elevation >= 89 ? -DayNight.SunElevation(env) : Math.Abs(DayNight.SunElevation(env) - phase.elevation);
+				if (error < bestError)
+				{
+					bestError = error;
+					bestHour = hour;
+				}
+			}
+			env.timeOfDay = bestHour;
+			let sun = DayNight.SunDirection(env);
+			if (phase.atSun)
+				look = sun;
+			else
+			{
+				let flat = Vector3(sun.x, 0, sun.z).Normalized;
+				let yaw = phase.toward ? flat : -flat;
+				look = yaw * Math.Cos(phase.pitch * Mathf.Deg2Rad) + .(0, 1, 0) * Math.Sin(phase.pitch * Mathf.Deg2Rad);
+			}
+		}
+		look = look.Normalized;
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mCameraObject.Transform.Position = .(0, phase.height, 0);
+		mCameraObject.Transform.Rotation = Quaternion.LookRotation(look, .(0, 1, 0));
+		DayNight.Apply(mScene);
+	}
+
+	protected override void OnUpdate()
+	{
+		mScene.Update();
+		AssetLoader.Update();
+	}
+
+	protected override void OnRender()
+	{
+		if (mPhase < 0 || (mShot != null && mFrame < 0))
+		{
+			mPhase++;
+			if (mPhase >= mPhases.Count)
+			{
+				Finish();
+				return;
+			}
+			StartPhase(mPhases[mPhase]);
+			mFrame = 0;
+			DeleteAndNullify!(mShot);
+		}
+		mView.Resize(ShotWidth, ShotHeight);
+		mView.Render(mScene, mCamera.GetCameraData((float)ShotWidth / ShotHeight));
+		mFrame++;
+		if (mFrame < SettleFrames)
+			return;
+		if (mShot == null)
+			mShot = new CompareShot();
+		let path = scope $"{mDir}/{mPhases[mPhase].name}.png";
+		if (mShot.Step(mView, ShotWidth, ShotHeight, path))
+		{
+			let pixels = mShot.Pixels;
+			let copy = new uint8[pixels.Count];
+			Internal.MemCpy(copy.CArray(), pixels.CArray(), pixels.Count);
+			CheckShot(mPhases[mPhase], copy);
+			mFrame = -1;
+		}
+	}
+
+	void CheckShot(Phase phase, uint8[] pixels)
+	{
+		let gpu = ProfilerModules.VolumetricCloudsMs;
+		Console.WriteLine(scope $"cloud-test: {phase.name} coverage {phase.coverage}: pixels {RenderView.VolumetricCloudPixels}, GPU {gpu:F3} ms");
+		int64 sum = 0;
+		for (int y < SkyRows)
+			for (int x < ShotWidth)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				sum += pixels[i] + pixels[i + 1] + pixels[i + 2];
+			}
+		Check(sum > 0, scope $"{phase.name}: not black");
+		if (!RenderView.CloudsRunnable)
+			return;
+		// Keep every cloudless shot, and the noon deck the others are compared with.
+		if (phase.name == "noon-clear") { mNoonClear = pixels; return; }
+		if (phase.name == "noon-clouds") { mNoonClouds = pixels; }
+		else if (phase.name == "sunset-clear") { mSunsetClear = pixels; return; }
+		else if (phase.name == "night-clear") { mNightClear = pixels; return; }
+		else if (phase.name == "behind-clear") { mBehindClear = pixels; return; }
+
+		// Every cloudless shot is done; the cloudy pairs are checked as they arrive.
+		if (phase.name == "noon-clouds")
+		{
+			Check(mNoonClear != null, "noon: a cloudless partner exists");
+			if (mNoonClear == null)
+				return;
+			let stats = Stats(mNoonClear, pixels);
+			Console.WriteLine(scope $"cloud-test: noon cloud: {stats.count} px, mean {stats.meanLum:F1}, p20 {stats.p20:F1}, p95 {stats.p95:F1}, warmth {stats.warmth:F1}");
+			Check(stats.count > 2000, scope $"noon: the deck covers the sky ({stats.count} px changed)");
+			Check(stats.p95 - stats.p20 > 20, scope $"noon: lit tops and shaded bases ({stats.p20:F1}..{stats.p95:F1})");
+			Check(stats.p95 > 170, scope $"noon: the sunlit tops and edges are white (p95 {stats.p95:F1})");
+			Check(stats.p20 < 140, scope $"noon: the bases are grey, not white (p20 {stats.p20:F1})");
+			Check(stats.meanLum < 250, scope $"noon: the deck is not blown white (mean {stats.meanLum:F1})");
+			Check(gpu > 0, scope $"noon: the raymarch reports GPU time ({gpu:F3} ms)");
+		}
+		else if (phase.name == "noon-away")
+		{
+			if (mNoonClouds == null)
+				return;
+			let toward = MeanLum(mNoonClouds);
+			let away = MeanLum(pixels);
+			Console.WriteLine(scope $"cloud-test: noon sunward mean {toward:F1}, away {away:F1}");
+			Check(toward > away + 2, scope $"noon: the sunward deck is brighter than away from the sun ({toward:F1} vs {away:F1})");
+		}
+		else if (phase.name == "sunset-clouds")
+		{
+			if (mSunsetClear == null || mNoonClouds == null || mNoonClear == null)
+				return;
+			let sunset = Stats(mSunsetClear, pixels);
+			let noon = Stats(mNoonClear, mNoonClouds);
+			Console.WriteLine(scope $"cloud-test: sunset cloud: {sunset.count} px, mean {sunset.meanLum:F1}, warmth {sunset.warmth:F1} (noon {noon.warmth:F1})");
+			Check(sunset.count > 2000, scope $"sunset: the deck covers the sky ({sunset.count} px changed)");
+			Check(sunset.warmth > noon.warmth + 8, scope $"sunset: the lit undersides are warmer ({sunset.warmth:F1} vs {noon.warmth:F1})");
+		}
+		else if (phase.name == "night-clouds")
+		{
+			if (mNightClear == null || mNoonClouds == null || mNoonClear == null)
+				return;
+			let night = Stats(mNightClear, pixels);
+			let noon = Stats(mNoonClear, mNoonClouds);
+			Console.WriteLine(scope $"cloud-test: night cloud: {night.count} px, mean {night.meanLum:F1} (noon {noon.meanLum:F1})");
+			Check(night.count > 1000, scope $"night: the moonlit deck covers the sky ({night.count} px changed)");
+			Check(night.meanLum > 0.5, scope $"night: the deck is moonlit, not black (mean {night.meanLum:F1})");
+			Check(night.meanLum < noon.meanLum * 0.5, scope $"night: the deck is much darker than at noon ({night.meanLum:F1} vs {noon.meanLum:F1})");
+		}
+		else if (phase.name == "behind-cloud")
+		{
+			if (mBehindClear == null)
+				return;
+			// The sun's disc sits in the middle of the picture; an overcast deck in front of it must hide it.
+			let clear = Region(0.4f, 0.4f, 0.6f, 0.6f, mBehindClear);
+			let cloud = Region(0.4f, 0.4f, 0.6f, 0.6f, pixels);
+			Console.WriteLine(scope $"cloud-test: sun behind a cloud: clear max {clear.maxLum:F1} / mean {clear.meanLum:F1}, cloud max {cloud.maxLum:F1} / mean {cloud.meanLum:F1}");
+			Check(cloud.maxLum < clear.maxLum, scope $"the overcast deck hides the sun's disc (max {cloud.maxLum:F1} < {clear.maxLum:F1})");
+			Check(cloud.maxLum < 250, scope $"the sun behind the deck is not a blown hole (max {cloud.maxLum:F1})");
+		}
+	}
+
+	/// Statistics of the pixels the cloud changed against its cloudless partner (the pair's first shot), over the sky
+	/// part of the picture; zero when there is no partner to compare with.
+	static CloudStats Stats(uint8[] clear, uint8[] clouds)
+	{
+		CloudStats stats = default;
+		if (clear == null || clouds == null || clear.Count != clouds.Count)
+			return stats;
+		var lum = scope List<float>();
+		float rSum = 0;
+		float bSum = 0;
+		for (int32 y = 0; y < SkyRows; y++)
+			for (int32 x = 0; x < ShotWidth; x++)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				let diff = Math.Abs((int32)clear[i] - (int32)clouds[i]) + Math.Abs((int32)clear[i + 1] - (int32)clouds[i + 1]) + Math.Abs((int32)clear[i + 2] - (int32)clouds[i + 2]);
+				if (diff < MaskDiff)
+					continue;
+				lum.Add(Lum(clouds, i));
+				rSum += clouds[i];
+				bSum += clouds[i + 2];
+			}
+		stats.count = (int32)lum.Count;
+		if (lum.Count == 0)
+			return stats;
+		lum.Sort();
+		stats.p20 = lum[(int32)((lum.Count - 1) * 0.2f)];
+		stats.p95 = lum[(int32)((lum.Count - 1) * 0.95f)];
+		float total = 0;
+		for (let value in lum)
+			total += value;
+		stats.meanLum = total / lum.Count;
+		stats.warmth = (rSum - bSum) / lum.Count;
+		return stats;
+	}
+
+	struct RegionStats
+	{
+		public float meanLum;
+		public float maxLum;
+	}
+
+	/// The mean and brightest luminance of the picture's [x0, y0) - [x1, y1) share (fractions of the picture).
+	static RegionStats Region(float x0, float y0, float x1, float y1, uint8[] pixels)
+	{
+		RegionStats stats = default;
+		if (pixels == null)
+			return stats;
+		int32 a = (int32)(ShotWidth * x0);
+		int32 b = (int32)(ShotWidth * x1);
+		int32 c = (int32)(ShotHeight * y0);
+		int32 d = (int32)(ShotHeight * y1);
+		float total = 0;
+		int32 count = 0;
+		for (int32 y = c; y < d; y++)
+			for (int32 x = a; x < b; x++)
+			{
+				let l = Lum(pixels, (y * ShotWidth + x) * 4);
+				total += l;
+				stats.maxLum = Math.Max(stats.maxLum, l);
+				count++;
+			}
+		stats.meanLum = count > 0 ? total / count : 0;
+		return stats;
+	}
+
+	/// The mean luminance of the sky part of a shot.
+	static float MeanLum(uint8[] pixels)
+	{
+		if (pixels == null)
+			return 0;
+		float total = 0;
+		for (int32 y = 0; y < SkyRows; y++)
+			for (int32 x = 0; x < ShotWidth; x++)
+				total += Lum(pixels, (y * ShotWidth + x) * 4);
+		return total / (SkyRows * ShotWidth);
+	}
+
+	static float Lum(uint8[] pixels, int32 i) => pixels[i] * 0.2126f + pixels[i + 1] * 0.7152f + pixels[i + 2] * 0.0722f;
+
+	void Finish()
+	{
+		Console.WriteLine(Result == 0 ? "cloud-test lighting: PASS" : "cloud-test lighting: FAILED");
+		Close();
+	}
+}

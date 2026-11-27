@@ -44,6 +44,7 @@ namespace Tallow;
 ///                                                      GPU-path and streaming values, check the quality file, exit 0 or 1
 ///   --cloud-test settings                              print the cloud settings with no window, check they save and reload
 ///                                                      through a scene file, exit 0 or 1
+///   --cloud-test sky|volume|lighting                   draw the 2D backup / the raymarch / its lighting and check them
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
 ///   --no-geometry-streaming                            load every page of a big mesh whole instead of streaming them
 ///   --no-texture-streaming                             load big textures whole instead of streaming their mip levels
@@ -399,6 +400,13 @@ class Application
 		if (GetArg("--cloud-test", cloudTest) && cloudTest == "volume" && !(this is CloudVolumeTestApp))
 		{
 			let test = scope CloudVolumeTestApp();
+			test.Run(args);
+			return test.Result;
+		}
+		// The cloud lighting check draws noon, sunset, night and a sun behind a cloud, and needs a window (C2b).
+		if (GetArg("--cloud-test", cloudTest) && cloudTest == "lighting" && !(this is CloudLightingTestApp))
+		{
+			let test = scope CloudLightingTestApp();
 			test.Run(args);
 			return test.Result;
 		}
