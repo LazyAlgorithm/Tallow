@@ -330,6 +330,8 @@ target_link_libraries(tallow_native PRIVATE bgfx bx SDL3::SDL3-static)
 if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS AND NOT APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
 	set(_upscale_vk ${CMAKE_CURRENT_SOURCE_DIR}/upscale/vk)
 	target_include_directories(tallow_native PRIVATE ${_upscale_vk})
+	# tallow_upscale.cpp compiles its Vulkan code only where this is set; elsewhere it holds stubs.
+	target_compile_definitions(tallow_native PRIVATE TALLOW_UPSCALE_VULKAN=1)
 	option(TALLOW_DLSS "Build NVIDIA DLSS support (downloads the DLSS SDK)" ON)
 	if(TALLOW_DLSS)
 		include(${CMAKE_CURRENT_SOURCE_DIR}/FetchDLSS.cmake)

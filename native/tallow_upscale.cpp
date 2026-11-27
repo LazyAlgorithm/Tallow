@@ -29,6 +29,11 @@
 #include <string>
 
 #include <bgfx/tallow_vk.h>
+
+// TALLOW_UPSCALE_VULKAN is defined by native/CMakeLists.txt where the Vulkan renderer is built (Linux and Windows
+// x86-64). Elsewhere (macOS, iOS, Android, the web player, Linux arm64) this file holds stubs instead: DLSS and FSR
+// need Vulkan, and those builds have no Vulkan headers.
+#if defined(TALLOW_UPSCALE_VULKAN)
 #include <vulkan/vulkan.h>
 
 #if defined(_WIN32)
@@ -844,3 +849,104 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL tallow_fsr2_vkGetDeviceProcAddr(VkDevic
 }
 }
 #endif
+
+#else // TALLOW_UPSCALE_VULKAN
+
+// No Vulkan renderer on this platform (macOS, iOS, Android, the web player, Linux arm64): the native upscalers cannot
+// run, but the engine still calls their API. These stubs report them unavailable; the jitter maths is shared with the
+// Vulkan build because the engine's own temporal upscaling uses it on every platform.
+
+namespace
+{
+	float halton(int index, int base)
+	{
+		float f = 1.0f, r = 0.0f;
+		while (index > 0)
+		{
+			f /= (float)base;
+			r += f * (float)(index % base);
+			index /= base;
+		}
+		return r;
+	}
+}
+
+extern "C" void tn_upscale_prepare_vulkan(void)
+{
+}
+
+extern "C" {
+
+int tn_upscale_supported(int kind, char* reason, int reasonLength)
+{
+	(void)kind;
+	if (reason != nullptr && reasonLength > 0)
+		std::snprintf(reason, (size_t)reasonLength, "%s", "DLSS and FSR need the Vulkan renderer");
+	return 0;
+}
+
+int tn_upscale_optimal_size(int kind, int outW, int outH, int qualityMode, int* renderW, int* renderH)
+{
+	static const float ratios[] = { 1.5f, 1.7f, 2.0f, 3.0f, 1.0f, 1.3f };
+	if (renderW == nullptr || renderH == nullptr || outW <= 0 || outH <= 0) return 0;
+	if (qualityMode < 0 || qualityMode > 5) qualityMode = 0;
+	(void)kind;
+	float r = ratios[qualityMode];
+	if (r <= 1.0f) { *renderW = outW; *renderH = outH; return 1; }
+	*renderW = (int)((float)outW / r);
+	*renderH = (int)((float)outH / r);
+	return 1;
+}
+
+int tn_upscale_jitter_phases(int kind, int renderW, int outW)
+{
+	if (renderW <= 0) return 8;
+	float ratio = (float)outW / (float)renderW;
+	int n = (int)std::ceil(8.0f * ratio * ratio);
+	(void)kind;
+	return n < 8 ? 8 : (n > 256 ? 256 : n);
+}
+
+void tn_upscale_jitter_offset(int kind, int index, int phases, float* x, float* y)
+{
+	(void)kind;
+	if (phases < 1) phases = 8;
+	int i = (index % phases) + 1;
+	if (x != nullptr) *x = halton(i, 2) - 0.5f;
+	if (y != nullptr) *y = halton(i, 3) - 0.5f;
+}
+
+void* tn_upscale_create(int kind, int renderW, int renderH, int outW, int outH, int qualityMode, int flags)
+{
+	(void)kind; (void)renderW; (void)renderH; (void)outW; (void)outH; (void)qualityMode; (void)flags;
+	return nullptr;
+}
+
+void tn_upscale_destroy(void* ctx)
+{
+	(void)ctx;
+}
+
+int tn_upscale_evaluate(void* ctx, uint16_t colorTex, uint16_t depthTex, uint16_t motionTex, uint16_t outputTex,
+	float jitterX, float jitterY, float motionScaleX, float motionScaleY, int reset, float sharpness, float frameTimeMs,
+	float camNear, float camFar, float fovY, uint16_t viewId)
+{
+	(void)ctx; (void)colorTex; (void)depthTex; (void)motionTex; (void)outputTex; (void)jitterX; (void)jitterY;
+	(void)motionScaleX; (void)motionScaleY; (void)reset; (void)sharpness; (void)frameTimeMs; (void)camNear;
+	(void)camFar; (void)fovY; (void)viewId;
+	return 0;
+}
+
+int tn_upscale_failed(void* ctx)
+{
+	(void)ctx;
+	return 0;
+}
+
+void tn_upscale_shutdown()
+{
+}
+
+}
+
+#endif // TALLOW_UPSCALE_VULKAN
