@@ -282,7 +282,8 @@ bool cloudSlab(vec3 ro, vec3 rd, float far, out float t0, out float t1)
 // the sky composite `sky * (1 - a) + rgb`. jitter (0..1) is the march's start offset within the first step, from the
 // blue-noise tile (C2c): it changes every frame and every pixel, and the temporal blend in cs_clouds.sc averages the
 // banding it would otherwise leave. midDistance is the middle of the slab along the ray (0 when it is missed), where
-// cs_clouds.sc reprojects this frame's layer into last frame's; marched is how many steps were taken (the debug view).
+// cs_clouds.sc reprojects this frame's layer into last frame's; marched is how many steps were taken (the debug view
+// shows its share of the budget).
 vec4 cloudMarch(vec3 ro, vec3 rd, float jitter, out float midDistance, out float marched)
 {
 	midDistance = 0.0;

@@ -6,7 +6,9 @@
 // pattern is evenly spread, not clumped), and the finished layer is blended with last frame's layer reprojected by the
 // slab midpoint, minus the wind that moved the weather, into last frame's view-projection (mirroring the froxel fog's
 // history in cs_vfog_inject.sc). The history is dropped on a camera cut, a resize, a skipped frame or when the quality
-// setting turns the blend off. A debug view writes each pixel's marched step count in grey instead of the cloud.
+// setting turns the blend off. A debug view (`--gpu-debug-view clouds`, C3a) writes the cloud field instead of the
+// picture: the column's opacity in red (the density the ray met), its average light in green and the share of the step
+// budget it used in blue.
 //
 // The energy-conserving sum along the ray is Hillaire's (Frostbite, 2015), the same shape as cs_vfog_integrate.sc; the
 // weather map, height profile and detail erosion follow Schneider 2015 ("Real-Time Volumetric Cloudscapes"). Run only
@@ -26,7 +28,7 @@ SAMPLER2D(s_cloudHistory, 5);
 // Last frame's view-projection and (xyz) how far the weather moved since: a cloud at p now was at p - windDelta then.
 uniform mat4 u_cloudPrevViewProj;
 uniform vec4 u_cloudWindDelta;
-// x 1: write each pixel's marched step count (the ray-count debug view) instead of the cloud.
+// x 1: write the cloud field (density red, light green, marched step share blue) instead of the cloud.
 uniform vec4 u_cloudDebug;
 IMAGE2D_WO(i_clouds, rgba16f, 0);
 
@@ -60,9 +62,12 @@ void main()
 	}
 	if (u_cloudDebug.x > 0.5)
 	{
-		// Grey: the share of the step budget this ray used (0 where the slab was missed).
+		// The cloud field instead of the picture: red the column's opacity (how much cloud the ray met), green the
+		// layer's average light (its scattered radiance, tonemapped so lit tops do not all clip to white), blue the
+		// share of the step budget the ray used (0 where it missed the slab). All three are 0 where there is no cloud.
 		float steps = max(u_cloudSteps.x, 1.0);
-		layer = vec4(vec3_splat(marched / steps), 1.0);
+		float light = dot(layer.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(layer.a, 1.0e-4);
+		layer = vec4(layer.a, 1.0 - exp(-light * 0.5), marched / steps, 1.0);
 	}
 	imageStore(i_clouds, id, layer);
 }

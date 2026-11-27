@@ -163,9 +163,11 @@ extension RenderView
 		let viewProj = camera.projection * camera.view;
 		let forward = Vector3(camera.view.m[2], camera.view.m[6], camera.view.m[10]);
 		let wind = Clouds.Offset(env, Clouds.Seconds(scene));
+		let debug = GpuDriven.View == .Clouds;
 		// Last frame's layer is reused only when this frame follows it directly, the camera stayed put and faced the
-		// same way, and the quality setting allows the blend (mirroring the fog's mFogHistoryValid).
-		mCloudHistoryValid = CloudTemporalAllowed && mCloudLastFrame == frame - 1
+		// same way, the quality setting allows the blend (mirroring the fog's mFogHistoryValid) and the debug view is
+		// off (its density/light values are not a layer, and would smear into the history).
+		mCloudHistoryValid = CloudTemporalAllowed && !debug && mCloudLastFrame == frame - 1
 			&& (camera.position - mCloudLastEye).Length < CloudHistoryCut
 			&& Vector3.Dot(forward, mCloudLastForward) > CloudHistoryCos;
 		mCloudPrevViewProj = mCloudLastViewProj;
@@ -175,7 +177,7 @@ extension RenderView
 			windDelta = wind - mCloudLastWind;
 		mCloudSteps = .(Math.Max(CloudSteps, 1), Math.Max(CloudShadowSteps, 0), (float)(frame % 1024), keep);
 		mCloudWindDelta = .(windDelta.x, windDelta.y, 0, 0);
-		mCloudDebug = .(GpuDriven.View == .Clouds ? 1 : 0, 0, 0, 0);
+		mCloudDebug = .(debug ? 1 : 0, 0, 0, 0);
 		mCloudSize = .(mCloudWidth, mCloudHeight, 0, 0);
 		bgfx.set_uniform(RenderResources.uCloudSteps, &mCloudSteps, 1);
 		bgfx.set_uniform(RenderResources.uCloudSize, &mCloudSize, 1);

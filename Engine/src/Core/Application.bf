@@ -44,10 +44,11 @@ namespace Tallow;
 ///                                                      GPU-path and streaming values, check the quality file, exit 0 or 1
 ///   --cloud-test settings                              print the cloud settings with no window, check they save and reload
 ///                                                      through a scene file, exit 0 or 1
-///   --cloud-test sky|volume|lighting|temporal|integration
+///   --cloud-test sky|volume|lighting|temporal|integration|quality
 ///                                                      draw the 2D backup / the raymarch / its lighting / the temporal
 ///                                                      blend and budget / the renderer integration (a building, the sun
-///                                                      behind a deck, the reflection cube, the fog and a skybox), and check them
+///                                                      behind a deck, the reflection cube, the fog and a skybox) /
+///                                                      each preset's cloud budget and the debug view, and check them
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
 ///   --no-geometry-streaming                            load every page of a big mesh whole instead of streaming them
 ///   --no-texture-streaming                             load big textures whole instead of streaming their mip levels
@@ -425,6 +426,13 @@ class Application
 		if (GetArg("--cloud-test", cloudTest) && cloudTest == "integration" && !(this is CloudIntegrationTestApp))
 		{
 			let test = scope CloudIntegrationTestApp();
+			test.Run(args);
+			return test.Result;
+		}
+		// The quality check draws the presets' cloud budgets, Low's 2D backup and the debug view (C3a).
+		if (GetArg("--cloud-test", cloudTest) && cloudTest == "quality" && !(this is CloudQualityTestApp))
+		{
+			let test = scope CloudQualityTestApp();
 			test.Run(args);
 			return test.Result;
 		}

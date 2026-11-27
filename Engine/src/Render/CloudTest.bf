@@ -1013,11 +1013,11 @@ class CloudLightingTestApp : Application
 /// clock is advanced a frame at a time so the wind drifts deterministically. Shots: a still camera settled for a while
 /// and one frame more (no shimmer: the consecutive frames are nearly the same), a teleport to a new place and the one
 /// frame after it (the history must be dropped, so no ghost of the old view is blended in), the same place once it has
-/// settled again, a smooth pan (the history stays, reprojected), that place settled, a ray-count debug view and a
-/// budget shot. Writes a screenshot of each and checks: the cut drops the history and the cut frame matches the settled
-/// one at the new place; the pan keeps the history and the moving frame matches the settled one at its end; the still
-/// frames converge; the debug view shows varying ray counts; and the pass stays inside 1.5 ms at High (half res,
-/// 48 steps). Needs Vulkan, Direct3D or Metal.
+/// settled again, a smooth pan (the history stays, reprojected), that place settled, a cloud debug view (density red,
+/// light green, marched step share blue) and a budget shot. Writes a screenshot of each and checks: the cut drops the
+/// history and the cut frame matches the settled one at the new place; the pan keeps the history and the moving frame
+/// matches the settled one at its end; the still frames converge; the debug view shows a varying cloud field with
+/// varying ray counts; and the pass stays inside 1.5 ms at High (half res, 48 steps). Needs Vulkan, Direct3D or Metal.
 class CloudTemporalTestApp : Application
 {
 	const int32 ShotWidth = 640;
@@ -1300,9 +1300,29 @@ class CloudTemporalTestApp : Application
 		}
 		else if (phase.name == "rays")
 		{
-			Console.WriteLine(scope $"cloud-test: ray count view {minLum:F0}..{maxLum:F0} of 255, mean {total / (SkyRows * ShotWidth):F0}");
-			Check(maxLum > 0, "the debug view shows the ray counts");
-			Check(maxLum - minLum > 12, scope $"ray counts vary across the sky ({minLum:F0}..{maxLum:F0})");
+			// The cloud debug view's three channels over the sky: red the column's opacity (density), green its
+			// average light, blue the share of the step budget the ray used.
+			float[3] minC = .(255, 255, 255);
+			float[3] maxC = .(0, 0, 0);
+			float[3] sumC = .(0, 0, 0);
+			for (int32 y = 0; y < SkyRows; y++)
+				for (int32 x = 0; x < ShotWidth; x++)
+				{
+					let i = (y * ShotWidth + x) * 4;
+					for (int32 c < 3)
+					{
+						float v = pixels[i + c];
+						minC[c] = Math.Min(minC[c], v);
+						maxC[c] = Math.Max(maxC[c], v);
+						sumC[c] += v;
+					}
+				}
+			let n = (float)(SkyRows * ShotWidth);
+			Console.WriteLine(scope $"cloud-test: cloud view density {minC[0]:F0}..{maxC[0]:F0} (mean {sumC[0] / n:F0}), light {minC[1]:F0}..{maxC[1]:F0} (mean {sumC[1] / n:F0}), rays {minC[2]:F0}..{maxC[2]:F0} (mean {sumC[2] / n:F0}) of 255");
+			Check(maxLum > 0, "the debug view shows the cloud field");
+			Check(maxC[0] - minC[0] > 24 && sumC[0] / n > 4, scope $"the density channel varies over the sky ({minC[0]:F0}..{maxC[0]:F0})");
+			Check(maxC[1] - minC[1] > 24 && maxC[1] > 25, scope $"the light channel lights the cloud ({minC[1]:F0}..{maxC[1]:F0})");
+			Check(maxC[2] - minC[2] > 12, scope $"ray counts vary across the sky ({minC[2]:F0}..{maxC[2]:F0})");
 		}
 		else if (phase.name == "budget")
 		{
@@ -1902,6 +1922,276 @@ class CloudIntegrationTestApp : Application
 	void Finish()
 	{
 		Console.WriteLine(Result == 0 ? "cloud-test integration: PASS" : "cloud-test integration: FAILED");
+		Close();
+	}
+}
+
+/// `--cloud-test quality [--cloud-test-folder <dir>]`: the presets' cloud values at work (C3a). One camera on a
+/// volumetric-cloud scene, drawn at Low with and without clouds and then at Medium, High and Ultra (the scene asks for
+/// the full picture, so each preset's resolution cap shows), plus High with the cloud debug view. Writes a screenshot
+/// of each and checks: Low has no raymarch but its 2D backup still draws the clouds; Medium, High and Ultra raymarch
+/// with their own step counts, and their targets grow with their resolution caps (half, three quarters, full); and the
+/// debug view shows the density and light channels. Needs Vulkan, Direct3D or Metal for the raymarch part.
+class CloudQualityTestApp : Application
+{
+	const int32 ShotWidth = 640;
+	const int32 ShotHeight = 360;
+	const int SettleFrames = 16;
+	/// The weather clock the shots are drawn at, so the wind does not drift between phases.
+	const double CloudTime = 3600.0;
+	/// The share of the picture above the horizon that the checks use.
+	const int32 SkyRows = ShotHeight * 7 / 10;
+
+	public int32 Result;
+
+	struct Phase
+	{
+		public StringView name;
+		public QualityLevel level;
+		public bool clouds;
+		public GpuDriven.DebugView debug;
+	}
+
+	Scene mScene ~ delete _;
+	RenderView mView ~ delete _;
+	Camera mCamera;
+	GameObject mCameraObject;
+	GameObject mSunObject;
+	String mDir = new .() ~ delete _;
+	List<Phase> mPhases = new .() ~ delete _;
+	int mPhase = -1;
+	int mFrame;
+	CompareShot mShot ~ delete _;
+	uint8[] mLowOff ~ delete _;
+	/// The last raymarching preset's target size, so the caps are checked in order.
+	int32 mLastPixels;
+
+	protected override bool LoadsPlayerQuality => false;
+
+	public this()
+	{
+		Title.Set("Cloud quality test");
+		Width = ShotWidth;
+		Height = ShotHeight;
+	}
+
+	void Check(bool ok, StringView what)
+	{
+		Console.WriteLine(scope $"cloud-test: {ok ? "ok" : "FAIL"} {what}");
+		if (!ok)
+			Result = 1;
+	}
+
+	protected override bool OnInit()
+	{
+		if (!GetArg("--cloud-test-folder", mDir) || mDir.IsEmpty || mDir.StartsWith("--"))
+			mDir.Set(scope $"{Path.GetTempPath(.. scope .())}tallow-cloud-quality");
+		Directory.CreateDirectory(mDir);
+		Clouds.OverrideSeconds = CloudTime;
+		Profiler.Enabled = true;
+		mPhases.Add(.() { name = "low-off", level = .Low, clouds = false });
+		mPhases.Add(.() { name = "low", level = .Low, clouds = true });
+		mPhases.Add(.() { name = "medium", level = .Medium, clouds = true });
+		mPhases.Add(.() { name = "high", level = .High, clouds = true });
+		mPhases.Add(.() { name = "ultra", level = .Ultra, clouds = true });
+		mPhases.Add(.() { name = "view", level = .High, clouds = true, debug = .Clouds });
+
+		mScene = new Scene();
+		let cameraObject = mScene.CreateGameObject("Camera");
+		mCameraObject = cameraObject;
+		mCamera = cameraObject.AddComponent<Camera>();
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mSunObject = mScene.CreateGameObject("Sun");
+		mSunObject.Transform.EulerAngles = .(20, -30, 0);
+		let light = mSunObject.AddComponent<Light>();
+		light.intensity = 1.5f;
+		let ground = mScene.CreateGameObject("Ground");
+		let renderer = ground.AddComponent<MeshRenderer>();
+		renderer.mesh.Set("builtin:plane");
+		renderer.color = .FromBytes(112, 158, 92);
+		ground.Transform.LocalScale = .(500, 1, 500);
+		mView = new RenderView(10);
+		mView.AllowPostAa = false;
+		ScreenEffects.GlobalIllumination = .Ambient;
+		mScene.StartPlay();
+		return true;
+	}
+
+	void StartPhase(Phase phase)
+	{
+		// The preset sets the cloud budget (Quality.bf); the scene asks for the full picture so each cap shows.
+		Quality.Set(phase.level);
+		let env = mScene.Environment;
+		env.Reset();
+		env.skyMode = .Physical;
+		env.dayNight = true;
+		env.dayNightPaused = true;
+		env.autoColors = true;
+		env.sunIntensity = Atmosphere.ReferenceSunIntensity;
+		env.sunLight = mSunObject.Id;
+		// No fog over the sky: the cloud pass is what this test measures.
+		env.volumetricFog = false;
+		env.clouds = phase.clouds;
+		env.cloudMode = .Volumetric;
+		env.cloudCoverage = 0.45f;
+		env.cloudResolution = 1.0f;
+		// The afternoon hour with the sun 45 degrees up (as --cloud-test volume).
+		float bestHour = 12;
+		float bestError = float.MaxValue;
+		for (float hour = 12; hour < 21; hour += 0.01f)
+		{
+			env.timeOfDay = hour;
+			let error = Math.Abs(DayNight.SunElevation(env) - 45);
+			if (error < bestError)
+			{
+				bestError = error;
+				bestHour = hour;
+			}
+		}
+		env.timeOfDay = bestHour;
+		let sun = DayNight.SunDirection(env);
+		var look = Vector3(sun.x, 0, sun.z).Normalized;
+		look.y = 0.35f;
+		look = look.Normalized;
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mCameraObject.Transform.Position = .(0, 200, 0);
+		mCameraObject.Transform.Rotation = Quaternion.LookRotation(look, .(0, 1, 0));
+		GpuDriven.View = phase.debug;
+		DayNight.Apply(mScene);
+	}
+
+	protected override void OnUpdate()
+	{
+		mScene.Update();
+		AssetLoader.Update();
+	}
+
+	protected override void OnRender()
+	{
+		if (mPhase < 0 || (mShot != null && mFrame < 0))
+		{
+			mPhase++;
+			if (mPhase >= mPhases.Count)
+			{
+				Finish();
+				return;
+			}
+			StartPhase(mPhases[mPhase]);
+			mFrame = 0;
+			DeleteAndNullify!(mShot);
+		}
+		mView.Resize(ShotWidth, ShotHeight);
+		mView.Render(mScene, mCamera.GetCameraData((float)ShotWidth / ShotHeight));
+		mFrame++;
+		if (mFrame < SettleFrames)
+			return;
+		if (mShot == null)
+			mShot = new CompareShot();
+		let path = scope $"{mDir}/{mPhases[mPhase].name}.png";
+		if (mShot.Step(mView, ShotWidth, ShotHeight, path))
+		{
+			let pixels = mShot.Pixels;
+			let copy = new uint8[pixels.Count];
+			Internal.MemCpy(copy.CArray(), pixels.CArray(), pixels.Count);
+			CheckShot(mPhases[mPhase], copy);
+			mFrame = -1;
+		}
+	}
+
+	void CheckShot(Phase phase, uint8[] pixels)
+	{
+		Console.WriteLine(scope $"cloud-test: {phase.name}: preset {Quality.Names[(int)phase.level]} allowed {RenderView.CloudsAllowed} steps {RenderView.CloudSteps} shadow {RenderView.CloudShadowSteps} resolution {RenderView.CloudMaxResolution:F2} distance {RenderView.CloudMaxDistance:F0} pixels {RenderView.VolumetricCloudPixels} rays {RenderView.VolumetricCloudRays}");
+		int64 sum = 0;
+		for (int y < ShotHeight / 2)
+			for (int x < ShotWidth)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				sum += pixels[i] + pixels[i + 1] + pixels[i + 2];
+			}
+		Check(sum > 0, scope $"{phase.name}: not black");
+		if (phase.name == "low-off" || phase.name == "low")
+		{
+			// Low draws the 2D backup whatever the card: no raymarch.
+			Check(!RenderView.CloudsAllowed && RenderView.CloudSteps == 0, scope $"{phase.name}: Low has no cloud raymarch");
+			if (phase.name == "low-off")
+				mLowOff = pixels;
+			else
+			{
+				Check(RenderView.VolumetricCloudPixels == 0, "Low: nothing is raymarched");
+				let diff = Diff(mLowOff, pixels, 0, 0, ShotWidth, SkyRows);
+				Console.WriteLine(scope $"cloud-test: Low's 2D backup changes the sky (diff {diff})");
+				Check(diff > 20000, scope $"Low: the 2D backup draws the clouds (diff {diff})");
+			}
+			return;
+		}
+		if (!RenderView.CloudsRunnable)
+		{
+			Console.WriteLine(scope $"cloud-test: {phase.name}: no compute, the 2D backup draws instead");
+			return;
+		}
+		if (phase.name == "view")
+		{
+			Check(RenderView.VolumetricCloudPixels > 0, "the debug view raymarches");
+			CheckDebugView(pixels);
+			return;
+		}
+		// Medium, High and Ultra raymarch at their own step count and resolution cap.
+		let expectedSteps = phase.level == .Medium ? 32 : (phase.level == .High ? 48 : 64);
+		Check(RenderView.CloudsAllowed, scope $"{phase.name}: the raymarch runs");
+		Check(RenderView.CloudSteps == expectedSteps, scope $"{phase.name}: {expectedSteps} steps");
+		Check(RenderView.VolumetricCloudPixels > 0, scope $"{phase.name}: the cloud target has pixels");
+		Check(RenderView.VolumetricCloudPixels > mLastPixels, scope $"{phase.name}: the target is larger than the last preset's ({RenderView.VolumetricCloudPixels} > {mLastPixels} px)");
+		mLastPixels = RenderView.VolumetricCloudPixels;
+	}
+
+	/// The debug view's three channels over the sky: red the column's opacity (density), green its average light,
+	/// blue the share of the step budget the ray used.
+	void CheckDebugView(uint8[] pixels)
+	{
+		float[3] minC = .(255, 255, 255);
+		float[3] maxC = .(0, 0, 0);
+		float[3] sumC = .(0, 0, 0);
+		for (int32 y = 0; y < SkyRows; y++)
+			for (int32 x = 0; x < ShotWidth; x++)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				for (int32 c < 3)
+				{
+					float v = pixels[i + c];
+					minC[c] = Math.Min(minC[c], v);
+					maxC[c] = Math.Max(maxC[c], v);
+					sumC[c] += v;
+				}
+			}
+		let n = (float)(SkyRows * ShotWidth);
+		Console.WriteLine(scope $"cloud-test: cloud view density {minC[0]:F0}..{maxC[0]:F0} (mean {sumC[0] / n:F0}), light {minC[1]:F0}..{maxC[1]:F0} (mean {sumC[1] / n:F0}), rays {minC[2]:F0}..{maxC[2]:F0} (mean {sumC[2] / n:F0}) of 255");
+		Check(maxC[0] - minC[0] > 24 && sumC[0] / n > 4, scope $"the density channel varies over the sky ({minC[0]:F0}..{maxC[0]:F0})");
+		Check(maxC[1] - minC[1] > 24 && maxC[1] > 25, scope $"the light channel lights the cloud ({minC[1]:F0}..{maxC[1]:F0})");
+		Check(maxC[2] - minC[2] > 12, scope $"ray counts vary across the sky ({minC[2]:F0}..{maxC[2]:F0})");
+	}
+
+	static int64 Diff(uint8[] a, uint8[] b, int32 x0, int32 y0, int32 x1, int32 y1)
+	{
+		if (a == null || b == null || a.Count != b.Count)
+			return int64.MaxValue;
+		int64 sum = 0;
+		for (int32 y = y0; y < y1; y++)
+			for (int32 x = x0; x < x1; x++)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				for (int32 c < 3)
+					sum += Math.Abs((int32)a[i + c] - (int32)b[i + c]);
+			}
+		return sum;
+	}
+
+	void Finish()
+	{
+		GpuDriven.View = .Off;
+		Quality.Set(.High);
+		Console.WriteLine(Result == 0 ? "cloud-test quality: PASS" : "cloud-test quality: FAILED");
 		Close();
 	}
 }

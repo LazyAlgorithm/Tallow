@@ -25,7 +25,7 @@ static class QualityTest
 		{
 			let level = (QualityLevel)i;
 			Quality.Set(level);
-			Console.WriteLine(scope $"{Quality.Names[i]}: gpuDriven={GpuDriven.QualitySetting} pixelError={GpuDriven.PixelError} occlusion={GpuDriven.Occlusion} streamGeometry={GpuDriven.StreamGeometry} budgets MB geo/tex/vt={StreamingCore.Pool(.GeoPage).Budget >> 20}/{StreamingCore.Pool(.TextureMip).Budget >> 20}/{StreamingCore.Pool(.VtTile).Budget >> 20} fog on={RenderView.FogEnabled} tile={RenderView.FogTileSize} slices={RenderView.FogSlices} temporal={RenderView.FogTemporalAllowed} lights={RenderView.FogLocalLights}");
+			Console.WriteLine(scope $"{Quality.Names[i]}: gpuDriven={GpuDriven.QualitySetting} pixelError={GpuDriven.PixelError} occlusion={GpuDriven.Occlusion} streamGeometry={GpuDriven.StreamGeometry} budgets MB geo/tex/vt={StreamingCore.Pool(.GeoPage).Budget >> 20}/{StreamingCore.Pool(.TextureMip).Budget >> 20}/{StreamingCore.Pool(.VtTile).Budget >> 20} fog on={RenderView.FogEnabled} tile={RenderView.FogTileSize} slices={RenderView.FogSlices} temporal={RenderView.FogTemporalAllowed} lights={RenderView.FogLocalLights} clouds on={RenderView.CloudsAllowed} steps={RenderView.CloudSteps} shadowSteps={RenderView.CloudShadowSteps} temporal={RenderView.CloudTemporalAllowed} resolution={RenderView.CloudMaxResolution} distance={RenderView.CloudMaxDistance}");
 			Check(Quality.Level == level, "level is kept after Apply");
 			Check(GpuDriven.QualitySetting == (i > 0), "GPU path off only on Low");
 			Check(StreamingCore.Pool(.GeoPage).Budget == (int64)Quality.Current.geometryBudgetMB << 20, "geometry budget applied");
@@ -33,22 +33,39 @@ static class QualityTest
 			Check(RenderView.FogTileSize == Quality.Current.fogTileSize && RenderView.FogSlices == Quality.Current.fogSlices
 				&& RenderView.FogLocalLights == Quality.Current.fogLocalLights && RenderView.FogTemporalAllowed == Quality.Current.fogTemporal,
 				"fog quality applied");
+			// Low has no cloud raymarch at all: the scene's mode is treated as 2D, so the sky draws the 2D backup.
+			Check(RenderView.CloudsAllowed == (i > 0), "the cloud raymarch is off only on Low (the 2D backup)");
+			Check(RenderView.CloudSteps == Quality.Current.cloudSteps && RenderView.CloudShadowSteps == Quality.Current.cloudShadowSteps
+				&& RenderView.CloudTemporalAllowed == Quality.Current.cloudTemporal
+				&& RenderView.CloudMaxResolution == Quality.Current.cloudMaxResolution
+				&& RenderView.CloudMaxDistance == Quality.Current.cloudMaxDistance, "cloud quality applied");
 		}
 		Quality.Set(.Ultra);
 		Check(GpuDriven.PixelError == 0.75f && StreamingCore.Pool(.TextureMip).Budget == 2048L << 20, "Ultra: 0.75 px, 2048 MB textures");
 		Check(RenderView.FogTileSize == 8 && RenderView.FogSlices == 128 && RenderView.FogLocalLights == 128 && RenderView.FogTemporalAllowed, "Ultra: finest fog grid, 128 lights, temporal");
 		Check(RenderView.FogHistoryBlend == 0.95f, "Ultra: fog history blend 0.95");
+		Check(RenderView.CloudsAllowed && RenderView.CloudSteps == 64 && RenderView.CloudShadowSteps == 4
+			&& RenderView.CloudTemporalAllowed && RenderView.CloudMaxResolution == 1.0f && RenderView.CloudMaxDistance == 20000,
+			"Ultra: full-resolution clouds, 64 steps, 4 shadow steps, 20 km");
 		Quality.Set(.Low);
 		Check(StreamingCore.Pool(.VtTile).Budget == 256L << 20, "Low: 256 MB virtual textures");
 		Check(PhysicalSky.Quality == 0, "Low: smallest sky table");
 		Check(!RenderView.FogEnabled && RenderView.FogTileSize == 16 && RenderView.FogSlices == 32 && RenderView.FogLocalLights == 0
 			&& !RenderView.FogTemporalAllowed, "Low: volumetric fog off (the fallback's height fog and shafts)");
+		Check(!RenderView.CloudsAllowed && RenderView.CloudSteps == 0 && RenderView.CloudShadowSteps == 0
+			&& !RenderView.CloudTemporalAllowed, "Low: the 2D cloud backup (no raymarch)");
 		Quality.Set(.Medium);
 		Check(RenderView.FogEnabled && RenderView.FogTileSize == 16 && RenderView.FogSlices == 48 && RenderView.FogLocalLights == 16
 			&& RenderView.FogTemporalAllowed, "Medium: 16 px, 48 slices, 16 lights, temporal");
+		Check(RenderView.CloudsAllowed && RenderView.CloudSteps == 32 && RenderView.CloudShadowSteps == 2
+			&& RenderView.CloudTemporalAllowed && RenderView.CloudMaxResolution == 0.5f && RenderView.CloudMaxDistance == 8000,
+			"Medium: 32 steps, 2 shadow steps, half resolution, 8 km");
 		Quality.Set(.High);
 		Check(RenderView.FogEnabled && RenderView.FogTileSize == 12 && RenderView.FogSlices == 64 && RenderView.FogLocalLights == 64
 			&& RenderView.FogTemporalAllowed && RenderView.FogHistoryBlend == 0.9f, "High: 12 px, 64 slices, 64 lights, temporal");
+		Check(RenderView.CloudsAllowed && RenderView.CloudSteps == 48 && RenderView.CloudShadowSteps == 4
+			&& RenderView.CloudTemporalAllowed && RenderView.CloudMaxResolution == 0.75f && RenderView.CloudMaxDistance == 12000,
+			"High: 48 steps, 4 shadow steps, 0.75 of the picture, 12 km");
 
 		// A lighting preset changes only the lighting settings: the render scale and the chosen upscaler stay.
 		Quality.Current.renderScale = 0.75f;
@@ -58,11 +75,14 @@ static class QualityTest
 		Check(RenderView.RenderScale == 0.75f && Upscaling.Current == .DLSS, "lighting preset leaves render scale and upscaler");
 		Check(RenderView.FogTileSize == 16 && RenderView.FogSlices == 32 && RenderView.FogLocalLights == 0 && !RenderView.FogEnabled,
 			"lighting preset applies the Low fog grid");
+		Check(!RenderView.CloudsAllowed && RenderView.CloudSteps == 0, "lighting preset applies Low clouds (the 2D backup)");
 		Check(RenderView.ShadowDistanceScale == 0.5f && RenderView.MaxShadowedLights == 2, "lighting preset applies Low shadows");
 		Check(CSharpPlatform.QualityLightingLevel() == (int32)QualityLevel.Low, "the C# lighting level reports the preset");
 		Quality.SetLighting(.Ultra);
 		Check(RenderView.FogTileSize == 8 && RenderView.FogSlices == 128 && RenderView.FogLocalLights == 128
 			&& RenderView.FogHistoryBlend == 0.95f, "lighting preset applies the Ultra fog grid");
+		Check(RenderView.CloudsAllowed && RenderView.CloudSteps == 64 && RenderView.CloudMaxResolution == 1.0f
+			&& RenderView.CloudMaxDistance == 20000, "lighting preset applies the Ultra cloud values");
 		Check(RenderView.RenderScale == 0.75f && Upscaling.Current == .DLSS, "Ultra lighting leaves render scale and upscaler");
 		Check(Quality.LightingLevel == .Ultra, "lighting level follows the preset");
 		Check(!CSharpPlatform.QualitySetLightingValue("renderScale", "1", false), "a non-lighting setting is refused by the lighting setter");
@@ -79,6 +99,9 @@ static class QualityTest
 		Check(CSharpPlatform.QualitySetLightingValue("fogSlices", "32", false), "fog slices change by name");
 		Check(CSharpPlatform.QualitySetLightingValue("fogLocalLights", "4", false), "the local-light fog budget changes by name");
 		Check(CSharpPlatform.QualitySetLightingValue("fogTemporal", "0", false), "the fog temporal blend changes by name");
+		Check(CSharpPlatform.QualitySetLightingValue("cloudSteps", "24", false), "the cloud step budget changes by name");
+		Check(CSharpPlatform.QualitySetLightingValue("cloudMaxResolution", "0.4", false), "the cloud resolution changes by name");
+		Check(CSharpPlatform.QualitySetLightingValue("cloudTemporal", "0", false), "the cloud temporal blend changes by name");
 		Check(Quality.LightingLevel == .Custom, "the changed fog grid is Custom");
 		Check(Quality.Save(folder), "the quality file is saved");
 		Quality.Set(.High);
@@ -87,6 +110,10 @@ static class QualityTest
 			&& !Quality.Current.fogTemporal, "the game's fog override survives a reload");
 		Check(RenderView.FogTileSize == 16 && RenderView.FogSlices == 32 && RenderView.FogLocalLights == 4
 			&& !RenderView.FogTemporalAllowed, "the loaded fog override is applied");
+		Check(Quality.Current.cloudSteps == 24 && Quality.Current.cloudMaxResolution == 0.4f && !Quality.Current.cloudTemporal,
+			"the game's cloud override survives a reload");
+		Check(RenderView.CloudSteps == 24 && RenderView.CloudMaxResolution == 0.4f && !RenderView.CloudTemporalAllowed,
+			"the loaded cloud override is applied");
 		Check(Quality.Current.renderScale == 0.75f && Quality.Current.upscaler == .DLSS && Upscaling.Current == .DLSS,
 			"render scale and upscaler survive the reload");
 
@@ -104,6 +131,11 @@ static class QualityTest
 		v.fogSlices = 128;
 		v.fogTemporal = false;
 		v.fogLocalLights = 24;
+		v.cloudSteps = 24;
+		v.cloudShadowSteps = 3;
+		v.cloudTemporal = false;
+		v.cloudMaxResolution = 0.4f;
+		v.cloudMaxDistance = 16000;
 		let text = scope String();
 		Quality.Write(v, text);
 		let back = Quality.Read(text, .());
@@ -111,6 +143,10 @@ static class QualityTest
 		Check(Quality.LevelOf(back) == .Custom, "changed values are Custom");
 		Check(back.fogTileSize == 8 && back.fogSlices == 128 && !back.fogTemporal && back.fogLocalLights == 24 && !back.volumetricFog,
 			"fog settings round trip");
+		Check(back.clouds && back.cloudSteps == 24 && back.cloudShadowSteps == 3 && !back.cloudTemporal
+			&& back.cloudMaxResolution == 0.4f && back.cloudMaxDistance == 16000, "cloud settings round trip");
+		Check(Quality.IsLightingField("cloudSteps") && Quality.IsLightingField("cloudMaxResolution")
+			&& !Quality.IsLightingField("cloudResolution"), "the cloud values are lighting settings");
 
 		// The command line wins.
 		GpuDriven.PixelErrorFromArgs = true;

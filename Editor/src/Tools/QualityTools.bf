@@ -146,6 +146,28 @@ extension EditorApp
 			if (ImGui.IsItemHovered())
 				ImGui.SetTooltip("How many point and spot lights may scatter into the fog in a view (the first in each cell's list).");
 			ImGui.EndDisabled();
+			// Volumetric clouds (RenderViewClouds.bf): the raymarch on or off (Low and cards without compute draw the
+			// 2D backup), its step budget, the self-shadow steps, the temporal blend, the resolution and distance caps.
+			changed |= ImGui.Checkbox("Volumetric Clouds", ref v.clouds);
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("Raymarches the scene's cloud slab on the physical sky (Vulkan, Metal, Direct3D). Off, or on a card without compute shaders (OpenGL, the web), the 2D cloud backup is drawn instead.");
+			ImGui.BeginDisabled(!v.clouds);
+			changed |= ImGui.DragInt("Cloud Steps", ref v.cloudSteps, 1, 0, 128);
+			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip("How many samples the march takes through the cloud slab per pixel: more is smoother and costs more.");
+			changed |= ImGui.DragInt("Cloud Shadow Steps", ref v.cloudShadowSteps, 1, 0, 8);
+			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip("How many samples each cloud takes towards the sun (or moon) for its self-shadowing: more is puffier and costs more. 0 is flat lighting.");
+			changed |= ImGui.Checkbox("Cloud Temporal Blend", ref v.cloudTemporal);
+			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip("Blends each frame's cloud layer with the last, which hides the march's noise. Dropped on a camera cut.");
+			changed |= ImGui.SliderFloat("Cloud Resolution", ref v.cloudMaxResolution, 0.25f, 1, "%.2f of the picture");
+			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip("The largest share of the picture's resolution the cloud march may use (a scene's own Cloud Resolution is capped by it).");
+			changed |= ImGui.DragFloat("Cloud Distance", ref v.cloudMaxDistance, 50, 500, 100000, "%.0f m");
+			if (ImGui.IsItemHovered(ImGui.HoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip("The farthest the cloud march goes, in metres (a scene's own Cloud Distance is capped by it).");
+			ImGui.EndDisabled();
 			if (changed)
 			{
 				Quality.Current = v;
