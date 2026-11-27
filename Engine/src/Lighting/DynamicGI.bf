@@ -897,6 +897,7 @@ static class DynamicGI
 		DeleteAndNullify!(sBuilding);
 		sTracks.Clear();
 		sGatherList.Clear();
+		sGatherIds.Clear();
 		sGathering = false;
 		sReady = false;
 		sScene = null;
@@ -951,6 +952,9 @@ static class DynamicGI
 
 	static Dictionary<uint64, Track> sTracks = new .() ~ DeleteDictionaryAndValues!(_);
 	static List<MeshRenderer> sGatherList = new .() ~ delete _;
+	/// The entity of each renderer in sGatherList, in step: the gather spans frames, and an object destroyed in
+	/// between is freed (its handle then dangles), so aliveness is checked on the id instead of the handle.
+	static List<uint64> sGatherIds = new .() ~ delete _;
 	static int32 sGatherIndex, sGatherPart, sGatherTriangle;
 	static GiGeometry sBuilding;
 	static bool sGathering;
@@ -987,7 +991,7 @@ static class DynamicGI
 		if (sGathering)
 		{
 			using (sGatherMarker.Sample())
-				GatherSome(ref finished);
+				GatherSome(scene.World, ref finished);
 			return;
 		}
 		if (now < sNextCheck)
@@ -998,6 +1002,7 @@ static class DynamicGI
 		scene.Components<MeshRenderer>(renderers);
 		uint64 signature = 0;
 		sGatherList.Clear();
+		sGatherIds.Clear();
 		for (let renderer in renderers)
 		{
 			if (!Eligible(renderer))
@@ -1025,6 +1030,7 @@ static class DynamicGI
 			if ((parts == null || parts.Count == 0) && mesh == null)
 				continue;
 			sGatherList.Add(renderer);
+			sGatherIds.Add(id);
 			signature += ((uint64)id * 0x9E3779B97F4A7C15 + matrix) * 0xBF58476D1CE4E5B9 + (uint64)(int)Internal.UnsafeCastToPtr(mesh);
 		}
 		// Forget renderers that are gone.
@@ -1043,6 +1049,7 @@ static class DynamicGI
 		if (signature == sBuiltSignature && sBuiltOnce)
 		{
 			sGatherList.Clear();
+			sGatherIds.Clear();
 			return;
 		}
 		// Something changed: gather again.
@@ -1054,18 +1061,21 @@ static class DynamicGI
 		sBuilding = new GiGeometry();
 		sGathering = true;
 		using (sGatherMarker.Sample())
-			GatherSome(ref finished);
+			GatherSome(scene.World, ref finished);
 	}
 
 	static bool sBuiltOnce;
 
-	static void GatherSome(ref GiGeometry finished)
+	static void GatherSome(World world, ref GiGeometry finished)
 	{
 		let start = scope Stopwatch(true);
 		while (sGatherIndex < sGatherList.Count)
 		{
 			let renderer = sGatherList[sGatherIndex];
-			if (!renderer.GameObject.IsDestroyed && !GatherRenderer(renderer, start))
+			// A renderer whose object was destroyed while the gather spanned frames must not be touched: the object
+			// is freed at the end of the frame it was destroyed in (the handle then dangles), so its entity, recorded
+			// when the list was made, is checked instead.
+			if (world.IsAlive(Entity(sGatherIds[sGatherIndex])) && !renderer.GameObject.IsDestroyed && !GatherRenderer(renderer, start))
 				return;
 			sGatherIndex++;
 			sGatherPart = 0;
@@ -1089,6 +1099,7 @@ static class DynamicGI
 			sBuiltSignature = sGatherSignature;
 			sBuiltOnce = true;
 			sGatherList.Clear();
+			sGatherIds.Clear();
 			finished = sBuilding;
 			sBuilding = null;
 		}

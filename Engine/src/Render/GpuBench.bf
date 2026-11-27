@@ -17,10 +17,12 @@ namespace Tallow;
 ///   4 stream   a 2 million triangle mesh streamed through a geometry budget of a thirty-second of its size, flown in and along
 ///   5 tiny     16 meshes of a million triangles each, far away (a few pixels per triangle at most): the M7 gate scene
 ///   6 fog      a colonnade in thick volumetric fog with a low sun behind it (light shafts), the camera flying down it
+///   7 clouds   ground, hills and buildings under a lit volumetric cloud deck, the camera flying forward under it
 ///
 /// Per run the JSON has: mean/p95/max of the CPU time of the render call and bgfx's frame CPU and GPU times (ms), the mean GPU
-/// time of each pass (cull phase 1, occluder draws, HZB + phase 2, main draw, shadows, VT feedback; the passes of the GPU path
-/// read 0 in the old run), triangles (submitted to bgfx, drawn from clusters, and the sum), clusters, instances, pool and resident
+/// time of each pass (cull phase 1, occluder draws, HZB + phase 2, main draw, shadows, VT feedback, volumetric fog and
+/// clouds; the passes of the GPU path read 0 in the old run), the cloud pass's pixels and rays, triangles (submitted to bgfx,
+/// drawn from clusters, and the sum), clusters, instances, pool and resident
 /// megabytes, and streaming requests/misses/uploads/pages asked for. `--frames` is the length of the path (300), a run that takes
 /// longer than `--bench-timeout` seconds (120) is cut and marked.
 ///
@@ -52,7 +54,9 @@ class GpuBenchApp : Application
 		public List<double> renderMs = new .() ~ delete _;
 		public List<double> bgfxCpuMs = new .() ~ delete _;
 		public List<double> gpuMs = new .() ~ delete _;
-		public double cullMs, occluderMs, hzbMs, mainMs, shadowMs, vtMs, fogMs;
+		public double cullMs, occluderMs, hzbMs, mainMs, shadowMs, vtMs, fogMs, cloudMs;
+		public double cloudPixels, cloudRays;
+		public int64 maxCloudPixels, maxCloudRays;
 		public double submittedTriangles, clusterTriangles, clusters, instances, draws, computes;
 		public int64 maxClusterTriangles, maxClusters, maxSwClusters, maxSwTriangles, maxHwClusters;
 		public double poolMB, residentGeoMB, residentTexMB, residentVtMB, peakPoolMB, peakResidentGeoMB;
@@ -135,8 +139,9 @@ class GpuBenchApp : Application
 		case "4", "stream": mSceneId = 4; mSceneName.Set("stream");
 		case "5", "tiny": mSceneId = 5; mSceneName.Set("tiny");
 		case "6", "fog": mSceneId = 6; mSceneName.Set("fog");
+		case "7", "clouds": mSceneId = 7; mSceneName.Set("clouds");
 		default:
-			Console.WriteLine(scope $"gpu-bench: unknown scene '{text}' (1 mixed, 2 crowd, 3 closeup, 4 stream, 5 tiny, 6 fog)");
+			Console.WriteLine(scope $"gpu-bench: unknown scene '{text}' (1 mixed, 2 crowd, 3 closeup, 4 stream, 5 tiny, 6 fog, 7 clouds)");
 			Result = 1;
 			return false;
 		}
@@ -243,6 +248,63 @@ class GpuBenchApp : Application
 			env.vfDistance = 160;
 			env.shadowDistance = 120;
 			mSceneInfo.Set("a colonnade in thick volumetric fog with a low sun behind it (light shafts), camera flying down it");
+		case 7:
+			// Ground, hills and buildings under a volumetric cloud deck, lit by a low sun: the cloud pass's cost in a
+			// scene that also has to draw geometry (the fog is off, whose pass the clouds would share a bgfx view with).
+			let floor = mScene.CreateGameObject("Ground");
+			floor.Transform.Position = .(0, 0, 200);
+			floor.Transform.LocalScale = .(2400, 1, 2400);
+			let floorRenderer = floor.AddComponent<MeshRenderer>();
+			floorRenderer.mesh.Set("builtin:plane");
+			floorRenderer.color = .(0.30f, 0.38f, 0.22f);
+			mSceneInstances++;
+			mSceneTriangles += 2;
+			let hill = AddMesh("bench-clouds-hill", 48, 24);
+			for (int i < 14)
+			{
+				let angle = (float)i / 14 * Math.PI_f * 2;
+				let radius = 260 + (i % 3) * 90;
+				// Half buried in the ground, so they read as hills rather than balls.
+				Spawn(hill, .(Math.Sin(angle) * radius, -60 + (i % 4) * 18, 200 + Math.Cos(angle) * radius), 150, i);
+			}
+			for (int i < 40)
+			{
+				let ix = i % 8;
+				let iz = i / 8;
+				let building = mScene.CreateGameObject("Building");
+				let height = 12 + (i * 7) % 34;
+				let ground = 6 + (i * 13) % 40;
+				building.Transform.Position = .((ix - 3.5f) * 34 + ground, height * 0.5f, 60 + iz * 46);
+				building.Transform.LocalScale = .(10 + (i % 4) * 3, height, 10 + (i % 3) * 4);
+				let renderer = building.AddComponent<MeshRenderer>();
+				renderer.mesh.Set("builtin:cube");
+				renderer.color = .(0.55f + (i % 3) * 0.1f, 0.53f, 0.48f + (i % 5) * 0.03f);
+				mSceneInstances++;
+				mSceneTriangles += 12;
+			}
+			// A low warm sun so the deck is lit from the side (bright tops, grey bases) and casts shadows on the ground.
+			sun.Transform.Rotation = Quaternion.Euler(16, -35, 0);
+			light.intensity = 1.5f;
+			light.color = .(1.0f, 0.92f, 0.82f);
+			{
+				let env = mScene.Environment;
+				// The cloud layer needs the Physical sky (a Gradient sky draws neither cloud path).
+				env.skyMode = .Physical;
+				env.clouds = true;
+				env.cloudMode = .Volumetric;
+				env.cloudCoverage = 0.55f;
+				env.cloudDensity = 0.035f;
+				env.cloudHeight = 1300;
+				env.cloudThickness = 1400;
+				env.cloudWindSpeed = 9;
+				env.cloudWindDirection = 210;
+				env.cloudSeed = 4242;
+				env.cloudAnisotropy = 0.6f;
+				env.cloudAmbient = 0.6f;
+				env.cloudDistance = 12000;
+				env.cloudResolution = 0.5f;
+			}
+			mSceneInfo.Set("ground, hills and 40 buildings under a lit volumetric cloud deck (coverage 0.55), camera flying forward");
 		default:
 			let ball = AddMesh("bench-tiny", 1000, 500);
 			for (int i < 16)
@@ -306,6 +368,10 @@ class GpuBenchApp : Application
 			// Down the middle of the colonnade at eye height, towards the sun.
 			position = .(0, 3, -14 + t * 155);
 			angles = .(2, 0, 0);
+		case 7:
+			// Forward over the buildings towards the deck, the pitch rising from the ground to the cloud bases.
+			position = .(0, 18 + t * 30, -120 + t * 520);
+			angles = .(3 + t * 10, 0, 0);
 		default:
 			position = .(-12 + t * 24, 2, 0);
 			angles = .(0, 0, 0);
@@ -427,6 +493,11 @@ class GpuBenchApp : Application
 		run.shadowMs += ProfilerModules.ShadowMs;
 		run.vtMs += ProfilerModules.VtMs;
 		run.fogMs += ProfilerModules.VolumetricFogMs;
+		run.cloudMs += ProfilerModules.VolumetricCloudsMs;
+		run.cloudPixels += RenderView.VolumetricCloudPixels;
+		run.cloudRays += RenderView.VolumetricCloudRays;
+		run.maxCloudPixels = Math.Max(run.maxCloudPixels, RenderView.VolumetricCloudPixels);
+		run.maxCloudRays = Math.Max(run.maxCloudRays, RenderView.VolumetricCloudRays);
 		double submitted = 0;
 		for (let count in stats.numPrims)
 			submitted += count;
@@ -537,7 +608,8 @@ class GpuBenchApp : Application
 			Stat(json, "cpuMsRender", run.renderMs);
 			Stat(json, "cpuMsBgfxFrame", run.bgfxCpuMs);
 			Stat(json, "gpuMsFrame", run.gpuMs);
-			json.AppendF($"      \"gpuMsPass\": {{ \"cullPhase1\": {run.cullMs / n:0.000}, \"occluderDraws\": {run.occluderMs / n:0.000}, \"hzbPhase2\": {run.hzbMs / n:0.000}, \"mainDraw\": {run.mainMs / n:0.000}, \"shadows\": {run.shadowMs / n:0.000}, \"vtFeedback\": {run.vtMs / n:0.000}, \"volumetricFog\": {run.fogMs / n:0.000} }},\n");
+			json.AppendF($"      \"gpuMsPass\": {{ \"cullPhase1\": {run.cullMs / n:0.000}, \"occluderDraws\": {run.occluderMs / n:0.000}, \"hzbPhase2\": {run.hzbMs / n:0.000}, \"mainDraw\": {run.mainMs / n:0.000}, \"shadows\": {run.shadowMs / n:0.000}, \"vtFeedback\": {run.vtMs / n:0.000}, \"volumetricFog\": {run.fogMs / n:0.000}, \"volumetricClouds\": {run.cloudMs / n:0.000} }},\n");
+			json.AppendF($"      \"clouds\": {{ \"pixelsMean\": {run.cloudPixels / n:0}, \"pixelsMax\": {run.maxCloudPixels}, \"raysMean\": {run.cloudRays / n:0}, \"raysMax\": {run.maxCloudRays} }},\n");
 			json.AppendF($"      \"trianglesSubmittedMean\": {run.submittedTriangles / n:0},\n      \"trianglesFromClustersMean\": {run.clusterTriangles / n:0},\n      \"trianglesFromClustersMax\": {run.maxClusterTriangles},\n");
 			json.AppendF($"      \"trianglesTotalMean\": {(run.submittedTriangles + run.clusterTriangles) / n:0},\n");
 			json.AppendF($"      \"clustersMean\": {run.clusters / n:0},\n      \"clustersMax\": {run.maxClusters},\n      \"swClustersMax\": {run.maxSwClusters},\n      \"swTrianglesMax\": {run.maxSwTriangles},\n      \"hwClustersMax\": {run.maxHwClusters},\n      \"instancesMean\": {run.instances / n:0},\n");

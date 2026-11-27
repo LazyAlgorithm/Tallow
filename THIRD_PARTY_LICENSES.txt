@@ -26,6 +26,7 @@ Tallow, and every game built with it, includes the libraries below. Their licenc
   Roboto               Interface and default World Text font
   Font Awesome         Interface icons
   SMAA                 Antialiasing (SMAA 1x shaders and lookup textures, iryoku/smaa)
+  Bevy                 Sky and atmosphere shaders (bevy_pbr atmosphere, MIT)
   NVIDIA DLSS          Upscaling (DLSS SDK and runtime; NVIDIA GeForce RTX only)
   FidelityFX FSR 2     Upscaling (FSR temporal upscaler and Vulkan backend, AMD)
   FidelityFX FSR 1     Upscaling (FSR 1 EASU and RCAS shaders, AMD)
@@ -1126,6 +1127,36 @@ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+------------------------------------------------------------------------------
+Bevy
+------------------------------------------------------------------------------
+
+The physical sky's shaders (Engine/shaders/include/atmosphere.sh, fs_atmo_transmittance.sc,
+fs_atmo_multiscatter.sc, fs_atmo_skyview.sc and include/sky_physical.sh) are ported from Bevy's
+atmosphere (bevy_pbr), used under the MIT licence below.
+
+MIT License
+
+Copyright (c) 2020 Carter Anderson
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ------------------------------------------------------------------------------
 NVIDIA DLSS

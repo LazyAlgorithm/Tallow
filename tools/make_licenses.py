@@ -39,6 +39,7 @@ libraries = [
     ('Roboto', 'Interface and default World Text font', tp / 'fonts/LICENSE-Roboto.txt'),
     ('Font Awesome', 'Interface icons', tp / 'fonts/LICENSE-FontAwesome.txt'),
     ('SMAA', 'Antialiasing (SMAA 1x shaders and lookup textures, iryoku/smaa)', root / 'Engine/shaders/licenses/SMAA-LICENSE.txt'),
+    ('Bevy', 'Sky and atmosphere shaders (bevy_pbr atmosphere, MIT)', root / 'Engine/shaders/licenses/Bevy-LICENSE-MIT.txt'),
     ('NVIDIA DLSS', 'Upscaling (DLSS SDK and runtime; NVIDIA GeForce RTX only)', dlss_license),
     ('FidelityFX FSR 2', 'Upscaling (FSR temporal upscaler and Vulkan backend, AMD)', tp / 'fsr2/LICENSE.txt'),
     ('FidelityFX FSR 1', 'Upscaling (FSR 1 EASU and RCAS shaders, AMD)', root / 'Engine/shaders/licenses/FidelityFX-FSR-LICENSE.txt'),
