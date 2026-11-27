@@ -73,6 +73,12 @@ static class RenderResources
 	// The cloud layer (PhysicalSky.SetUniforms; include/clouds.sh). The volumetric march (C2) shares this block.
 	public static bgfx.UniformHandle uCloudShape, uCloudWind, uCloudLight, uCloudView, uCloudTint;
 	public static bgfx.UniformHandle uCloudSunDir, uCloudSunColor, uCloudMoonDir, uCloudMoonColor, uCloudAmbient;
+	/// The cloud pass (cs_clouds.sc, RenderViewClouds.bf): the march's steps and frame, the target's size, its texture.
+	public static bgfx.ProgramHandle CloudsProgram;
+	public static bgfx.UniformHandle uCloudSteps, uCloudSize, sClouds;
+	/// Bound as s_clouds where the raymarch did not run, so the sky shader's sampler is always set (1x1, transparent).
+	public static bgfx.TextureHandle CloudDummy;
+	public static bool CloudsReady;
 
 	public static bgfx.TextureHandle ShadowMap;
 	public static bgfx.FrameBufferHandle ShadowFrameBuffer;
@@ -235,6 +241,13 @@ static class RenderResources
 		uCloudMoonDir = bgfx.create_uniform("u_cloudMoonDir", .Vec4, 1);
 		uCloudMoonColor = bgfx.create_uniform("u_cloudMoonColor", .Vec4, 1);
 		uCloudAmbient = bgfx.create_uniform("u_cloudAmbient", .Vec4, 1);
+		uCloudSteps = bgfx.create_uniform("u_cloudSteps", .Vec4, 1);
+		uCloudSize = bgfx.create_uniform("u_cloudSize", .Vec4, 1);
+		sClouds = bgfx.create_uniform("s_clouds", .Sampler, 1);
+		CloudsProgram = LoadCompute("cs_clouds");
+		CloudsReady = CloudsProgram.Valid;
+		uint8[4] transparent = .(0, 0, 0, 0);
+		CloudDummy = bgfx.create_texture_2d(1, 1, false, 1, .RGBA8, Gfx.SamplerClamp, bgfx.copy(&transparent, 4), 0);
 		VFogInjectProgram = LoadCompute("cs_vfog_inject");
 		VFogIntegrateProgram = LoadCompute("cs_vfog_integrate");
 		VFogApplyProgram = Gfx.LoadProgram("vs_fullscreen", "fs_vfog_apply");
@@ -400,6 +413,14 @@ static class RenderResources
 		bgfx.destroy_uniform(uCloudMoonDir);
 		bgfx.destroy_uniform(uCloudMoonColor);
 		bgfx.destroy_uniform(uCloudAmbient);
+		bgfx.destroy_uniform(uCloudSteps);
+		bgfx.destroy_uniform(uCloudSize);
+		bgfx.destroy_uniform(sClouds);
+		if (CloudsProgram.Valid)
+			bgfx.destroy_program(CloudsProgram);
+		if (CloudDummy.Valid)
+			bgfx.destroy_texture(CloudDummy);
+		CloudsReady = false;
 		bgfx.destroy_program(DecalProgram);
 		bgfx.destroy_program(WaterProgram);
 		bgfx.destroy_program(MirrorProgram);

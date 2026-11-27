@@ -56,6 +56,10 @@ static class ProfilerModules
 	static ProfilerCounter sVFogLights = .("Volumetric Fog Local Lights", .Rendering);
 	/// The latest frame's volumetric fog GPU time in ms (read by tests and --gpu-bench).
 	public static double VolumetricFogMs { get; private set; }
+	/// Volumetric clouds' raymarch pass (RenderViewClouds.bf), in ms (0 when it did not run).
+	static ProfilerCounter sGpuCloudsMs = .("GPU Time: Volumetric clouds", .Rendering, "ms");
+	/// The latest frame's volumetric cloud raymarch GPU time in ms (read by --cloud-test).
+	public static double VolumetricCloudsMs { get; private set; }
 	// Virtual textures (VirtualTextures.bf).
 	static ProfilerCounter sVtTiles = .("VT Tiles Resident", .Assets);
 	static ProfilerCounter sVtUploads = .("VT Tile Uploads", .Assets, "/s");
@@ -319,7 +323,7 @@ static class ProfilerModules
 		if (stats.viewStats != null && stats.gpuTimerFreq > 0)
 		{
 			int32 passes = 0;
-			double cull = 0, occluder = 0, hzb = 0, main = 0, shadow = 0, vt = 0, vfog = 0;
+			double cull = 0, occluder = 0, hzb = 0, main = 0, shadow = 0, vt = 0, vfog = 0, clouds = 0;
 			let name = scope String();
 			for (int i < stats.numViews)
 			{
@@ -351,6 +355,8 @@ static class ProfilerModules
 					vt += ms;
 				else if (name.StartsWith("Volumetric fog"))
 					vfog += ms;
+				else if (name.StartsWith("Volumetric cloud"))
+					clouds += ms;
 				else if (v >= 10 && (name.StartsWith("Shadow") || name.StartsWith("Point and spot")))
 					shadow += ms;
 				else if (v >= 10)
@@ -363,6 +369,7 @@ static class ProfilerModules
 			sGpuShadowMs.Set(shadow);
 			sGpuVtMs.Set(vt);
 			sGpuVFogMs.Set(vfog);
+			sGpuCloudsMs.Set(clouds);
 			CullMs = cull;
 			OccluderMs = occluder;
 			HzbMs = hzb;
@@ -370,6 +377,7 @@ static class ProfilerModules
 			ShadowMs = shadow;
 			VtMs = vt;
 			VolumetricFogMs = vfog;
+			VolumetricCloudsMs = clouds;
 			sPasses.Set(passes);
 		}
 		return gpu;

@@ -15,7 +15,7 @@ void main()
 	vec3 dir = normalize(v_wpos - u_camPos.xyz);
 	vec3 color = skyboxColor(dir);
 #ifdef TW_SKY_BLEND
-	color += skyColor(dir, 1.0, u_camPos.xyz) * u_skyboxTint.w;
+	color += skyColor(dir, 1.0, u_camPos.xyz, v_texcoord0) * u_skyboxTint.w;
 #endif
 	gl_FragColor = vec4(color, 1.0);
 }

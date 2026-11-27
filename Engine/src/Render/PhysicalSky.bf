@@ -35,6 +35,8 @@ static class PhysicalSky
 	static float sBuiltHeight = float.MinValue;
 	static int64 sSubmitFrame = -1, sUpdatedFrame = -1, sGeneration, sReadyFrom = -1;
 	static Vector4 sAtmoParams;
+	/// The cloud block's u_cloudView as last set, so the screen sky can turn its screen-space flag on for its draw.
+	static Vector4 sCloudView;
 
 	static bgfx.FrameBufferHandle Invalid => .() { idx = uint16.MaxValue };
 
@@ -305,6 +307,7 @@ static class PhysicalSky
 		let skyAmbient = Linear(env.ambientSky);
 		let ambient = Math.Max(env.ambientIntensity, 0);
 		Vector4 cloudAmbient = .(skyAmbient.x * ambient, skyAmbient.y * ambient, skyAmbient.z * ambient, 0.35f);
+		sCloudView = view;
 		bgfx.set_uniform(RenderResources.uCloudShape, &shape, 1);
 		bgfx.set_uniform(RenderResources.uCloudWind, &wind, 1);
 		bgfx.set_uniform(RenderResources.uCloudLight, &light, 1);
@@ -315,6 +318,19 @@ static class PhysicalSky
 		bgfx.set_uniform(RenderResources.uCloudMoonDir, &cloudMoonDir, 1);
 		bgfx.set_uniform(RenderResources.uCloudMoonColor, &cloudMoon, 1);
 		bgfx.set_uniform(RenderResources.uCloudAmbient, &cloudAmbient, 1);
+		// The sky shader always declares s_clouds; a transparent 1x1 stands in until a screen draw binds the real layer.
+		bgfx.set_texture(2, RenderResources.sClouds, RenderResources.CloudDummy, uint32.MaxValue);
+	}
+
+	/// Binds the raymarched cloud layer (cs_clouds.sc's target) for a sky draw and marks it screen space, so the sky
+	/// composites it instead of the 2D layer. Called after SetUniforms for the main camera's sky; the reflection cube,
+	/// captures and planar views keep the 2D layer (SetUniforms' screen-space flag is 0).
+	public static void BindCloudLayer(bgfx.TextureHandle texture, bool screenSpace)
+	{
+		var view = sCloudView;
+		view.w = screenSpace ? 1 : 0;
+		bgfx.set_uniform(RenderResources.uCloudView, &view, 1);
+		bgfx.set_texture(2, RenderResources.sClouds, texture.Valid ? texture : RenderResources.CloudDummy, uint32.MaxValue);
 	}
 
 	static Vector4 Linear(Color c) => .(Math.Pow(Math.Max(c.r, 0), 2.2f), Math.Pow(Math.Max(c.g, 0), 2.2f), Math.Pow(Math.Max(c.b, 0), 2.2f), c.a);

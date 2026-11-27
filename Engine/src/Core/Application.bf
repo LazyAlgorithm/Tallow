@@ -395,6 +395,13 @@ class Application
 			test.Run(args);
 			return test.Result;
 		}
+		// The volumetric cloud check draws clear, broken and overcast skies and needs a window (C2a).
+		if (GetArg("--cloud-test", cloudTest) && cloudTest == "volume" && !(this is CloudVolumeTestApp))
+		{
+			let test = scope CloudVolumeTestApp();
+			test.Run(args);
+			return test.Result;
+		}
 		// --full-day plays a whole day in a window (D1e); without it the check needs no window.
 		if (HasArg("--daynight-test") && HasArg("--full-day") && !(this is FullDayTestApp))
 		{

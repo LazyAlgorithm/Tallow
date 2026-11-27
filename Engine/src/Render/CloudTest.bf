@@ -381,3 +381,224 @@ class CloudTestApp : Application
 		Close();
 	}
 }
+
+/// `--cloud-test volume [--cloud-test-folder <dir>]`: the volumetric raymarch (C2a) at half resolution on the physical
+/// sky, from one camera: clouds off, coverage 0, then clear / broken / overcast cover. Writes a screenshot of each and
+/// checks: coverage 0 is pixel-identical to clouds off; each cover changes the sky; and the "Volumetric clouds" pass
+/// reports GPU time. Needs Vulkan, Direct3D or Metal (else the run reports the 2D fallback).
+class CloudVolumeTestApp : Application
+{
+	const int32 ShotWidth = 640;
+	const int32 ShotHeight = 360;
+	const int SettleFrames = 16;
+	/// The weather clock the shots are drawn at, so the wind does not drift between phases and they can be compared.
+	const double CloudTime = 3600.0;
+
+	public int32 Result;
+
+	struct Phase
+	{
+		public StringView name;
+		public bool clouds;
+		public float coverage;
+	}
+
+	Scene mScene ~ delete _;
+	RenderView mView ~ delete _;
+	Camera mCamera;
+	GameObject mCameraObject;
+	GameObject mSunObject;
+	String mDir = new .() ~ delete _;
+	List<Phase> mPhases = new .() ~ delete _;
+	int mPhase = -1;
+	int mFrame;
+	CompareShot mShot ~ delete _;
+	uint8[] mOff ~ delete _;
+	uint8[] mClear ~ delete _;
+
+	protected override bool LoadsPlayerQuality => false;
+
+	public this()
+	{
+		Title.Set("Cloud volume test");
+		Width = ShotWidth;
+		Height = ShotHeight;
+	}
+
+	void Check(bool ok, StringView what)
+	{
+		Console.WriteLine(scope $"cloud-test: {ok ? "ok" : "FAIL"} {what}");
+		if (!ok)
+			Result = 1;
+	}
+
+	protected override bool OnInit()
+	{
+		if (!GetArg("--cloud-test-folder", mDir) || mDir.IsEmpty || mDir.StartsWith("--"))
+			mDir.Set(scope $"{Path.GetTempPath(.. scope .())}tallow-cloud-volume");
+		Directory.CreateDirectory(mDir);
+		Clouds.OverrideSeconds = CloudTime;
+		Profiler.Enabled = true;
+		mPhases.Add(.() { name = "off", clouds = false, coverage = 0 });
+		mPhases.Add(.() { name = "zero", clouds = true, coverage = 0 });
+		mPhases.Add(.() { name = "clear", clouds = true, coverage = 0.15f });
+		mPhases.Add(.() { name = "broken", clouds = true, coverage = 0.45f });
+		mPhases.Add(.() { name = "overcast", clouds = true, coverage = 0.9f });
+
+		mScene = new Scene();
+		let cameraObject = mScene.CreateGameObject("Camera");
+		mCameraObject = cameraObject;
+		mCamera = cameraObject.AddComponent<Camera>();
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mSunObject = mScene.CreateGameObject("Sun");
+		mSunObject.Transform.EulerAngles = .(20, -30, 0);
+		let light = mSunObject.AddComponent<Light>();
+		light.intensity = 1.5f;
+		let ground = mScene.CreateGameObject("Ground");
+		let renderer = ground.AddComponent<MeshRenderer>();
+		renderer.mesh.Set("builtin:plane");
+		renderer.color = .FromBytes(112, 158, 92);
+		ground.Transform.LocalScale = .(500, 1, 500);
+		mView = new RenderView(10);
+		mView.AllowPostAa = false;
+		ScreenEffects.GlobalIllumination = .Ambient;
+		mScene.StartPlay();
+		return true;
+	}
+
+	void StartPhase(Phase phase)
+	{
+		let env = mScene.Environment;
+		env.Reset();
+		env.skyMode = .Physical;
+		env.dayNight = true;
+		env.dayNightPaused = true;
+		env.autoColors = true;
+		env.sunIntensity = Atmosphere.ReferenceSunIntensity;
+		env.sunLight = mSunObject.Id;
+		// No fog over the sky: the cloud pass is what this test measures.
+		env.volumetricFog = false;
+		env.clouds = phase.clouds;
+		env.cloudMode = .Volumetric;
+		env.cloudCoverage = phase.coverage;
+		// The afternoon hour with the sun 45 degrees up.
+		float bestHour = 12;
+		float bestError = float.MaxValue;
+		for (float hour = 12; hour < 21; hour += 0.01f)
+		{
+			env.timeOfDay = hour;
+			let error = Math.Abs(DayNight.SunElevation(env) - 45);
+			if (error < bestError)
+			{
+				bestError = error;
+				bestHour = hour;
+			}
+		}
+		env.timeOfDay = bestHour;
+		let sun = DayNight.SunDirection(env);
+		var look = Vector3(sun.x, 0, sun.z).Normalized;
+		look.y = 0.35f;
+		look = look.Normalized;
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mCameraObject.Transform.Position = .(0, 200, 0);
+		mCameraObject.Transform.Rotation = Quaternion.LookRotation(look, .(0, 1, 0));
+		DayNight.Apply(mScene);
+	}
+
+	protected override void OnUpdate()
+	{
+		mScene.Update();
+		AssetLoader.Update();
+	}
+
+	protected override void OnRender()
+	{
+		if (mPhase < 0 || (mShot != null && mFrame < 0))
+		{
+			mPhase++;
+			if (mPhase >= mPhases.Count)
+			{
+				Finish();
+				return;
+			}
+			StartPhase(mPhases[mPhase]);
+			mFrame = 0;
+			DeleteAndNullify!(mShot);
+		}
+		mView.Resize(ShotWidth, ShotHeight);
+		mView.Render(mScene, mCamera.GetCameraData((float)ShotWidth / ShotHeight));
+		mFrame++;
+		if (mFrame < SettleFrames)
+			return;
+		if (mShot == null)
+			mShot = new CompareShot();
+		let path = scope $"{mDir}/{mPhases[mPhase].name}.png";
+		if (mShot.Step(mView, ShotWidth, ShotHeight, path))
+		{
+			let pixels = mShot.Pixels;
+			let copy = new uint8[pixels.Count];
+			Internal.MemCpy(copy.CArray(), pixels.CArray(), pixels.Count);
+			CheckShot(mPhases[mPhase], copy);
+			mFrame = -1;
+		}
+	}
+
+	void CheckShot(Phase phase, uint8[] pixels)
+	{
+		let gpu = ProfilerModules.VolumetricCloudsMs;
+		Console.WriteLine(scope $"cloud-test: {phase.name} coverage {phase.coverage}: pixels {RenderView.VolumetricCloudPixels}, GPU {gpu:F3} ms");
+		// Not black.
+		int64 sum = 0;
+		for (int y < ShotHeight / 2)
+			for (int x < ShotWidth)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				sum += pixels[i] + pixels[i + 1] + pixels[i + 2];
+			}
+		Check(sum > 0, scope $"{phase.name}: not black");
+		if (!RenderView.CloudsRunnable)
+			return;
+		if (phase.name == "off") { mOff = pixels; return; }
+		if (phase.name == "zero")
+		{
+			Check(Diff(mOff, pixels, 0, 0, ShotWidth, ShotHeight * 7 / 10) == 0, "coverage 0 is pixel-identical to clouds off");
+			return;
+		}
+		// Every cover changes the sky above the horizon...
+		let sky = Diff(mOff, pixels, 0, 0, ShotWidth, ShotHeight * 7 / 10);
+		Check(sky > 20000, scope $"{phase.name}: clouds change the sky (diff {sky})");
+		// ...and the pass ran, at the step count it was given.
+		Check(gpu > 0, scope $"{phase.name}: the raymarch reports GPU time ({gpu:F3} ms)");
+		Check(RenderView.VolumetricCloudPixels > 0, scope $"{phase.name}: cloud target has pixels");
+		if (phase.name == "clear")
+			mClear = pixels;
+		else if (phase.name == "overcast" && mClear != null)
+		{
+			let more = Diff(mClear, pixels, 0, 0, ShotWidth, ShotHeight * 7 / 10);
+			Check(more > 20000, scope $"overcast differs from clear (diff {more})");
+		}
+	}
+
+	static int64 Diff(uint8[] a, uint8[] b, int32 x0, int32 y0, int32 x1, int32 y1)
+	{
+		if (a == null || b == null || a.Count != b.Count)
+			return int64.MaxValue;
+		int64 sum = 0;
+		for (int32 y = y0; y < y1; y++)
+			for (int32 x = x0; x < x1; x++)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				for (int32 c < 3)
+					sum += Math.Abs((int32)a[i + c] - (int32)b[i + c]);
+			}
+		return sum;
+	}
+
+	void Finish()
+	{
+		Console.WriteLine(Result == 0 ? "cloud-test volume: PASS" : "cloud-test volume: FAILED");
+		Close();
+	}
+}

@@ -357,6 +357,7 @@ class RenderView
 		ReleaseWaterTargets();
 		ReleasePostTargets();
 		ReleaseVolumetricTargets();
+		ReleaseCloudTargets();
 	}
 
 	public void Resize(int32 width, int32 height)
@@ -528,7 +529,11 @@ class RenderView
 			DrawLocalShadows();
 		Profiler.End();
 		FrameShadowTiles += (int32)mLights.Tiles.Count;
-		// The froxel grid reads the cascades just drawn, so it is filled before the scene (RenderViewVolumetric.bf).
+		// The cloud march and the froxel grid share the fog-inject compute view, filled before the scene: the clouds
+		// first, then the fog's own inject (RenderViewClouds.bf, RenderViewVolumetric.bf).
+		mCloudsActive = UsesVolumetricClouds(camera, env);
+		if (mCloudsActive)
+			DispatchClouds(scene, camera, env);
 		if (mVolumetricFogActive)
 			DispatchVolumetricFog(camera, env);
 		using (sOpaqueMarker.Sample())
@@ -1727,11 +1732,15 @@ class RenderView
 		if (skybox.Valid)
 		{
 			if (Skybox.ShowsPhysical(env))
+			{
 				PhysicalSky.SetUniforms(scene, env, mSunDir, mSunColor);
+				BindCloudSky();
+			}
 			SubmitFullscreen(view, skybox, Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateDepthLequal | Gfx.StateMsaa);
 			return;
 		}
 		PhysicalSky.SetUniforms(scene, env, mSunDir, mSunColor);
+		BindCloudSky();
 		SubmitFullscreen(view, PhysicalSky.Mode(env) == 0 ? RenderResources.SkyProgram : RenderResources.SkyPhysicalProgram, Gfx.StateWriteRGB | Gfx.StateWriteA | Gfx.StateDepthLequal | Gfx.StateMsaa);
 	}
 

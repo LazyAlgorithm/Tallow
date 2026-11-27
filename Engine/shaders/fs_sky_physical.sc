@@ -8,5 +8,5 @@ uniform vec4 u_camPos;
 
 void main()
 {
-	gl_FragColor = vec4(skyColor(normalize(v_wpos - u_camPos.xyz), 1.0, u_camPos.xyz), 1.0);
+	gl_FragColor = vec4(skyColor(normalize(v_wpos - u_camPos.xyz), 1.0, u_camPos.xyz, v_texcoord0), 1.0);
 }

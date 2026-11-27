@@ -8,11 +8,17 @@ namespace Tallow;
 /// share it.
 static class Clouds
 {
+	/// A pinned time in seconds for the weather (tests: deterministic shots and the headless peer check). Null uses the
+	/// scene's clock.
+	public static double? OverrideSeconds;
+
 	/// The weather's time in seconds: the session's simulation clock (the server's tick, eased between ticks, so every
 	/// peer is on the same timeline), the local clock while playing, or the real clock in the editor. A paused day/night
 	/// clock does not stop it (C3c).
 	public static double Seconds(Scene scene)
 	{
+		if (OverrideSeconds.HasValue)
+			return OverrideSeconds.Value;
 		let network = scene?.Network;
 		if (network != null && network.Mode != .Offline)
 			return (network.ServerTick - 1 + Time.InterpolationAlpha) / (double)Time.TickRate;

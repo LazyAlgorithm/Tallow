@@ -25,6 +25,9 @@ uniform vec4 u_starRot[3];
 uniform vec4 u_preetham[5];
 
 SAMPLER2D(s_atmoSkyView, 1);
+// The raymarched cloud layer the cloud pass (cs_clouds.sc) wrote this frame: premultiplied light in rgb, opacity in a.
+// Bound to a transparent 1x1 texture where the pass did not run (the reflection cube, captures, or clouds off).
+SAMPLER2D(s_clouds, 2);
 
 // The physical sky from the sky-view LUT, per unit of sun light, times the scale.
 vec3 lutSky(vec3 dir)
@@ -148,17 +151,31 @@ vec3 skyBodies(vec3 dir, float sunDisc)
 	return color;
 }
 
+// The cloud layer over the sky: the raymarched target at this pixel when the volumetric pass ran for this view
+// (u_cloudView.w is 1 and the mode is Volumetric), else the 2D procedural layer. Both return premultiplied light in rgb
+// and opacity in a, so a thick cloud hides the sun, moon and stars drawn under it.
+vec4 cloudLayer(vec3 dir, vec3 origin, vec2 screenUv)
+{
+	if (u_cloudView.y < 0.5)
+		return vec4_splat(0.0);
+	if (u_cloudView.w > 0.5 && u_cloudView.z > 1.5)
+		return texture2DLod(s_clouds, screenUv, 0.0);
+	return cloudLayer2D(dir, origin);
+}
+
 // The sky's colour in direction dir (unit length), linear HDR, seen from origin (the camera, or the sky's cube's
 // centre). sunDisc 0 leaves out the sun's bright disc, the moon and the stars (reflections get the sun's highlight from
-// the sun itself, as a light). The clouds go over the bodies, so a thick cloud hides the sun, moon and stars.
-vec3 skyColor(vec3 dir, float sunDisc, vec3 origin)
+// the sun itself, as a light). The clouds go over the bodies, so a thick cloud hides the sun, moon and stars. screenUv
+// is the pixel's position in the picture (the cloud pass's target is in screen space).
+vec3 skyColor(vec3 dir, float sunDisc, vec3 origin, vec2 screenUv)
 {
 	vec3 sky = u_skyMode.x < 1.5 ? lutSky(dir) : preethamSky(dir);
 	// Airglow: the night sky is never quite black.
 	sky += vec3(0.0008, 0.001, 0.0016) * u_skyMode.w;
 	if (dir.y > atmoHorizonElevation(u_atmoParams.y))
 		sky += skyBodies(dir, sunDisc);
-	return applyProceduralClouds(sky, dir, origin);
+	vec4 cloud = cloudLayer(dir, origin, screenUv);
+	return sky * (1.0 - cloud.a) + cloud.rgb;
 }
 
 #endif
