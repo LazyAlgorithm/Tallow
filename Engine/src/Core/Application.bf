@@ -42,6 +42,8 @@ namespace Tallow;
 ///                                                      check the server-owned Day / Night clock (exit 1 on a failure)
 ///   --quality-test                                     switch each quality preset with no window, print the applied
 ///                                                      GPU-path and streaming values, check the quality file, exit 0 or 1
+///   --cloud-test settings                              print the cloud settings with no window, check they save and reload
+///                                                      through a scene file, exit 0 or 1
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
 ///   --no-geometry-streaming                            load every page of a big mesh whole instead of streaming them
 ///   --no-texture-streaming                             load big textures whole instead of streaming their mip levels
@@ -382,6 +384,10 @@ class Application
 		}
 		if (HasArg("--quality-test"))
 			return QualityTest.Run();
+		// The cloud settings check prints and round-trips every field with no window (C1b).
+		let cloudTest = scope String();
+		if (GetArg("--cloud-test", cloudTest) && cloudTest == "settings")
+			return CloudTest.RunSettings();
 		// --full-day plays a whole day in a window (D1e); without it the check needs no window.
 		if (HasArg("--daynight-test") && HasArg("--full-day") && !(this is FullDayTestApp))
 		{

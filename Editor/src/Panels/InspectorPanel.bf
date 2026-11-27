@@ -341,6 +341,7 @@ extension EditorApp
 			ImGui.EndTable();
 		}
 		changed |= DrawVolumetricFogSettings(env);
+		changed |= DrawCloudSettings(env);
 		changed |= DrawDayNightSettings(env);
 		changed |= DrawScreenEffectsSettings(env);
 		changed |= DrawStreamingSettings(env);

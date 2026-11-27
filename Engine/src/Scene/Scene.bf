@@ -17,6 +17,15 @@ enum SkyMode : int32
 	Custom
 }
 
+/// How the physical sky's clouds are drawn (SceneEnvironment.cloudMode).
+enum CloudMode : int32
+{
+	/// Raymarched through a slab of air (Vulkan, Direct3D and Metal; the Graphics Quality setting can turn it off).
+	Volumetric,
+	/// The cheap 2D procedural cloud drawn in the sky shader (every backend).
+	TwoD
+}
+
 /// Environment settings saved with a scene: ambient light, sky and fog.
 class SceneEnvironment
 {
@@ -189,6 +198,41 @@ class SceneEnvironment
 	/// (sun disc, stars, moon) is drawn first and the skybox added over it, so a skybox of clouds on black works.
 	public float skyboxBlend;
 
+	/// Clouds in the physical sky: the weather map of the cloud layer (tallowengine.com/docs/clouds). Off: the sky
+	/// exactly as it was, so older scenes keep their look. Drawn with the Physical sky, or a Custom skybox with
+	/// Physical Sky Under above 0 (with a full skybox the picture replaces the sky and there are no clouds).
+	public bool clouds;
+	/// Clouds: Volumetric (raymarched through a slab of air; Vulkan, Direct3D and Metal) or 2D (the cheap procedural
+	/// cloud in the sky shader, every backend). Low graphics quality draws 2D whatever this says.
+	public CloudMode cloudMode = .Volumetric;
+	/// Clouds: the share of the sky the weather map fills (0: clear, 1: overcast).
+	public float cloudCoverage = 0.45f;
+	/// Clouds: how thick the inside of a full cloud is, per metre (0.04 fades out over about 25 m).
+	public float cloudDensity = 0.04f;
+	/// Clouds: the bottom of the cloud layer, in metres above the world.
+	public float cloudHeight = 1500;
+	/// Clouds: how deep the cloud layer is, in metres (its top is Cloud Height + this).
+	public float cloudThickness = 1800;
+	/// Clouds: how fast the weather drifts, in metres a second (0 freezes it; the seed still decides the shape).
+	public float cloudWindSpeed = 12;
+	/// Clouds: the direction the weather drifts, in degrees clockwise from +Z (north).
+	public float cloudWindDirection = 45;
+	/// Clouds: the wind seed. It picks the weather map: peers with the same seed and wind settings agree on the
+	/// clouds, without any network messages.
+	public int32 cloudSeed;
+	/// Clouds: how much light goes on forward through a cloud (-0.9 to 0.9): higher makes a bright silver lining
+	/// when looking towards the sun; 0 scatters every way the same.
+	public float cloudAnisotropy = 0.6f;
+	/// Clouds: how much of the sky and ground ambient light they scatter.
+	public float cloudAmbient = 0.6f;
+	/// Clouds: the colour they scatter back (the cloud's albedo; white as it is).
+	public Color cloudTint = .(1, 1, 1);
+	/// Clouds: how far the volumetric march reaches, in metres. The graphics quality setting may cap it.
+	public float cloudDistance = 12000;
+	/// Clouds: the march's share of the picture's resolution (0.5: half, for speed). The graphics quality setting
+	/// may cap it.
+	public float cloudResolution = 0.5f;
+
 	/// Volumetric fog (tallowengine.com/docs/day-night): fog lit by the sun, with light shafts where shadows cut it, worked
 	/// out in a grid of cells over the view (Vulkan, Direct3D and Metal; OpenGL and the web draw a cheaper height fog with
 	/// sun shafts instead). It replaces the distance fog (fogDensity) while on. The graphics quality setting can also turn
@@ -304,6 +348,20 @@ class SceneEnvironment
 		skyboxTint = other.skyboxTint;
 		nightSkybox.Set(other.nightSkybox);
 		skyboxBlend = other.skyboxBlend;
+		clouds = other.clouds;
+		cloudMode = other.cloudMode;
+		cloudCoverage = other.cloudCoverage;
+		cloudDensity = other.cloudDensity;
+		cloudHeight = other.cloudHeight;
+		cloudThickness = other.cloudThickness;
+		cloudWindSpeed = other.cloudWindSpeed;
+		cloudWindDirection = other.cloudWindDirection;
+		cloudSeed = other.cloudSeed;
+		cloudAnisotropy = other.cloudAnisotropy;
+		cloudAmbient = other.cloudAmbient;
+		cloudTint = other.cloudTint;
+		cloudDistance = other.cloudDistance;
+		cloudResolution = other.cloudResolution;
 		volumetricFog = other.volumetricFog;
 		vfDensity = other.vfDensity;
 		vfHeight = other.vfHeight;

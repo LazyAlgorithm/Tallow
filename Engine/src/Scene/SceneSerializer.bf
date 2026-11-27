@@ -112,6 +112,24 @@ static class SceneSerializer
 		if (!env.nightSkybox.IsEmpty)
 			text.AppendF("env nightSkybox {}\n", Quote(env.nightSkybox, .. scope .()));
 		Number(text, "skyboxBlend", env.skyboxBlend, defaults.skyboxBlend);
+		// Clouds: written only when changed, so older scenes (clouds off) stay exactly as they were.
+		Number(text, "clouds", env.clouds ? 1 : 0, 0);
+		Number(text, "cloudMode", (int32)env.cloudMode, 0);
+		Number(text, "cloudCoverage", env.cloudCoverage, defaults.cloudCoverage);
+		Number(text, "cloudDensity", env.cloudDensity, defaults.cloudDensity);
+		Number(text, "cloudHeight", env.cloudHeight, defaults.cloudHeight);
+		Number(text, "cloudThickness", env.cloudThickness, defaults.cloudThickness);
+		Number(text, "cloudWindSpeed", env.cloudWindSpeed, defaults.cloudWindSpeed);
+		Number(text, "cloudWindDirection", env.cloudWindDirection, defaults.cloudWindDirection);
+		// A whole number: a float would round seeds above 2^24.
+		if (env.cloudSeed != 0)
+			text.AppendF("env cloudSeed {}\n", env.cloudSeed);
+		Number(text, "cloudAnisotropy", env.cloudAnisotropy, defaults.cloudAnisotropy);
+		Number(text, "cloudAmbient", env.cloudAmbient, defaults.cloudAmbient);
+		if (env.cloudTint.r != 1 || env.cloudTint.g != 1 || env.cloudTint.b != 1 || env.cloudTint.a != 1)
+			WriteColor(text, "cloudTint", env.cloudTint);
+		Number(text, "cloudDistance", env.cloudDistance, defaults.cloudDistance);
+		Number(text, "cloudResolution", env.cloudResolution, defaults.cloudResolution);
 		Number(text, "volumetricFog", env.volumetricFog ? 1 : 0, 0);
 		Number(text, "vfDensity", env.vfDensity, defaults.vfDensity);
 		Number(text, "vfHeight", env.vfHeight, defaults.vfHeight);
@@ -821,6 +839,20 @@ static class SceneSerializer
 		case "skyboxTint": env.skyboxTint = color;
 		case "nightSkybox": env.nightSkybox.Set(tokens[2]);
 		case "skyboxBlend": env.skyboxBlend = Math.Clamp(value, 0, 1);
+		case "clouds": env.clouds = value != 0;
+		case "cloudMode": env.cloudMode = (CloudMode)(int32)Math.Clamp(value, 0, 1);
+		case "cloudCoverage": env.cloudCoverage = Math.Clamp(value, 0, 1);
+		case "cloudDensity": env.cloudDensity = Math.Max(value, 0);
+		case "cloudHeight": env.cloudHeight = value;
+		case "cloudThickness": env.cloudThickness = Math.Max(value, 1);
+		case "cloudWindSpeed": env.cloudWindSpeed = Math.Max(value, 0);
+		case "cloudWindDirection": env.cloudWindDirection = value;
+		case "cloudSeed": env.cloudSeed = (int32)value;
+		case "cloudAnisotropy": env.cloudAnisotropy = Math.Clamp(value, -0.9f, 0.9f);
+		case "cloudAmbient": env.cloudAmbient = Math.Clamp(value, 0, 1);
+		case "cloudTint": env.cloudTint = color;
+		case "cloudDistance": env.cloudDistance = Math.Clamp(value, 500, 100000);
+		case "cloudResolution": env.cloudResolution = Math.Clamp(value, 0.25f, 1);
 		case "volumetricFog": env.volumetricFog = value != 0;
 		case "vfDensity": env.vfDensity = Math.Max(value, 0);
 		case "vfHeight": env.vfHeight = value;

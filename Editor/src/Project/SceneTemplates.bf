@@ -53,6 +53,8 @@ static class SceneTemplates
 		// Volumetric fog is on in new scenes, with a light haze (older scenes keep it off: the class default).
 		scene.Environment.volumetricFog = true;
 		scene.Environment.vfDensity = 0.01f;
+		// Clouds are on in new scenes, with sensible defaults (older scenes keep them off: the class default).
+		scene.Environment.clouds = true;
 	}
 
 	/// Sun, camera and a floor; with withPlayer (a new project's first scene), the first-person character too if
