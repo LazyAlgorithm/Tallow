@@ -13,6 +13,13 @@ namespace Tallow;
 /// self-shadowing by an optical depth towards the sun (or the moon at night), a two-lobe Henyey-Greenstein phase, the
 /// powder term, a near-isotropic multiple-scattering term and the desaturated sky/ground ambient (include/clouds.sh).
 ///
+/// Renderer integration (C2d): the sky pass draws everything before the solid scene (depth LEQUAL), so terrain and
+/// buildings hide the clouds with no extra work, and `skyColor` composites the layer over the sun, moon and stars, so a
+/// thick cloud hides them. The reflection cube, reflection-probe captures and planar views keep the 2D layer (their
+/// `u_cloudView.w` is 0), so reflections have cloud cover without a second march; the Custom skybox's Skybox Blend
+/// path samples this screen layer. `--gpu-driven-caps-off` turns the pass off (`CloudsRunnable` false) and the sky
+/// draws the 2D backup instead.
+///
 /// Temporal and performance (C2c): two targets swap each frame. The march's start is jittered by a 32x32 blue-noise
 /// tile that shifts by a low-discrepancy offset every frame, and the finished layer is blended with last frame's layer
 /// reprojected by the slab's midpoint (minus the wind that carried the weather) into last frame's view-projection, as

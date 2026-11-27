@@ -68,5 +68,7 @@ void main()
 	vec3 sun = u_sunColor.rgb * (vfogPhase(u_vfogMedium.w, dot(dir, u_sunDir.xyz)) * u_vfogLight.w)
 		* vfogSkyShafts(uv);
 	vec3 lit = (sun + u_ambientSky.rgb * u_vfogGrid.w) * u_vfogLight.rgb;
-	gl_FragColor = vec4((1.0 - through) * lit, 1.0 - through);
+	// Premultiplied light and the transmittance, exactly as the froxel apply writes them (fs_vfog_apply.sc): the shared
+	// blend state is source x 1 + destination x source alpha, so the alpha carries how much of the picture shows through.
+	gl_FragColor = vec4((1.0 - through) * lit, through);
 }

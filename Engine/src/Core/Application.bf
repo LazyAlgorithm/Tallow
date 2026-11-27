@@ -44,8 +44,10 @@ namespace Tallow;
 ///                                                      GPU-path and streaming values, check the quality file, exit 0 or 1
 ///   --cloud-test settings                              print the cloud settings with no window, check they save and reload
 ///                                                      through a scene file, exit 0 or 1
-///   --cloud-test sky|volume|lighting|temporal          draw the 2D backup / the raymarch / its lighting / the temporal
-///                                                      blend and budget, and check them
+///   --cloud-test sky|volume|lighting|temporal|integration
+///                                                      draw the 2D backup / the raymarch / its lighting / the temporal
+///                                                      blend and budget / the renderer integration (a building, the sun
+///                                                      behind a deck, the reflection cube, the fog and a skybox), and check them
 ///   --streaming-budget geo=MB,tex=MB,vt=MB             byte budgets of the streaming pools, in megabytes (any subset)
 ///   --no-geometry-streaming                            load every page of a big mesh whole instead of streaming them
 ///   --no-texture-streaming                             load big textures whole instead of streaming their mip levels
@@ -416,6 +418,13 @@ class Application
 		if (GetArg("--cloud-test", cloudTest) && cloudTest == "temporal" && !(this is CloudTemporalTestApp))
 		{
 			let test = scope CloudTemporalTestApp();
+			test.Run(args);
+			return test.Result;
+		}
+		// The renderer integration check draws a building, the sun behind a deck, a mirror ball and a skybox (C2d).
+		if (GetArg("--cloud-test", cloudTest) && cloudTest == "integration" && !(this is CloudIntegrationTestApp))
+		{
+			let test = scope CloudIntegrationTestApp();
 			test.Run(args);
 			return test.Result;
 		}

@@ -1336,3 +1336,572 @@ class CloudTemporalTestApp : Application
 		Close();
 	}
 }
+
+/// `--cloud-test integration [--cloud-test-folder <dir>]`: the renderer integration (C2d). From one camera, with the
+/// physical sky and Day / Night: a building (an unlit cube) in front of the clouds, cloudless and overcast, and the
+/// same sky with the building hidden so its pixels can be found; the sun's disc clear and behind an overcast deck; a
+/// mirror ball cloudless and overcast (it shows the sky's reflection cube); the volumetric fog with and without the
+/// clouds; and a Custom skybox (a scratch black panorama) with Skybox Blend 1 and 0, clouds off and on. Writes a
+/// screenshot of each and checks: the building's interior is pixel-identical with the clouds on, while the sky beside
+/// it changes (the depth buffer hides the clouds behind terrain and buildings); the deck hides the sun's disc; the
+/// ball shows cloud cover at its top with no clear gap (the cube uses the 2D backup, so reflections agree); the fog
+/// and the clouds run together; and the clouds show under the skybox only when Skybox Blend is above 0. Run once
+/// normally (the raymarch) and once with `--gpu-driven-caps-off` (the 2D backup), which must draw the clouds too.
+/// Needs a window.
+class CloudIntegrationTestApp : Application
+{
+	const int32 ShotWidth = 640;
+	const int32 ShotHeight = 360;
+	const int32 SettleFrames = 20;
+	/// The reflection cube is re-made at most every SkyMinimumFrames (30) frames while the clock runs, then a face at
+	/// a time: the mirror phases wait longer so the ball shows this phase's sky, not the last one's.
+	const int32 MirrorSettleFrames = 120;
+	const int32 SkyboxSettleFrames = 30;
+	/// The weather clock the shots are drawn at, so the wind does not drift between phases.
+	const double CloudTime = 3600.0;
+	/// The share of the picture above the horizon that the sky statistics use.
+	const int32 SkyRows = ShotHeight * 7 / 10;
+	/// A pixel counts as changed between two shots when its three channels differ by this much in sum (0..765).
+	const int64 MaskDiff = 24;
+	/// The mirror ball's square in the middle of the picture (as --cloud-test sky's): only the cube can change it.
+	const int32 BallX0 = ShotWidth * 44 / 100;
+	const int32 BallX1 = ShotWidth * 56 / 100;
+	const int32 BallY0 = ShotHeight * 44 / 100;
+	const int32 BallY1 = ShotHeight * 56 / 100;
+	/// The ball's upper part: the reflected zenith, where an overcast deck must show rather than clear blue sky.
+	const int32 BallTopX0 = ShotWidth * 45 / 100;
+	const int32 BallTopX1 = ShotWidth * 55 / 100;
+	const int32 BallTopY0 = ShotHeight * 39 / 100;
+	const int32 BallTopY1 = ShotHeight * 47 / 100;
+	const StringView SkyboxPath = "Skies/black.hdr";
+
+	enum Kind
+	{
+		Building,
+		Sun,
+		Mirror,
+		Fog,
+		Skybox
+	}
+
+	public int32 Result;
+
+	struct Phase
+	{
+		public StringView name;
+		public Kind kind;
+		public bool clouds;
+		public float coverage;
+		/// The building is drawn (false only for the mask shot that finds its pixels).
+		public bool building;
+		/// Look straight at the sun: its disc in the picture's middle (the sun-behind-cloud pair).
+		public bool atSun;
+		/// The camera's pitch (degrees, positive up).
+		public float pitch;
+		/// Skybox Blend (only .Skybox): how much physical sky shows under the picture.
+		public float blend;
+	}
+
+	Scene mScene ~ delete _;
+	RenderView mView ~ delete _;
+	Camera mCamera;
+	GameObject mCameraObject;
+	GameObject mSunObject;
+	GameObject mBuilding;
+	GameObject mMirror;
+	String mDir = new .() ~ delete _;
+	List<Phase> mPhases = new .() ~ delete _;
+	int mPhase = -1;
+	int mFrame;
+	int mWait;
+	CompareShot mShot ~ delete _;
+	// The shots the checks compare, by name.
+	uint8[] mMask ~ delete _;
+	uint8[] mBuildingClear ~ delete _;
+	bool[] mBuildingPixels ~ delete _;
+	uint8[] mSunClear ~ delete _;
+	uint8[] mMirrorClear ~ delete _;
+	uint8[] mFogClear ~ delete _;
+	uint8[] mSkyboxBlendClear ~ delete _;
+	uint8[] mSkyboxNoneClear ~ delete _;
+
+	protected override bool LoadsPlayerQuality => false;
+
+	public this()
+	{
+		Title.Set("Cloud integration test");
+		Width = ShotWidth;
+		Height = ShotHeight;
+	}
+
+	void Check(bool ok, StringView what)
+	{
+		Console.WriteLine(scope $"cloud-test: {ok ? "ok" : "FAIL"} {what}");
+		if (!ok)
+			Result = 1;
+	}
+
+	protected override bool OnInit()
+	{
+		if (!GetArg("--cloud-test-folder", mDir) || mDir.IsEmpty || mDir.StartsWith("--"))
+			mDir.Set(scope $"{Path.GetTempPath(.. scope .())}tallow-cloud-integration");
+		Directory.CreateDirectory(mDir);
+		// A scratch skybox for the Custom + Skybox Blend check: nearly black, so the physical sky and its clouds are
+		// what shows under it, and drawn only once it imports.
+		let assets = scope $"{mDir}/Project/Assets";
+		let skies = scope $"{assets}/Skies";
+		if (Directory.Exists(scope $"{mDir}/Project"))
+			Directory.DelTree(scope $"{mDir}/Project").IgnoreError();
+		Directory.CreateDirectory(skies).IgnoreError();
+		Assets.ProjectPath.Set(assets);
+		{
+			const int32 PanoW = 128;
+			const int32 PanoH = 64;
+			let dark = new float[PanoW * PanoH * 4];
+			defer delete dark;
+			for (int i < PanoW * PanoH)
+			{
+				dark[i * 4] = 0.01f;
+				dark[i * 4 + 1] = 0.01f;
+				dark[i * 4 + 2] = 0.02f;
+				dark[i * 4 + 3] = 1;
+			}
+			Check(Native.tn_skybox_write_test_picture(scope $"{skies}/black.hdr".CStr(), 2, PanoW, PanoH, dark.Ptr), "wrote the scratch skybox");
+		}
+		Clouds.OverrideSeconds = CloudTime;
+		Profiler.Enabled = true;
+		// Clear then cloudy pairs; the first phase of the building pair hides the building, so its pixels are found.
+		mPhases.Add(.() { name = "building-mask", kind = .Building, clouds = false, coverage = 0, building = false, pitch = 20 });
+		mPhases.Add(.() { name = "building-clear", kind = .Building, clouds = false, coverage = 0, building = true, pitch = 20 });
+		mPhases.Add(.() { name = "building-clouds", kind = .Building, clouds = true, coverage = 0.75f, building = true, pitch = 20 });
+		mPhases.Add(.() { name = "sun-clear", kind = .Sun, clouds = false, coverage = 0, atSun = true });
+		mPhases.Add(.() { name = "sun-clouds", kind = .Sun, clouds = true, coverage = 0.95f, atSun = true });
+		mPhases.Add(.() { name = "mirror-clear", kind = .Mirror, clouds = false, coverage = 0, pitch = 30 });
+		mPhases.Add(.() { name = "mirror-clouds", kind = .Mirror, clouds = true, coverage = 1, pitch = 30 });
+		mPhases.Add(.() { name = "fog-clear", kind = .Fog, clouds = false, coverage = 0, pitch = 30 });
+		mPhases.Add(.() { name = "fog-clouds", kind = .Fog, clouds = true, coverage = 0.75f, pitch = 30 });
+		mPhases.Add(.() { name = "skybox-blend-clear", kind = .Skybox, clouds = false, coverage = 0, blend = 1 });
+		mPhases.Add(.() { name = "skybox-blend-clouds", kind = .Skybox, clouds = true, coverage = 0.75f, blend = 1 });
+		mPhases.Add(.() { name = "skybox-none-clear", kind = .Skybox, clouds = false, coverage = 0, blend = 0 });
+		mPhases.Add(.() { name = "skybox-none-clouds", kind = .Skybox, clouds = true, coverage = 0.75f, blend = 0 });
+
+		mScene = new Scene();
+		let cameraObject = mScene.CreateGameObject("Camera");
+		mCameraObject = cameraObject;
+		mCamera = cameraObject.AddComponent<Camera>();
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mSunObject = mScene.CreateGameObject("Sun");
+		mSunObject.Transform.EulerAngles = .(20, -30, 0);
+		let light = mSunObject.AddComponent<Light>();
+		light.intensity = 1.5f;
+		let ground = mScene.CreateGameObject("Ground");
+		let renderer = ground.AddComponent<MeshRenderer>();
+		renderer.mesh.Set("builtin:plane");
+		renderer.color = .FromBytes(112, 158, 92);
+		ground.Transform.LocalScale = .(500, 1, 500);
+		// The building: unlit, so the clouds cannot change its colour through the ambient; only the depth buffer can
+		// decide whether the cloud is drawn over it.
+		mBuilding = mScene.CreateGameObject("Building");
+		let buildingRenderer = mBuilding.AddComponent<MeshRenderer>();
+		buildingRenderer.mesh.Set("builtin:cube");
+		buildingRenderer.unlit = true;
+		buildingRenderer.color = .(0.75f, 0.75f, 0.75f);
+		mBuilding.SetActive(false);
+		// A mirror ball: what it shows is the sky's reflection cube.
+		mMirror = mScene.CreateGameObject("Mirror");
+		let mirrorRenderer = mMirror.AddComponent<MeshRenderer>();
+		mirrorRenderer.mesh.Set("builtin:sphere_smooth");
+		mirrorRenderer.color = .(0.5f, 0.5f, 0.5f);
+		mirrorRenderer.metallic = 1;
+		mirrorRenderer.roughness = 0.15f;
+		mMirror.SetActive(false);
+		mView = new RenderView(10);
+		mView.AllowPostAa = false;
+		ScreenEffects.GlobalIllumination = .Ambient;
+		mScene.StartPlay();
+		return true;
+	}
+
+	void StartPhase(Phase phase)
+	{
+		let env = mScene.Environment;
+		env.Reset();
+		env.skyMode = .Physical;
+		env.dayNight = true;
+		env.dayNightPaused = true;
+		env.autoColors = true;
+		env.sunIntensity = Atmosphere.ReferenceSunIntensity;
+		env.sunLight = mSunObject.Id;
+		env.moonSize = 1;
+		// The fog pair runs the fog; the others keep the sky clean so only the clouds change it. Thin and far, so the
+		// deck still shows through the fog (the default 0.02 over the sky's 400 m would hide it, and the fallback
+		// integrates the full 400 m while the grid stops at vfDistance).
+		env.volumetricFog = phase.kind == .Fog;
+		env.vfDensity = 0.002f;
+		env.vfDistance = 4000;
+		env.clouds = phase.clouds;
+		env.cloudMode = .Volumetric;
+		env.cloudCoverage = phase.coverage;
+		// The afternoon hour with the sun 45 degrees up (as --cloud-test volume).
+		float bestHour = 12;
+		float bestError = float.MaxValue;
+		for (float hour = 12; hour < 21; hour += 0.01f)
+		{
+			env.timeOfDay = hour;
+			let error = Math.Abs(DayNight.SunElevation(env) - 45);
+			if (error < bestError)
+			{
+				bestError = error;
+				bestHour = hour;
+			}
+		}
+		env.timeOfDay = bestHour;
+		let sun = DayNight.SunDirection(env);
+		let flat = Vector3(sun.x, 0, sun.z).Normalized;
+		Vector3 look;
+		if (phase.atSun)
+			look = sun;
+		else
+			look = flat * Math.Cos(phase.pitch * Mathf.Deg2Rad) + .(0, 1, 0) * Math.Sin(phase.pitch * Mathf.Deg2Rad);
+		look = look.Normalized;
+		mCamera.fieldOfView = 75;
+		mCamera.farClip = 20000;
+		mCameraObject.Transform.Position = .(0, 200, 0);
+		mCameraObject.Transform.Rotation = Quaternion.LookRotation(look, .(0, 1, 0));
+		// The building 30 m off, centred on the view; the mirror ball 4.5 m (as --cloud-test sky).
+		let eye = mCameraObject.Transform.Position;
+		mBuilding.SetActive(phase.kind == .Building && phase.building);
+		mBuilding.Transform.Position = eye + look * 30;
+		mBuilding.Transform.Rotation = Quaternion.LookRotation(flat, .(0, 1, 0));
+		mBuilding.Transform.LocalScale = .(16, 8, 4);
+		mMirror.SetActive(phase.kind == .Mirror);
+		mMirror.Transform.Position = eye + look * 4.5f;
+		mMirror.Transform.LocalScale = .(1.6f, 1.6f, 1.6f);
+		if (phase.kind == .Skybox)
+		{
+			env.skyMode = .Custom;
+			env.skybox.Set(SkyboxPath);
+			env.skyboxBlend = phase.blend;
+			env.bloom = 0;
+		}
+		DayNight.Apply(mScene);
+	}
+
+	protected override void OnUpdate()
+	{
+		mScene.Update();
+		AssetLoader.Update();
+	}
+
+	protected override void OnRender()
+	{
+		if (mPhase < 0 || (mShot != null && mFrame < 0))
+		{
+			mPhase++;
+			if (mPhase >= mPhases.Count)
+			{
+				Finish();
+				return;
+			}
+			StartPhase(mPhases[mPhase]);
+			mFrame = 0;
+			mWait = 0;
+			DeleteAndNullify!(mShot);
+		}
+		let phase = mPhases[mPhase];
+		mView.Resize(ShotWidth, ShotHeight);
+		mView.Render(mScene, mCamera.GetCameraData((float)ShotWidth / ShotHeight));
+		// The scratch skybox imports on its first draw; nothing can be compared until it is drawn.
+		if (phase.kind == .Skybox && !Skybox.Active(mScene.Environment))
+		{
+			mWait++;
+			mFrame = 0;
+			if (mWait > 300)
+			{
+				Check(false, "the scratch skybox loaded and is drawn");
+				Finish();
+			}
+			return;
+		}
+		mFrame++;
+		let settle = phase.kind == .Mirror ? MirrorSettleFrames : (phase.kind == .Skybox ? SkyboxSettleFrames : SettleFrames);
+		if (mFrame < settle)
+			return;
+		if (mShot == null)
+			mShot = new CompareShot();
+		let path = scope $"{mDir}/{phase.name}.png";
+		if (mShot.Step(mView, ShotWidth, ShotHeight, path))
+		{
+			let pixels = mShot.Pixels;
+			let copy = new uint8[pixels.Count];
+			Internal.MemCpy(copy.CArray(), pixels.CArray(), pixels.Count);
+			CheckShot(phase, copy);
+			mFrame = -1;
+		}
+	}
+
+	void CheckShot(Phase phase, uint8[] pixels)
+	{
+		let gpuClouds = ProfilerModules.VolumetricCloudsMs;
+		let gpuFog = ProfilerModules.VolumetricFogMs;
+		Console.WriteLine(scope $"cloud-test: {phase.name} coverage {phase.coverage}: pixels {RenderView.VolumetricCloudPixels}, GPU clouds {gpuClouds:F3} ms, fog {gpuFog:F3} ms");
+		int64 sum = 0;
+		for (int y < SkyRows)
+			for (int x < ShotWidth)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				sum += pixels[i] + pixels[i + 1] + pixels[i + 2];
+			}
+		Check(sum > 0, scope $"{phase.name}: not black");
+		if (mPhase == 0)
+			Console.WriteLine(scope $"cloud-test: the clouds draw from {(RenderView.CloudsRunnable ? "the volumetric raymarch" : "the 2D backup")}");
+		if (phase.clouds && phase.coverage > 0)
+		{
+			if (RenderView.CloudsRunnable)
+				Check(RenderView.VolumetricCloudPixels > 0, scope $"{phase.name}: the raymarch wrote its layer");
+			else
+			{
+				// The 2D backup: no march at all, but the layer still changes the sky (checked per pair below).
+				Check(RenderView.VolumetricCloudPixels == 0, scope $"{phase.name}: the 2D backup draws, with no raymarch");
+				if (GpuDriven.ForceUnavailable)
+					Check(!RenderView.CloudsRunnable, scope $"{phase.name}: --gpu-driven-caps-off keeps the volumetric path off");
+			}
+		}
+
+		if (phase.kind == .Building)
+		{
+			if (phase.name == "building-mask")
+			{
+				mMask = pixels;
+				return;
+			}
+			if (!phase.clouds)
+			{
+				mBuildingClear = pixels;
+				return;
+			}
+			if (mMask == null || mBuildingClear == null)
+			{
+				Check(false, "building: the mask and cloudless shots exist");
+				return;
+			}
+			BuildBuildingMask();
+			// The mask eroded by a pixel: MSAA edges mix the sky behind the building, which the clouds change.
+			int32 maskCount = 0, interior = 0, skyCount = 0, skyChanged = 0;
+			int64 buildingDiff = 0, skyDiff = 0;
+			for (int32 y = 0; y < SkyRows; y++)
+				for (int32 x = 0; x < ShotWidth; x++)
+				{
+					let i = (y * ShotWidth + x) * 4;
+					if (mBuildingPixels[y * ShotWidth + x])
+						maskCount++;
+					if (Interior(x, y))
+					{
+						interior++;
+						buildingDiff += DiffAt(mBuildingClear, pixels, i);
+					}
+					else if (!mBuildingPixels[y * ShotWidth + x])
+					{
+						skyCount++;
+						let d = DiffAt(mBuildingClear, pixels, i);
+						skyDiff += d;
+						if (d >= MaskDiff)
+							skyChanged++;
+					}
+				}
+			Console.WriteLine(scope $"cloud-test: building: {maskCount} px mask, {interior} px interior, {skyChanged} sky px changed");
+			Check(maskCount > 5000, scope $"the building covers part of the sky ({maskCount} px)");
+			Check(interior > 2000, scope $"the building has a solid interior ({interior} px)");
+			Check(buildingDiff == 0, scope $"the depth buffer hides the clouds behind the building (interior diff {buildingDiff})");
+			Check(skyCount > 0 && (double)skyDiff / (skyCount * 3) > 2.0, scope $"the clouds are drawn on the sky beside it ({skyChanged} px changed, mean {((double)skyDiff / (skyCount * 3)):F2} of 255)");
+		}
+		else if (phase.kind == .Sun)
+		{
+			if (!phase.clouds)
+			{
+				mSunClear = pixels;
+				return;
+			}
+			if (mSunClear == null)
+			{
+				Check(false, "sun: the cloudless shot exists");
+				return;
+			}
+			// The sun's disc sits in the middle of the picture; an overcast deck in front of it must hide it.
+			let clear = Region(0.4f, 0.4f, 0.6f, 0.6f, mSunClear);
+			let cloud = Region(0.4f, 0.4f, 0.6f, 0.6f, pixels);
+			Console.WriteLine(scope $"cloud-test: sun behind a cloud: clear max {clear.maxLum:F1} / mean {clear.meanLum:F1}, cloud max {cloud.maxLum:F1} / mean {cloud.meanLum:F1}");
+			Check(cloud.maxLum < clear.maxLum, scope $"the overcast deck hides the sun's disc (max {cloud.maxLum:F1} < {clear.maxLum:F1})");
+			Check(cloud.maxLum < 250, scope $"the sun behind the deck is not a blown hole (max {cloud.maxLum:F1})");
+		}
+		else if (phase.kind == .Mirror)
+		{
+			if (!phase.clouds)
+			{
+				mMirrorClear = pixels;
+				return;
+			}
+			if (mMirrorClear == null)
+			{
+				Check(false, "mirror: the cloudless shot exists");
+				return;
+			}
+			let ball = RectDiff(mMirrorClear, pixels, BallX0, BallY0, BallX1, BallY1);
+			let topClear = BlueDominance(mMirrorClear, BallTopX0, BallTopY0, BallTopX1, BallTopY1);
+			let topCloud = BlueDominance(pixels, BallTopX0, BallTopY0, BallTopX1, BallTopY1);
+			Console.WriteLine(scope $"cloud-test: mirror ball diff {ball}, zenith blue-r clear {topClear:F1} cloud {topCloud:F1}");
+			Check(ball > 1000, scope $"the reflection cube shows the clouds (diff {ball})");
+			Check(topCloud < topClear - 5.0f, scope $"no clear gap at the ball's top: the reflected zenith is cloud, not blue sky (blue-r {topCloud:F1} < {topClear:F1})");
+		}
+		else if (phase.kind == .Fog)
+		{
+			if (!phase.clouds)
+			{
+				mFogClear = pixels;
+				return;
+			}
+			if (mFogClear == null)
+			{
+				Check(false, "fog: the cloudless shot exists");
+				return;
+			}
+			Check(mView.VolumetricFogDrawn, "with the clouds the volumetric fog still runs");
+			let d = RectMeanDiff(mFogClear, pixels, 0, 0, ShotWidth, SkyRows);
+			Console.WriteLine(scope $"cloud-test: fog: sky mean difference {d:F2} of 255");
+			Check(d > 1.0f, scope $"the clouds change the sky with the volumetric fog on (mean difference {d:F2})");
+		}
+		else if (phase.kind == .Skybox)
+		{
+			Check(Skybox.Active(mScene.Environment), scope $"{phase.name}: the skybox is drawn");
+			let blend = phase.blend;
+			if (!phase.clouds)
+			{
+				if (blend > 0)
+					mSkyboxBlendClear = pixels;
+				else
+					mSkyboxNoneClear = pixels;
+				return;
+			}
+			let clear = blend > 0 ? mSkyboxBlendClear : mSkyboxNoneClear;
+			if (clear == null)
+			{
+				Check(false, scope $"{phase.name}: the cloudless shot exists");
+				return;
+			}
+			let d = RectDiff(clear, pixels, 0, 0, ShotWidth, SkyRows);
+			Console.WriteLine(scope $"cloud-test: {phase.name}: sky diff {d} (Skybox Blend {blend})");
+			if (blend > 0)
+				Check(d > 20000, scope $"the clouds show under the skybox with Skybox Blend ({d})");
+			else
+				Check(d == 0, scope $"a skybox without Skybox Blend replaces the sky: no clouds ({d})");
+		}
+	}
+
+	void BuildBuildingMask()
+	{
+		delete mBuildingPixels;
+		mBuildingPixels = new bool[ShotWidth * ShotHeight];
+		for (int32 y = 0; y < ShotHeight; y++)
+			for (int32 x = 0; x < ShotWidth; x++)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				mBuildingPixels[y * ShotWidth + x] = DiffAt(mMask, mBuildingClear, i) >= MaskDiff;
+			}
+	}
+
+	bool Interior(int32 x, int32 y)
+	{
+		for (int32 dy = -1; dy <= 1; dy++)
+			for (int32 dx = -1; dx <= 1; dx++)
+			{
+				let nx = x + dx;
+				let ny = y + dy;
+				if (nx < 0 || ny < 0 || nx >= ShotWidth || ny >= ShotHeight)
+					return false;
+				if (!mBuildingPixels[ny * ShotWidth + nx])
+					return false;
+			}
+		return true;
+	}
+
+	static int64 DiffAt(uint8[] a, uint8[] b, int32 i)
+	{
+		return Math.Abs((int32)a[i] - (int32)b[i]) + Math.Abs((int32)a[i + 1] - (int32)b[i + 1]) + Math.Abs((int32)a[i + 2] - (int32)b[i + 2]);
+	}
+
+	static int64 RectDiff(uint8[] a, uint8[] b, int32 x0, int32 y0, int32 x1, int32 y1)
+	{
+		if (a == null || b == null || a.Count != b.Count)
+			return int64.MaxValue;
+		int64 sum = 0;
+		for (int32 y = y0; y < y1; y++)
+			for (int32 x = x0; x < x1; x++)
+				sum += DiffAt(a, b, (y * ShotWidth + x) * 4);
+		return sum;
+	}
+
+	static float RectMeanDiff(uint8[] a, uint8[] b, int32 x0, int32 y0, int32 x1, int32 y1)
+	{
+		if (a == null || b == null || a.Count != b.Count)
+			return float.MaxValue;
+		int64 sum = 0;
+		for (int32 y = y0; y < y1; y++)
+			for (int32 x = x0; x < x1; x++)
+				sum += DiffAt(a, b, (y * ShotWidth + x) * 4);
+		return (float)sum / ((x1 - x0) * (y1 - y0) * 3);
+	}
+
+	/// Mean red minus blue in a square: the sky's blue (clouds are white or grey, so this falls when they cover it).
+	static float BlueDominance(uint8[] pixels, int32 x0, int32 y0, int32 x1, int32 y1)
+	{
+		if (pixels == null)
+			return 0;
+		float sum = 0;
+		for (int32 y = y0; y < y1; y++)
+			for (int32 x = x0; x < x1; x++)
+			{
+				let i = (y * ShotWidth + x) * 4;
+				sum += (int32)pixels[i + 2] - (int32)pixels[i];
+			}
+		return sum / ((x1 - x0) * (y1 - y0));
+	}
+
+	struct RegionStats
+	{
+		public float meanLum;
+		public float maxLum;
+	}
+
+	/// The mean and brightest luminance of the picture's [x0, y0) - [x1, y1) share (fractions of the picture).
+	static RegionStats Region(float x0, float y0, float x1, float y1, uint8[] pixels)
+	{
+		RegionStats stats = default;
+		if (pixels == null)
+			return stats;
+		int32 a = (int32)(ShotWidth * x0);
+		int32 b = (int32)(ShotWidth * x1);
+		int32 c = (int32)(ShotHeight * y0);
+		int32 d = (int32)(ShotHeight * y1);
+		float total = 0;
+		int32 count = 0;
+		for (int32 y = c; y < d; y++)
+			for (int32 x = a; x < b; x++)
+			{
+				let l = Lum(pixels, (y * ShotWidth + x) * 4);
+				total += l;
+				stats.maxLum = Math.Max(stats.maxLum, l);
+				count++;
+			}
+		stats.meanLum = count > 0 ? total / count : 0;
+		return stats;
+	}
+
+	static float Lum(uint8[] pixels, int32 i) => pixels[i] * 0.2126f + pixels[i + 1] * 0.7152f + pixels[i + 2] * 0.0722f;
+
+	void Finish()
+	{
+		Console.WriteLine(Result == 0 ? "cloud-test integration: PASS" : "cloud-test integration: FAILED");
+		Close();
+	}
+}
